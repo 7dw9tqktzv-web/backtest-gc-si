@@ -1,0 +1,30 @@
+# ============================================================================
+# DÉPENDANCES PYTHON - BACKTEST GC/SI
+# ============================================================================
+# 
+# Pour installer toutes les dépendances :
+#     pip install -r requirements.txt
+#
+# ============================================================================
+
+# Manipulation de données
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Configuration
+pyyaml>=6.0
+
+# Visualisation (pour les notebooks d'analyse)
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Optimisation parallèle (pour plus tard)
+joblib>=1.3.0
+
+# Jupyter notebooks
+jupyter>=1.0.0
+ipykernel>=6.0.0
+
+# Statistiques avancées (pour ADF test, etc.)
+scipy>=1.10.0
+statsmodels>=0.14.0

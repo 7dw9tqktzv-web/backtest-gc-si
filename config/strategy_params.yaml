@@ -1,0 +1,94 @@
+# ============================================================================
+# CONFIGURATION BACKTEST - SPREAD GC/SI MEAN REVERSION
+# ============================================================================
+# Ce fichier contient tous les paramètres configurables de la stratégie.
+# Modifie les valeurs ici sans toucher au code Python.
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# FICHIERS DE DONNÉES
+# ----------------------------------------------------------------------------
+data:
+  gc_file: "data/raw/GCG26_FUT_CME_scid_BarData.txt"
+  si_file: "data/raw/SIH26_FUT_CME_scid_BarData.txt"
+  gc_file_5s: "data/raw/GCG26_FUT_CME_5s.scid_BarData.txt"
+  si_file_5s: "data/raw/SIH26_FUT_CME_5s.scid_BarData.txt"
+  
+# ----------------------------------------------------------------------------
+# SPÉCIFICATIONS DES CONTRATS (CME/COMEX)
+# ----------------------------------------------------------------------------
+contracts:
+  # Gold (GC) - COMEX 100 oz
+  gc_point_value: 100       # $100 par point de prix
+  gc_tick_size: 0.10        # Tick minimum = $0.10
+  gc_tick_value: 10         # $10 par tick
+  
+  # Silver (SI) - COMEX 5000 oz
+  si_point_value: 5000      # $5000 par point de prix
+  si_tick_size: 0.005       # Tick minimum = $0.005
+  si_tick_value: 25         # $25 par tick
+
+# ----------------------------------------------------------------------------
+# PARAMÈTRES DES INDICATEURS
+# ----------------------------------------------------------------------------
+indicators:
+  beta_lookback: 2640       # Période pour calcul du Beta (2 jours × 22h × 60min)
+  zscore_period: 30         # Période pour moyenne et écart-type du Z-Score
+  correlation_period: 30    # Période pour la corrélation Pearson
+  adf_hurst_period: 128     # Période pour tests ADF et Hurst
+
+# ----------------------------------------------------------------------------
+# CONDITIONS D'ENTRÉE
+# ----------------------------------------------------------------------------
+entry:
+  zscore_long: -3.0         # Entrée LONG si Z-Score <= cette valeur
+  zscore_short: 3.0         # Entrée SHORT si Z-Score >= cette valeur
+  correlation_min: 0.70     # Corrélation minimum requise
+  cointegration_score_min: 50  # Score de cointégration minimum (0-100)
+
+# ----------------------------------------------------------------------------
+# CONDITIONS DE SORTIE
+# ----------------------------------------------------------------------------
+exit:
+  # Sortie sur Z-Score
+  zscore_tp_long: -2.0      # Take Profit LONG : sortie si Z >= cette valeur
+  zscore_sl_long: -3.5      # Stop Loss LONG : sortie si Z <= cette valeur
+  zscore_tp_short: 2.0      # Take Profit SHORT : sortie si Z <= cette valeur
+  zscore_sl_short: 3.5      # Stop Loss SHORT : sortie si Z >= cette valeur
+  
+  # Sortie sur PnL (en dollars)
+  pnl_take_profit: 400      # Take Profit en $ (sortie si PnL >= cette valeur)
+  pnl_stop_loss: -800       # Stop Loss en $ (sortie si PnL <= cette valeur)
+
+# ----------------------------------------------------------------------------
+# CONDITION DE RÉENTRÉE
+# ----------------------------------------------------------------------------
+reentry:
+  # Après un stop, on doit attendre que Z revienne vers 0 avant de reprendre
+  zscore_reset_long: -1.0   # Pour LONG: Z doit remonter à -1 avant nouvelle entrée
+  zscore_reset_short: 1.0   # Pour SHORT: Z doit descendre à +1 avant nouvelle entrée
+
+# ----------------------------------------------------------------------------
+# SIZING DES POSITIONS
+# ----------------------------------------------------------------------------
+sizing:
+  mode: "dollar_neutral_beta"  # Options: "fixed", "dollar_neutral", "dollar_neutral_beta"
+  si_contracts: 1              # Nombre de contrats SI de base
+  # Note: Le nombre de contrats GC sera calculé automatiquement :
+  # GC_contracts = (SI_notional / GC_notional) × Beta
+
+# ----------------------------------------------------------------------------
+# COÛTS DE TRANSACTION
+# ----------------------------------------------------------------------------
+costs:
+  commission_per_contract: 4.00   # $ par contrat aller-retour ($2.00 × 2)
+  slippage_gc_ticks: 1            # Slippage estimé en ticks pour GC
+  slippage_si_ticks: 1            # Slippage estimé en ticks pour SI
+
+# ----------------------------------------------------------------------------
+# SESSION DE TRADING
+# ----------------------------------------------------------------------------
+session:
+  start_time: "18:00:00"    # Début de session (heure locale Chicago)
+  end_time: "17:00:00"      # Fin de session
+  # Note: Les données ont déjà les 30 premières/dernières minutes enlevées

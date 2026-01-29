@@ -1,0 +1,44 @@
+# ============================================================================
+# BACKTEST GC/SI - Package Source
+# ============================================================================
+#
+# Ce package contient tous les modules du systeme de backtest :
+#   - data_loader : Chargement et synchronisation des donnees
+#   - indicators : Calculs des indicateurs (Beta, Z-Score, etc.)
+#   - signals : Generation des signaux d'entree/sortie
+#   - position : Gestion des positions et sizing
+#   - backtest_engine : Moteur de simulation
+#   - metrics : Calcul des metriques de performance
+#
+# ============================================================================
+
+from .data_loader import (
+    load_config,
+    load_sierra_chart_data,
+    synchronize_data,
+    validate_data,
+    load_and_prepare_data,
+    get_price_at_datetime
+)
+
+from .indicators import (
+    calculate_all_indicators,
+    get_indicators_at_datetime
+)
+
+from .signals import (
+    generate_signals,
+    get_signal_summary,
+    build_trade_list,
+    export_trade_list,
+    get_signals_at_datetime
+)
+
+from .position import (
+    calculate_position_size,
+    calculate_transaction_costs,
+    calculate_trade_pnl
+)
+
+__version__ = "1.0.0"
+__author__ = "Assistant IA"

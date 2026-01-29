@@ -1,0 +1,31 @@
+# Environnement virtuel Python
+.venv/
+
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Donnees brutes Sierra Chart (trop volumineux pour GitHub)
+data/raw/
+
+# Documentation ACSIL locale
+DOC SIERRA/
+
+# IDE
+.idea/
+.vscode/
+*.code-workspace
+
+# Sessions Claude Code
+.claude/
+
+# Notebooks exploratoires
+notebooks/
+
+# Resultats intermediaires
+results/
+
+# OS
+Thumbs.db
+.DS_Store
