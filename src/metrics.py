@@ -22,6 +22,7 @@ Sections d'analyse :
 """
 
 import csv
+import json
 import os
 import shutil
 import math
@@ -692,6 +693,48 @@ def generate_equity_chart(equity_data, output_path):
 
 
 # ============================================================================
+# VALIDATION CONFIG / CSV
+# ============================================================================
+def build_config_fingerprint(config):
+    """Construit une empreinte des parametres cles de la config."""
+    ind = config['indicators']
+    ext = config['exit']
+    ent = config['entry']
+    return (f"beta{ind['beta_lookback']}_zp{ind['zscore_period']}"
+            f"_corr{ind['correlation_period']}_adf{ind['adf_hurst_period']}"
+            f"_zE{ent['zscore_long']}_{ent['zscore_short']}"
+            f"_zTP{ext['zscore_tp_long']}_{ext['zscore_tp_short']}"
+            f"_zSL{ext['zscore_sl_long']}_{ext['zscore_sl_short']}"
+            f"_TP{ext['pnl_take_profit']}_SL{ext['pnl_stop_loss']}"
+            f"_corr{ent['correlation_min']}_coint{ent['cointegration_score_min']}")
+
+
+def validate_csv_config(config):
+    """Verifie que le CSV a ete genere avec la config actuelle.
+    Retourne (True, message) si OK, (False, message) si mismatch.
+    """
+    meta_path = BACKTEST_CSV.with_suffix('.meta.json')
+
+    if not meta_path.exists():
+        return True, "[!] Pas de fichier meta JSON -- verification impossible (retrocompatibilite)"
+
+    with open(meta_path, 'r', encoding='utf-8') as f:
+        meta = json.load(f)
+
+    csv_fingerprint = meta.get('config_fingerprint', '')
+    current_fingerprint = build_config_fingerprint(config)
+
+    if csv_fingerprint != current_fingerprint:
+        msg = (f"[ERREUR] Le backtest dans {BACKTEST_CSV.name} a ete genere avec des parametres differents.\n"
+               f"         CSV (backtest) : {csv_fingerprint}\n"
+               f"         Config actuelle: {current_fingerprint}\n"
+               f"         Relancez le backtest avant de lancer les metrics.")
+        return False, msg
+
+    return True, "[OK] Config coherente avec le backtest CSV"
+
+
+# ============================================================================
 # ARCHIVAGE
 # ============================================================================
 def build_archive_path(config):
@@ -876,6 +919,15 @@ def run_metrics():
     print()
     print(report)
     print()
+
+    # Valider la coherence config / CSV avant archivage
+    config_ok, config_msg = validate_csv_config(config)
+    print(config_msg)
+
+    if not config_ok:
+        print("\n[!] Archivage ANNULE -- les metriques ci-dessus sont affichees mais NON archivees.")
+        print("=" * 60)
+        return gm, am
 
     # Archiver
     print("[...] Archivage des resultats...")

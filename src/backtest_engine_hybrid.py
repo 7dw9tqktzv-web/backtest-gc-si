@@ -16,8 +16,10 @@
 # Date: Janvier 2026
 # ============================================================================
 
+import json
 import numpy as np
 import pandas as pd
+from datetime import datetime
 from typing import Tuple
 from pathlib import Path
 
@@ -512,11 +514,40 @@ def run_hybrid_backtest(
 # EXPORT ET AFFICHAGE
 # ============================================================================
 
-def export_backtest(trades_df: pd.DataFrame, filepath: str = "output/backtest_hybrid.csv"):
-    """Exporte les resultats du backtest hybride dans un fichier CSV."""
+def build_config_fingerprint(config):
+    """Construit une empreinte des parametres cles de la config.
+    Permet de verifier que le CSV a ete genere avec la config actuelle.
+    """
+    ind = config['indicators']
+    ext = config['exit']
+    ent = config['entry']
+    return (f"beta{ind['beta_lookback']}_zp{ind['zscore_period']}"
+            f"_corr{ind['correlation_period']}_adf{ind['adf_hurst_period']}"
+            f"_zE{ent['zscore_long']}_{ent['zscore_short']}"
+            f"_zTP{ext['zscore_tp_long']}_{ext['zscore_tp_short']}"
+            f"_zSL{ext['zscore_sl_long']}_{ext['zscore_sl_short']}"
+            f"_TP{ext['pnl_take_profit']}_SL{ext['pnl_stop_loss']}"
+            f"_corr{ent['correlation_min']}_coint{ent['cointegration_score_min']}")
+
+
+def export_backtest(trades_df: pd.DataFrame, config: dict, filepath: str = "output/backtest_hybrid.csv"):
+    """Exporte les resultats du backtest hybride dans un fichier CSV.
+    Sauvegarde aussi un fichier meta JSON pour valider la coherence config/CSV.
+    """
     Path(filepath).parent.mkdir(parents=True, exist_ok=True)
     trades_df.to_csv(filepath, index=False, sep=';')
     print(f"   [OK] {len(trades_df)} trades exportes dans : {filepath}")
+
+    # Sauvegarder le meta JSON a cote du CSV
+    meta_path = Path(filepath).with_suffix('.meta.json')
+    meta = {
+        "timestamp": datetime.now().isoformat(timespec='seconds'),
+        "trades_count": len(trades_df),
+        "config_fingerprint": build_config_fingerprint(config)
+    }
+    with open(meta_path, 'w', encoding='utf-8') as f:
+        json.dump(meta, f, indent=2)
+    print(f"   [OK] Metadata sauvegardee dans : {meta_path}")
 
 
 def print_backtest_summary(trades_df: pd.DataFrame, title: str = "BACKTEST HYBRIDE"):
@@ -632,7 +663,7 @@ if __name__ == "__main__":
         print_backtest_summary(trades_df, "BACKTEST HYBRIDE (1min + 5s)")
 
         # 6. Exporter
-        export_backtest(trades_df, "output/backtest_hybrid.csv")
+        export_backtest(trades_df, config, "output/backtest_hybrid.csv")
 
         print("\n[OK] Backtest hybride termine avec succes !")
 

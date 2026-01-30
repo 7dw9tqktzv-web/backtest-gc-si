@@ -219,6 +219,29 @@ GC_contracts = round( (NotionalSI / NotionalGC) × Beta ) , minimum 1
 - **ACSIL formula verification**: Confirmed Python matches ACSIL v1.4 for StdDev (ddof=1), Correlation (Pearson), and OLS Beta.
 - **Hybrid backtest (1min + 5s)**: Dollar exits monitored on 5-second bars for precision. Indicators stay on 1-minute (no x12 lookbacks). Full 5s approach was tested and rejected (too noisy, 70 SL_ZSCORE from transient threshold crossings).
 
+## Claude Code Skills
+
+### /backtest-runner
+Runs the hybrid backtest and affiche les resultats formates. Compare automatiquement avec le run precedent.
+- Sauvegarde les resultats precedents avant execution
+- Lance `backtest_engine_hybrid.py` puis `metrics.py`
+- Affiche les metriques cles et la comparaison avec le run precedent
+- Option de push vers GitHub
+
+### /optimize
+Teste differents parametres via langage naturel en francais (ex: "teste avec un TP a 500 et un beta lookback de 1320").
+- Modifie `config/strategy_params.yaml` selon la demande
+- Lance le backtest hybrid + metrics
+- Compare les resultats avec le baseline
+- Archive les variations dans `output/archive/`
+- Log dans `output/optimization_log.csv`
+
+## Git Tracking
+
+`.gitignore` exclut : `.venv/`, `__pycache__/`, `data/raw/`, `DOC SIERRA/`, `.idea/`, `.claude/`, `output/`, `results/`
+
+Les donnees brutes Sierra Chart, les resultats de backtest et la documentation ACSIL ne sont pas versionnees.
+
 ## Reference Documentation
 
 - `config/strategy_params.yaml` - All strategy parameters
@@ -230,3 +253,4 @@ GC_contracts = round( (NotionalSI / NotionalGC) × Beta ) , minimum 1
 - `output/optimization_log.csv` - Optimization history log
 - `DOC SIERRA/files/` - Sierra Chart ACSIL documentation
 - `DOC SIERRA/files/GC_SI_SpreadMeanReversion_v1.4.cpp` - ACSIL source code (reference)
+- `README.md` - Documentation du projet en francais (installation, usage, structure)
