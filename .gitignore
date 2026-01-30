@@ -26,6 +26,10 @@ notebooks/
 # Resultats intermediaires
 results/
 
+# Output du backtest (regenerable)
+output/
+
 # OS
 Thumbs.db
 .DS_Store
+nul

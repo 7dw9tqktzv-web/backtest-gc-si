@@ -20,7 +20,15 @@ backtest_gc_si/
 ├── output/
 │   ├── trade_list.csv                <- Liste des trades Z-Score (genere auto)
 │   ├── backtest_trades.csv           <- Backtest 1-min High/Low (genere auto)
-│   └── backtest_hybrid.csv           <- Backtest hybride 1min+5s (genere auto)
+│   ├── backtest_hybrid.csv           <- Backtest hybride 1min+5s (genere auto)
+│   ├── optimization_log.csv          <- Historique des tests d'optimisation
+│   └── archive/                      <- Resultats archives par parametres
+│       ├── index.csv                 <- Index global de tous les runs
+│       └── {period}/{indicators}/{entry_exit}/
+│           ├── backtest_hybrid.csv
+│           ├── metrics_report.txt
+│           ├── equity_curve.png
+│           └── params_snapshot.yaml
 │
 ├── src/
 │   ├── __init__.py
@@ -31,7 +39,7 @@ backtest_gc_si/
 │   ├── position.py                   <- [OK] Sizing dollar-neutral + PnL
 │   ├── backtest_engine.py            <- [OK] Simulation 1-min (High/Low dollar exits)
 │   ├── backtest_engine_hybrid.py     <- [OK] Simulation hybride 1min + 5s
-│   └── metrics.py                    <- [ ] Calcul des performances
+│   └── metrics.py                    <- [OK] Analyse performances + archivage
 │
 ├── requirements.txt                  <- Dependances Python
 ├── validate_data.py                  <- Script de validation vs Sierra Chart
@@ -68,6 +76,7 @@ python src/position.py          # Test sizing + calcul PnL
 ```bash
 python src/backtest_engine.py          # Backtest 1-min (High/Low dollar exits)
 python src/backtest_engine_hybrid.py   # Backtest hybride 1min + 5s (recommande)
+python src/metrics.py                  # Analyse performances + archivage
 ```
 
 ### Valider les donnees a une date precise
@@ -104,8 +113,8 @@ Tous les parametres sont dans `config/strategy_params.yaml`.
 ### Conditions d'entree
 | Parametre | Valeur |
 |-----------|--------|
-| Z-Score Entry LONG | <= -3.0 |
-| Z-Score Entry SHORT | >= +3.0 |
+| Z-Score Entry LONG | <= -2.5 |
+| Z-Score Entry SHORT | >= +2.5 |
 | Correlation min | > 0.70 |
 | Cointegration Score min | >= 50 |
 
@@ -118,8 +127,8 @@ Tous les parametres sont dans `config/strategy_params.yaml`.
 ### Conditions de sortie (Dollars)
 | Parametre | Valeur |
 |-----------|--------|
-| PnL Take Profit | +$400 |
-| PnL Stop Loss | -$800 |
+| PnL Take Profit | +$600 |
+| PnL Stop Loss | -$1000 |
 
 ### Reentree apres Stop Loss
 | Parametre | Valeur |
@@ -156,7 +165,7 @@ Tous les parametres sont dans `config/strategy_params.yaml`.
 5. [x] **position.py** - Sizing dollar-neutral avec Beta, couts de transaction, calcul PnL
 6. [x] **backtest_engine.py** - Simulation 1-min avec sorties dollar High/Low
 7. [x] **backtest_engine_hybrid.py** - Simulation hybride 1min + 5s
-8. [ ] **metrics.py** - Calcul des performances
+8. [x] **metrics.py** - Analyse performances (10 sections) + archivage automatique
 
 ## Donnees
 
@@ -171,10 +180,11 @@ Tous les parametres sont dans `config/strategy_params.yaml`.
 - PnL net : -$15,513, Win Rate : 62.1%
 
 ### backtest_engine_hybrid.py (1min + 5s, avec sorties $)
-- 84 trades (55 LONG, 29 SHORT)
-- PnL net : +$15,217, Win Rate : 89.3%
-- Profit Factor : 4.39, Max Drawdown : -$974
-- Exits : 61 TP_DOLLAR, 18 TP_ZSCORE, 3 SL_DOLLAR, 2 SL_ZSCORE
+- 229 trades (140 LONG, 89 SHORT)
+- PnL net : +$29,341, Win Rate : 73.4%
+- Profit Factor : 1.98, Max Drawdown : -$2,898
+- Exits : 88 TP_DOLLAR, 121 TP_ZSCORE, 13 SL_DOLLAR, 7 SL_ZSCORE
+- Sharpe : 0.266, Calmar : 10.12
 
 ---
 *Developpe avec Claude AI - Janvier 2026*

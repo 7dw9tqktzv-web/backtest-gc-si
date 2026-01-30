@@ -24,6 +24,7 @@ python src/position.py
 # Run backtests
 python src/backtest_engine.py          # 1-min with High/Low dollar exits
 python src/backtest_engine_hybrid.py   # Hybrid 1-min + 5s (recommended)
+python src/metrics.py                  # Performance analysis + archiving
 
 # Validate data at specific datetime
 python validate_data.py --date "2026-01-23 10:30:00"
@@ -50,7 +51,7 @@ Sierra Chart 5s CSV -> data_loader_5s.py -> backtest_engine_hybrid.py
 | `position.py` | Complete | Position sizing (dollar neutral with Beta) + PnL calculation |
 | `backtest_engine.py` | Complete | Trade simulation with High/Low intra-bar dollar exits |
 | `backtest_engine_hybrid.py` | Complete | Hybrid backtest: 1-min signals + 5s dollar exits |
-| `metrics.py` | To create | Performance analysis |
+| `metrics.py` | Complete | Performance analysis (10 sections) + archiving |
 
 ### Key Entry Points
 - `load_and_prepare_data()` in `data_loader.py` - returns `(df, config, stats)`
@@ -64,9 +65,24 @@ Sierra Chart 5s CSV -> data_loader_5s.py -> backtest_engine_hybrid.py
 - `calculate_trade_pnl(direction, entry_gc, entry_si, exit_gc, exit_si, gc_contracts, si_contracts, config)` in `position.py` - returns PnL dict
 - `run_backtest(df, config)` in `backtest_engine.py` - returns trades DataFrame (1-min High/Low)
 - `run_hybrid_backtest(df_1min, df_5s, config)` in `backtest_engine_hybrid.py` - returns trades DataFrame (hybrid)
+- `run_metrics()` in `metrics.py` - analyzes backtest results, generates report + equity curve, archives everything
 
 ### Configuration
 All parameters are in `config/strategy_params.yaml`. Never hardcode values.
+Key field: `indicators.period` defines the calculation timeframe (1min, 5min, 15min, 1h, 1d).
+
+### Archiving Structure
+```
+output/archive/
+  index.csv                                          <- Global index of all runs
+  {period}/                                          <- Indicator calculation period (1min, 5min, etc.)
+    beta{N}_zp{N}_corr{N}_adf{N}/                   <- Indicator parameters
+      zE{N}_{N}_zTP{N}_{N}_zSL{N}_{N}_TP{N}_SL{N}_corr{N}_coint{N}/
+        backtest_hybrid.csv                          <- Trade list copy
+        metrics_report.txt                           <- Full performance report
+        equity_curve.png                             <- Equity + underwater chart
+        params_snapshot.yaml                         <- Config snapshot
+```
 
 ## Trading Logic
 
@@ -82,16 +98,16 @@ COOLDOWN_SHORT -> FLAT                   [Z <= +1.0]
 ```
 
 ### Entry Conditions
-- LONG spread: Z-Score <= -3.0, Correlation > 0.70, Cointegration Score >= 50
-- SHORT spread: Z-Score >= 3.0, Correlation > 0.70, Cointegration Score >= 50
+- LONG spread: Z-Score <= -2.5, Correlation > 0.70, Cointegration Score >= 50
+- SHORT spread: Z-Score >= 2.5, Correlation > 0.70, Cointegration Score >= 50
 
 ### Exit Conditions (OR logic)
 | Condition | LONG | SHORT |
 |-----------|------|-------|
 | TP Z-Score | >= -2.0 | <= +2.0 |
 | SL Z-Score | <= -3.5 | >= +3.5 |
-| TP Dollars | +$400 | +$400 |
-| SL Dollars | -$800 | -$800 |
+| TP Dollars | +$600 | +$600 |
+| SL Dollars | -$1000 | -$1000 |
 
 ### Key Rules
 - After take profit: immediate re-entry allowed if conditions met
@@ -100,14 +116,14 @@ COOLDOWN_SHORT -> FLAT                   [Z <= +1.0]
 - Reversal allowed: close LONG and open SHORT on same bar
 - Exit priority: SL_DOLLAR > SL_ZSCORE > TP_DOLLAR > TP_ZSCORE
 - Single position at a time
-- Dollar-based exits (TP $400 / SL -$800) handled in backtest engines, not signals.py
+- Dollar-based exits (TP $600 / SL -$1000) handled in backtest engines, not signals.py
 
 ## Backtest Engines
 
 ### backtest_engine.py (1-min with High/Low)
 - Iterates on 1-minute bars
 - Dollar exits use High/Low prices to detect intra-bar SL/TP triggers
-- When SL/TP dollar triggered, PnL is fixed at the threshold (-$800 or +$400)
+- When SL/TP dollar triggered, PnL is fixed at the threshold (-$1000 or +$600)
 - Z-Score exits use Last price
 
 ### backtest_engine_hybrid.py (Hybrid 1-min + 5s) -- RECOMMENDED
@@ -120,8 +136,8 @@ COOLDOWN_SHORT -> FLAT                   [Z <= +1.0]
 
 #### Hybrid exit priority per 1-min bar:
 ```
-1a. Scan 5s bars: SL_DOLLAR (-$800) -> break
-1a. Scan 5s bars: TP_DOLLAR (+$400) -> break
+1a. Scan 5s bars: SL_DOLLAR (-$1000) -> break
+1a. Scan 5s bars: TP_DOLLAR (+$600) -> break
 1b. If no 5s trigger: SL_ZSCORE on 1-min Z-Score
 1b. If no 5s trigger: TP_ZSCORE on 1-min Z-Score
 ```
@@ -183,18 +199,18 @@ GC_contracts = round( (NotionalSI / NotionalGC) × Beta ) , minimum 1
 - Win rate: 62.1% (41/66)
 - Worst trade: -$14,624 (SHORT #52, 5 GC contracts, GC dropped 36 points)
 - Costs total: $7,188 (commission + slippage)
-- Note: These results do NOT include TP $400 / SL -$800 exits
+- Note: These results do NOT include TP $600 / SL -$1000 exits
 
-## Current Results (backtest_engine_hybrid.py on 84 trades)
+## Current Results (backtest_engine_hybrid.py on 229 trades)
 
-- PnL net total: +$15,217
-- Win rate: 89.3% (75/84)
-- 55 LONG / 29 SHORT
-- Exits: 61 TP_DOLLAR, 18 TP_ZSCORE, 3 SL_DOLLAR, 2 SL_ZSCORE
-- Best trade: +$397 | Worst trade: -$974
-- Max Drawdown: -$974
-- Profit Factor: 4.39
-- Costs total: $9,168
+- PnL net total: +$29,341
+- Win rate: 73.4% (168/229)
+- 140 LONG / 89 SHORT
+- Exits: 88 TP_DOLLAR, 121 TP_ZSCORE, 13 SL_DOLLAR, 7 SL_ZSCORE
+- Best trade: +$780 | Worst trade: -$2,898
+- Max Drawdown: -$2,898
+- Profit Factor: 1.98
+- Costs total: $26,454
 - Trade list exported to `output/backtest_hybrid.csv` (semicolon-separated)
 
 ## Completed Improvements
@@ -209,5 +225,8 @@ GC_contracts = round( (NotionalSI / NotionalGC) × Beta ) , minimum 1
 - `output/trade_list.csv` - Z-Score trade list (semicolon-separated, Excel compatible)
 - `output/backtest_trades.csv` - Full backtest with PnL in dollars (1-min High/Low, semicolon-separated)
 - `output/backtest_hybrid.csv` - Hybrid backtest with PnL in dollars (1-min + 5s, semicolon-separated)
+- `output/archive/` - Archived backtest results organized by period/indicators/entry-exit
+- `output/archive/index.csv` - Global index of all archived runs (semicolon-separated)
+- `output/optimization_log.csv` - Optimization history log
 - `DOC SIERRA/files/` - Sierra Chart ACSIL documentation
 - `DOC SIERRA/files/GC_SI_SpreadMeanReversion_v1.4.cpp` - ACSIL source code (reference)
