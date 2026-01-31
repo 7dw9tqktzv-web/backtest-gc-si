@@ -19,12 +19,16 @@ import sys
 import numpy as np
 import pandas as pd
 from pathlib import Path
+from datetime import datetime
 
 from data_loader import load_and_prepare_data
 from data_loader_5s import load_5s_data
 from indicators import calculate_all_indicators
-from backtest_engine_hybrid import (run_hybrid_backtest, export_backtest,
-                                    build_config_fingerprint)
+from backtest_engine_hybrid import run_hybrid_backtest, export_backtest
+try:
+    from common import build_config_fingerprint
+except ImportError:
+    from .common import build_config_fingerprint
 
 
 # ============================================================================
@@ -163,6 +167,195 @@ def compute_metrics(trades_df):
 
 
 # ============================================================================
+# SAUVEGARDE DES RESULTATS DANS LE LOG
+# ============================================================================
+
+LOG_PATH = Path("output/optimization_log.csv")
+LOG_COLUMNS = [
+    "DateTime", "Batch_ID", "Label", "Overrides",
+    "Trades", "LONG", "SHORT", "Winners", "Win_Rate",
+    "PnL_Net", "PnL_Avg", "Best", "Worst", "Max_Drawdown",
+    "Profit_Factor", "Sharpe", "Fingerprint"
+]
+
+
+def save_results_to_log(results, overrides_map, batch_id=None):
+    """
+    Sauvegarde les resultats d'un run d'optimisation dans le log CSV.
+
+    Parametres:
+    -----------
+    results : list of dict
+        Metriques de chaque config (retournees par run_optimization)
+    overrides_map : dict
+        Mapping label -> overrides dict (pour sauvegarder les parametres testes)
+    batch_id : str, optionnel
+        Identifiant du batch (par defaut: horodatage)
+    """
+    if batch_id is None:
+        batch_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    rows = []
+    for r in results:
+        label = r.get("label", "")
+        overrides = overrides_map.get(label, {})
+        # Formater les overrides en texte lisible : "key=val|key=val"
+        ov_str = "|".join(f"{k}={v}" for k, v in overrides.items()) if overrides else "baseline"
+
+        rows.append({
+            "DateTime": now,
+            "Batch_ID": batch_id,
+            "Label": label,
+            "Overrides": ov_str,
+            "Trades": r.get("trades", 0),
+            "LONG": r.get("long", 0),
+            "SHORT": r.get("short", 0),
+            "Winners": r.get("winners", 0),
+            "Win_Rate": r.get("win_rate", 0.0),
+            "PnL_Net": r.get("pnl_net", 0.0),
+            "PnL_Avg": r.get("pnl_avg", 0.0),
+            "Best": r.get("best", 0.0),
+            "Worst": r.get("worst", 0.0),
+            "Max_Drawdown": r.get("max_dd", 0.0),
+            "Profit_Factor": r.get("profit_factor", 0.0),
+            "Sharpe": r.get("sharpe", 0.0),
+            "Fingerprint": r.get("fingerprint", ""),
+        })
+
+    df_new = pd.DataFrame(rows, columns=LOG_COLUMNS)
+
+    # Append au fichier existant (ou creer si absent)
+    if LOG_PATH.exists():
+        df_new.to_csv(LOG_PATH, sep=';', index=False, mode='a', header=False)
+    else:
+        LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        df_new.to_csv(LOG_PATH, sep=';', index=False)
+
+    print(f"\n   [LOG] {len(rows)} resultats sauvegardes dans {LOG_PATH}")
+    print(f"         Batch ID: {batch_id}")
+
+
+def load_log():
+    """
+    Charge le log d'optimisation complet.
+
+    Retourne:
+    ---------
+    pd.DataFrame : Toutes les lignes du log, ou DataFrame vide si absent
+    """
+    if not LOG_PATH.exists():
+        print("   Aucun log d'optimisation trouve.")
+        return pd.DataFrame(columns=LOG_COLUMNS)
+
+    df = pd.read_csv(LOG_PATH, sep=';')
+    print(f"   [LOG] {len(df)} resultats charges depuis {LOG_PATH}")
+    return df
+
+
+def print_log_summary(df=None, top_n=20, sort_by="PnL_Net"):
+    """
+    Affiche un resume du log d'optimisation.
+
+    Parametres:
+    -----------
+    df : pd.DataFrame, optionnel
+        Log a afficher. Si None, charge depuis le fichier.
+    top_n : int
+        Nombre de resultats a afficher
+    sort_by : str
+        Colonne de tri (PnL_Net, Profit_Factor, Win_Rate, Sharpe, Max_Drawdown)
+    """
+    if df is None:
+        df = load_log()
+
+    if df.empty:
+        return
+
+    # Trier
+    ascending = sort_by == "Max_Drawdown"
+    df_sorted = df.sort_values(sort_by, ascending=ascending).head(top_n)
+
+    print(f"\n{'=' * 110}")
+    print(f"TOP {min(top_n, len(df_sorted))} RESULTATS (trie par {sort_by}) -- {len(df)} total dans le log")
+    print(f"{'=' * 110}")
+    print(f"{'#':<3} {'Batch':<16} {'Label':<25} {'Trades':<7} {'WR%':<7} "
+          f"{'PnL':<11} {'PF':<6} {'MaxDD':<10} {'Sharpe':<8}")
+    print(f"{'-' * 110}")
+
+    for i, (_, r) in enumerate(df_sorted.iterrows()):
+        print(f"{i+1:<3} {str(r.get('Batch_ID', '')):<16} "
+              f"{str(r.get('Label', '')):<25} "
+              f"{int(r.get('Trades', 0)):<7} "
+              f"{r.get('Win_Rate', 0):<7.1f} "
+              f"${r.get('PnL_Net', 0):>9,.0f} "
+              f"{r.get('Profit_Factor', 0):<6.2f} "
+              f"${r.get('Max_Drawdown', 0):>8,.0f} "
+              f"{r.get('Sharpe', 0):<8.3f}")
+
+    print(f"{'=' * 110}")
+
+    # Nombre de batches distincts
+    n_batches = df['Batch_ID'].nunique()
+    print(f"\n   {len(df)} configs au total dans {n_batches} batch(es)")
+
+
+def delete_batch(batch_id):
+    """
+    Supprime un batch entier du log.
+
+    Parametres:
+    -----------
+    batch_id : str
+        Identifiant du batch a supprimer
+    """
+    if not LOG_PATH.exists():
+        print("   Aucun log trouve.")
+        return
+
+    df = pd.read_csv(LOG_PATH, sep=';')
+    before = len(df)
+    df = df[df['Batch_ID'] != batch_id]
+    after = len(df)
+
+    if before == after:
+        print(f"   Batch '{batch_id}' non trouve dans le log.")
+        return
+
+    df.to_csv(LOG_PATH, sep=';', index=False)
+    print(f"   [LOG] Batch '{batch_id}' supprime : {before - after} lignes retirees ({after} restantes)")
+
+
+def keep_top_n(n=50, sort_by="PnL_Net"):
+    """
+    Ne garde que les N meilleurs resultats dans le log.
+
+    Parametres:
+    -----------
+    n : int
+        Nombre de resultats a conserver
+    sort_by : str
+        Critere de tri pour determiner les "meilleurs"
+    """
+    if not LOG_PATH.exists():
+        print("   Aucun log trouve.")
+        return
+
+    df = pd.read_csv(LOG_PATH, sep=';')
+    before = len(df)
+
+    if before <= n:
+        print(f"   Le log contient {before} lignes (<= {n}), rien a supprimer.")
+        return
+
+    ascending = sort_by == "Max_Drawdown"
+    df = df.sort_values(sort_by, ascending=ascending).head(n)
+    df.to_csv(LOG_PATH, sep=';', index=False)
+    print(f"   [LOG] Log nettoye : {before} -> {n} lignes (top {n} par {sort_by})")
+
+
+# ============================================================================
 # EXECUTION D'UN BACKTEST POUR UNE CONFIG
 # ============================================================================
 
@@ -280,6 +473,15 @@ def run_optimization(configs_list, verbose=True):
     # 3. Afficher le tableau comparatif
     print(f"\n[3/3] Resultats")
     print_comparison_table(results)
+
+    # 4. Sauvegarder dans le log
+    overrides_map = {}
+    for cfg_spec in configs_list:
+        overrides = cfg_spec.get("overrides", {})
+        label = cfg_spec.get("label", build_label(overrides))
+        overrides_map[label] = overrides
+
+    save_results_to_log(results, overrides_map)
 
     return results
 

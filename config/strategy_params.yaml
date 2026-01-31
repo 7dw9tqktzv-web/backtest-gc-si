@@ -33,8 +33,8 @@ contracts:
 # ----------------------------------------------------------------------------
 indicators:
   period: "1min"            # Période de calcul des indicateurs (1min, 5min, 15min, 1h, 1d)
-  beta_lookback: 2640       # Période pour calcul du Beta (2 jours × 22h × 60min)
-  zscore_period: 30         # Période pour moyenne et écart-type du Z-Score
+  beta_lookback: 1980       # Période pour calcul du Beta (2 jours × 22h × 60min)
+  zscore_period: 20         # Période pour moyenne et écart-type du Z-Score
   correlation_period: 30    # Période pour la corrélation Pearson
   adf_hurst_period: 128     # Période pour tests ADF et Hurst
 
@@ -44,8 +44,8 @@ indicators:
 entry:
   zscore_long: -2.5         # Entrée LONG si Z-Score <= cette valeur
   zscore_short: 2.5         # Entrée SHORT si Z-Score >= cette valeur
-  correlation_min: 0.70     # Corrélation minimum requise
-  cointegration_score_min: 50  # Score de cointégration minimum (0-100)
+  correlation_min: 0.60     # Corrélation minimum requise
+  cointegration_score_min: 40  # Score de cointégration minimum (0-100)
   hurst_max: 1.0              # Hurst maximum (1.0 = desactive, 0.50 = filtre strict mean reversion)
 
 # ----------------------------------------------------------------------------
@@ -59,8 +59,8 @@ exit:
   zscore_sl_short: 3.5      # Stop Loss SHORT : sortie si Z >= cette valeur
   
   # Sortie sur PnL (en dollars)
-  pnl_take_profit: 600      # Take Profit en $ (sortie si PnL >= cette valeur)
-  pnl_stop_loss: -1000      # Stop Loss en $ (sortie si PnL <= cette valeur)
+  pnl_take_profit: 300      # Take Profit en $ (sortie si PnL >= cette valeur)
+  pnl_stop_loss: -600       # Stop Loss en $ (sortie si PnL <= cette valeur)
 
 # ----------------------------------------------------------------------------
 # CONDITION DE RÉENTRÉE

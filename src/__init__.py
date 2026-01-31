@@ -3,6 +3,7 @@
 # ============================================================================
 #
 # Ce package contient tous les modules du systeme de backtest :
+#   - common : Constantes d'etats et fonctions partagees
 #   - data_loader : Chargement et synchronisation des donnees
 #   - indicators : Calculs des indicateurs (Beta, Z-Score, etc.)
 #   - signals : Generation des signaux d'entree/sortie
@@ -11,6 +12,14 @@
 #   - metrics : Calcul des metriques de performance
 #
 # ============================================================================
+
+from .common import (
+    STATE_FLAT, STATE_LONG, STATE_SHORT,
+    STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT,
+    check_entry_conditions, check_zscore_exit,
+    check_cooldown_reset, calculate_current_pnl,
+    build_config_fingerprint
+)
 
 from .data_loader import (
     load_config,

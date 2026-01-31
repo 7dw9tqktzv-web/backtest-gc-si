@@ -35,106 +35,20 @@ import pandas as pd
 from typing import Tuple
 
 from position import calculate_position_size, calculate_transaction_costs
-
-
-# ============================================================================
-# CONSTANTES D'ETATS (identiques a signals.py)
-# ============================================================================
-
-STATE_FLAT = 0
-STATE_LONG = 1
-STATE_SHORT = -1
-STATE_COOLDOWN_LONG = 2
-STATE_COOLDOWN_SHORT = -2
-
-
-# ============================================================================
-# CALCUL DU PNL COURANT (sans couts, pour comparaison intra-trade)
-# ============================================================================
-
-def calculate_current_pnl(
-    direction: int,
-    entry_gc: float,
-    entry_si: float,
-    current_gc: float,
-    current_si: float,
-    gc_contracts: int,
-    si_contracts: int,
-    config: dict
-) -> float:
-    """
-    Calcule le PnL brut courant d'une position ouverte.
-
-    On ne soustrait PAS les couts ici car on veut comparer avec les seuils
-    TP/SL en dollars qui sont definis sur le PnL brut.
-    Les couts seront deduits a la cloture du trade.
-
-    Parametres:
-    -----------
-    direction : int
-        1 = LONG spread, -1 = SHORT spread
-    entry_gc, entry_si : float
-        Prix d'entree
-    current_gc, current_si : float
-        Prix actuels
-    gc_contracts, si_contracts : int
-        Nombre de contrats
-    config : dict
-        Configuration
-
-    Retourne:
-    ---------
-    float : PnL brut courant en dollars
-    """
-    gc_point_value = config['contracts']['gc_point_value']   # 100
-    si_point_value = config['contracts']['si_point_value']   # 5000
-
-    if direction == 1:
-        # LONG spread : long SI, short GC
-        pnl_si = (current_si - entry_si) * si_point_value * si_contracts
-        pnl_gc = (entry_gc - current_gc) * gc_point_value * gc_contracts
-    else:
-        # SHORT spread : short SI, long GC
-        pnl_si = (entry_si - current_si) * si_point_value * si_contracts
-        pnl_gc = (current_gc - entry_gc) * gc_point_value * gc_contracts
-
-    return pnl_gc + pnl_si
-
-
-# ============================================================================
-# VERIFICATION DES CONDITIONS D'ENTREE
-# ============================================================================
-
-def check_entry_conditions(
-    zscore: float,
-    correlation: float,
-    cointegration_score: float,
-    state: int,
-    config: dict
-) -> int:
-    """
-    Verifie les conditions d'entree (identique a signals.py).
-
-    Retourne 1 (LONG), -1 (SHORT), ou 0 (pas d'entree).
-    """
-    z_long = config['entry']['zscore_long']
-    z_short = config['entry']['zscore_short']
-    corr_min = config['entry']['correlation_min']
-    score_min = config['entry']['cointegration_score_min']
-
-    quality_ok = (correlation > corr_min) and (cointegration_score >= score_min)
-    if not quality_ok:
-        return 0
-
-    # LONG : autorise si FLAT ou COOLDOWN_SHORT
-    if zscore <= z_long and state not in (STATE_LONG, STATE_SHORT, STATE_COOLDOWN_LONG):
-        return 1
-
-    # SHORT : autorise si FLAT ou COOLDOWN_LONG
-    if zscore >= z_short and state not in (STATE_LONG, STATE_SHORT, STATE_COOLDOWN_SHORT):
-        return -1
-
-    return 0
+try:
+    from common import (
+        STATE_FLAT, STATE_LONG, STATE_SHORT,
+        STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT,
+        check_entry_conditions, check_cooldown_reset,
+        calculate_current_pnl
+    )
+except ImportError:
+    from .common import (
+        STATE_FLAT, STATE_LONG, STATE_SHORT,
+        STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT,
+        check_entry_conditions, check_cooldown_reset,
+        calculate_current_pnl
+    )
 
 
 # ============================================================================
@@ -201,19 +115,6 @@ def check_exit_conditions(
     return False, ''
 
 
-# ============================================================================
-# VERIFICATION DU COOLDOWN
-# ============================================================================
-
-def check_cooldown_reset(zscore: float, state: int, config: dict) -> bool:
-    """
-    Verifie si le cooldown est termine (identique a signals.py).
-    """
-    if state == STATE_COOLDOWN_LONG:
-        return zscore >= config['reentry']['zscore_reset_long']
-    elif state == STATE_COOLDOWN_SHORT:
-        return zscore <= config['reentry']['zscore_reset_short']
-    return False
 
 
 # ============================================================================
@@ -269,6 +170,7 @@ def run_backtest(df: pd.DataFrame, config: dict) -> pd.DataFrame:
     si_highs = df['High_SI'].values
     si_lows = df['Low_SI'].values
     betas = df['Beta'].values
+    hursts = df['Hurst'].values if 'Hurst' in df.columns else np.full(n, np.nan)
     datetimes = df['DateTime'].values
 
     # Seuils de sortie en dollars
@@ -382,7 +284,7 @@ def run_backtest(df: pd.DataFrame, config: dict) -> pd.DataFrame:
 
                 # Verifier entree sur la meme barre
                 if state in (STATE_FLAT, STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT):
-                    entry = check_entry_conditions(z, corr, score, state, config)
+                    entry = check_entry_conditions(z, corr, score, state, config, hurst=hursts[i])
                     if entry != 0 and not np.isnan(beta):
                         size = calculate_position_size(gc, si, beta, config)
                         direction = entry
@@ -438,7 +340,7 @@ def run_backtest(df: pd.DataFrame, config: dict) -> pd.DataFrame:
 
                 # Verifier entree sur la meme barre
                 if state in (STATE_FLAT, STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT):
-                    entry = check_entry_conditions(z, corr, score, state, config)
+                    entry = check_entry_conditions(z, corr, score, state, config, hurst=hursts[i])
                     if entry != 0 and not np.isnan(beta):
                         size = calculate_position_size(gc, si, beta, config)
                         direction = entry
@@ -519,7 +421,7 @@ def run_backtest(df: pd.DataFrame, config: dict) -> pd.DataFrame:
 
         # ---- ETAPE 3 : Verifier les entrees ----
         if state in (STATE_FLAT, STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT):
-            entry = check_entry_conditions(z, corr, score, state, config)
+            entry = check_entry_conditions(z, corr, score, state, config, hurst=hursts[i])
 
             if entry != 0 and not np.isnan(beta):
                 # Calculer le sizing

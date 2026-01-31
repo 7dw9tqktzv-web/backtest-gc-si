@@ -20,113 +20,28 @@ import json
 import numpy as np
 import pandas as pd
 from datetime import datetime
-from typing import Tuple
 from pathlib import Path
 
-from data_loader import load_and_prepare_data, load_config
+from data_loader import load_and_prepare_data
 from data_loader_5s import load_5s_data
 from indicators import calculate_all_indicators
 from position import calculate_position_size, calculate_transaction_costs
-
-
-# ============================================================================
-# CONSTANTES D'ETATS (identiques a signals.py / backtest_engine.py)
-# ============================================================================
-
-STATE_FLAT = 0
-STATE_LONG = 1
-STATE_SHORT = -1
-STATE_COOLDOWN_LONG = 2
-STATE_COOLDOWN_SHORT = -2
-
-
-# ============================================================================
-# FONCTIONS UTILITAIRES
-# ============================================================================
-
-def calculate_current_pnl(
-    direction: int,
-    entry_gc: float,
-    entry_si: float,
-    current_gc: float,
-    current_si: float,
-    gc_contracts: int,
-    si_contracts: int,
-    config: dict
-) -> float:
-    """
-    Calcule le PnL brut courant d'une position ouverte.
-    Identique a backtest_engine.py.
-    """
-    gc_pv = config['contracts']['gc_point_value']   # 100
-    si_pv = config['contracts']['si_point_value']   # 5000
-
-    if direction == 1:
-        # LONG spread : long SI, short GC
-        pnl_si = (current_si - entry_si) * si_pv * si_contracts
-        pnl_gc = (entry_gc - current_gc) * gc_pv * gc_contracts
-    else:
-        # SHORT spread : short SI, long GC
-        pnl_si = (entry_si - current_si) * si_pv * si_contracts
-        pnl_gc = (current_gc - entry_gc) * gc_pv * gc_contracts
-
-    return pnl_gc + pnl_si
-
-
-def check_entry_conditions(
-    zscore: float,
-    correlation: float,
-    cointegration_score: float,
-    state: int,
-    config: dict
-) -> int:
-    """
-    Verifie les conditions d'entree (identique a backtest_engine.py).
-    Retourne 1 (LONG), -1 (SHORT), ou 0 (pas d'entree).
-    """
-    z_long = config['entry']['zscore_long']
-    z_short = config['entry']['zscore_short']
-    corr_min = config['entry']['correlation_min']
-    score_min = config['entry']['cointegration_score_min']
-
-    quality_ok = (correlation > corr_min) and (cointegration_score >= score_min)
-    if not quality_ok:
-        return 0
-
-    if zscore <= z_long and state not in (STATE_LONG, STATE_SHORT, STATE_COOLDOWN_LONG):
-        return 1
-
-    if zscore >= z_short and state not in (STATE_LONG, STATE_SHORT, STATE_COOLDOWN_SHORT):
-        return -1
-
-    return 0
-
-
-def check_zscore_exit(zscore: float, state: int, config: dict) -> Tuple[bool, str]:
-    """
-    Verifie uniquement les sorties Z-Score (pas les dollars).
-    Les sorties dollars sont gerees via les barres 5s.
-    """
-    if state == STATE_LONG:
-        if zscore <= config['exit']['zscore_sl_long']:
-            return True, 'SL_ZSCORE'
-        if zscore >= config['exit']['zscore_tp_long']:
-            return True, 'TP_ZSCORE'
-    elif state == STATE_SHORT:
-        if zscore >= config['exit']['zscore_sl_short']:
-            return True, 'SL_ZSCORE'
-        if zscore <= config['exit']['zscore_tp_short']:
-            return True, 'TP_ZSCORE'
-    return False, ''
-
-
-def check_cooldown_reset(zscore: float, state: int, config: dict) -> bool:
-    """Verifie si le cooldown est termine."""
-    if state == STATE_COOLDOWN_LONG:
-        return zscore >= config['reentry']['zscore_reset_long']
-    elif state == STATE_COOLDOWN_SHORT:
-        return zscore <= config['reentry']['zscore_reset_short']
-    return False
+try:
+    from common import (
+        STATE_FLAT, STATE_LONG, STATE_SHORT,
+        STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT,
+        check_entry_conditions, check_zscore_exit,
+        check_cooldown_reset, calculate_current_pnl,
+        build_config_fingerprint
+    )
+except ImportError:
+    from .common import (
+        STATE_FLAT, STATE_LONG, STATE_SHORT,
+        STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT,
+        check_entry_conditions, check_zscore_exit,
+        check_cooldown_reset, calculate_current_pnl,
+        build_config_fingerprint
+    )
 
 
 # ============================================================================
@@ -179,6 +94,7 @@ def run_hybrid_backtest(
     gc_prices = df_1min['Last_GC'].values
     si_prices = df_1min['Last_SI'].values
     betas = df_1min['Beta'].values
+    hursts = df_1min['Hurst'].values if 'Hurst' in df_1min.columns else np.full(n, np.nan)
     datetimes_1min = df_1min['DateTime'].values
 
     # Preparer les donnees 5s pour acces rapide
@@ -335,7 +251,7 @@ def run_hybrid_backtest(
                         state = STATE_FLAT
 
                 if state in (STATE_FLAT, STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT):
-                    entry = check_entry_conditions(z, corr, score, state, config)
+                    entry = check_entry_conditions(z, corr, score, state, config, hurst=hursts[i])
                     if entry != 0 and not np.isnan(beta):
                         size = calculate_position_size(gc, si, beta, config)
                         direction = entry
@@ -423,7 +339,7 @@ def run_hybrid_backtest(
 
         # ---- ETAPE 3 : Verifier les entrees ----
         if state in (STATE_FLAT, STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT):
-            entry = check_entry_conditions(z, corr, score, state, config)
+            entry = check_entry_conditions(z, corr, score, state, config, hurst=hursts[i])
 
             if entry != 0 and not np.isnan(beta):
                 size = calculate_position_size(gc, si, beta, config)
@@ -513,22 +429,6 @@ def run_hybrid_backtest(
 # ============================================================================
 # EXPORT ET AFFICHAGE
 # ============================================================================
-
-def build_config_fingerprint(config):
-    """Construit une empreinte des parametres cles de la config.
-    Permet de verifier que le CSV a ete genere avec la config actuelle.
-    """
-    ind = config['indicators']
-    ext = config['exit']
-    ent = config['entry']
-    return (f"beta{ind['beta_lookback']}_zp{ind['zscore_period']}"
-            f"_corr{ind['correlation_period']}_adf{ind['adf_hurst_period']}"
-            f"_zE{ent['zscore_long']}_{ent['zscore_short']}"
-            f"_zTP{ext['zscore_tp_long']}_{ext['zscore_tp_short']}"
-            f"_zSL{ext['zscore_sl_long']}_{ext['zscore_sl_short']}"
-            f"_TP{ext['pnl_take_profit']}_SL{ext['pnl_stop_loss']}"
-            f"_corr{ent['correlation_min']}_coint{ent['cointegration_score_min']}")
-
 
 def export_backtest(trades_df: pd.DataFrame, config: dict, filepath: str = "output/backtest_hybrid.csv"):
     """Exporte les resultats du backtest hybride dans un fichier CSV.

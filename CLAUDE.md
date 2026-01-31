@@ -46,6 +46,7 @@ optimizer.py: loads data once -> loops N configs -> calculate_all_indicators -> 
 ### Module Status
 | Module | Status | Purpose |
 |--------|--------|---------|
+| `common.py` | Complete | Shared state constants and utility functions (entry/exit/cooldown/PnL) |
 | `data_loader.py` | Complete | Load/sync GC & SI 1-min data from Sierra Chart exports |
 | `data_loader_5s.py` | Complete | Load/sync GC & SI 5-second data from Sierra Chart exports |
 | `indicators.py` | Complete | Calculate Beta, Spread, Z-Score, Correlation, ADF, Hurst |
@@ -103,17 +104,19 @@ COOLDOWN_SHORT -> FLAT                   [Z <= +1.0]
 ```
 
 ### Entry Conditions
-- LONG spread: Z-Score <= -2.5, Correlation > 0.70, Cointegration Score >= 50, Hurst < hurst_max
-- SHORT spread: Z-Score >= 2.5, Correlation > 0.70, Cointegration Score >= 50, Hurst < hurst_max
+- LONG spread: Z-Score <= -2.5, Correlation > 0.60, Cointegration Score >= 40, Hurst < hurst_max
+- SHORT spread: Z-Score >= 2.5, Correlation > 0.60, Cointegration Score >= 40, Hurst < hurst_max
 - Note: hurst_max = 1.0 disables the filter (default). Set to 0.50 for strict mean reversion filtering.
+- Note: correlation_min has no practical impact (always > 0.80 when other conditions are met)
+- Note: Hurst filter is redundant with Cointegration Score (Hurst < 0.45 on all traded bars)
 
 ### Exit Conditions (OR logic)
 | Condition | LONG | SHORT |
 |-----------|------|-------|
 | TP Z-Score | >= -2.0 | <= +2.0 |
 | SL Z-Score | <= -3.5 | >= +3.5 |
-| TP Dollars | +$600 | +$600 |
-| SL Dollars | -$1000 | -$1000 |
+| TP Dollars | +$300 | +$300 |
+| SL Dollars | -$600 | -$600 |
 
 ### Key Rules
 - After take profit: immediate re-entry allowed if conditions met
@@ -122,14 +125,14 @@ COOLDOWN_SHORT -> FLAT                   [Z <= +1.0]
 - Reversal allowed: close LONG and open SHORT on same bar
 - Exit priority: SL_DOLLAR > SL_ZSCORE > TP_DOLLAR > TP_ZSCORE
 - Single position at a time
-- Dollar-based exits (TP $600 / SL -$1000) handled in backtest engines, not signals.py
+- Dollar-based exits (TP $300 / SL -$600) handled in backtest engines, not signals.py
 
 ## Backtest Engines
 
 ### backtest_engine.py (1-min with High/Low)
 - Iterates on 1-minute bars
 - Dollar exits use High/Low prices to detect intra-bar SL/TP triggers
-- When SL/TP dollar triggered, PnL is fixed at the threshold (-$1000 or +$600)
+- When SL/TP dollar triggered, PnL is fixed at the threshold (-$600 or +$300)
 - Z-Score exits use Last price
 
 ### backtest_engine_hybrid.py (Hybrid 1-min + 5s) -- RECOMMENDED
@@ -142,8 +145,8 @@ COOLDOWN_SHORT -> FLAT                   [Z <= +1.0]
 
 #### Hybrid exit priority per 1-min bar:
 ```
-1a. Scan 5s bars: SL_DOLLAR (-$1000) -> break
-1a. Scan 5s bars: TP_DOLLAR (+$600) -> break
+1a. Scan 5s bars: SL_DOLLAR (-$600) -> break
+1a. Scan 5s bars: TP_DOLLAR (+$300) -> break
 1b. If no 5s trigger: SL_ZSCORE on 1-min Z-Score
 1b. If no 5s trigger: TP_ZSCORE on 1-min Z-Score
 ```
@@ -177,14 +180,6 @@ After `generate_signals()`:
 - Approach: Pedagogical, step-by-step with explanations
 - No emojis or accented characters in print() statements (Windows cp1252 terminal)
 
-## Current Results (signals.py on 44,018 bars)
-
-- 66 trades: 43 LONG, 23 SHORT
-- 61 TP Z-Score exits, 5 SL Z-Score exits (ratio 12.2)
-- Trades are short duration (1-7 min avg), 0.5% time in market
-- No trades after Jan 22 due to low correlation/cointegration score in that period
-- Trade list exported to `output/trade_list.csv` (semicolon-separated, Excel compatible)
-
 ## Position Sizing (position.py)
 
 ### Dollar Neutral with Beta (ACSIL v1.4 formula)
@@ -195,40 +190,83 @@ GC_contracts = round( (NotionalSI / NotionalGC) × Beta ) , minimum 1
 ```
 
 ### Key Observations
-- Beta varies from ~0.03 to ~6.3 on traded bars → GC contracts range from 1 to 6
-- Trades with 5 GC contracts are the most problematic (82% of total losses in Z-Score-only backtest)
-- Dollar-based exits (TP/SL $) in backtest engines limit large losses
+- Beta varies from ~0.03 to ~6.3 on traded bars -> GC contracts range from 1 to 6
+- Dollar-based exits (TP/SL $) in backtest engines limit large losses from high-contract trades
 
-## Current Results (position.py Z-Score-only backtest on 66 trades)
+## Current Results (Config A -- best PnL, 44,018 bars, 48 days)
 
-- PnL net total: -$15,513 (without dollar-based exits)
-- Win rate: 62.1% (41/66)
-- Worst trade: -$14,624 (SHORT #52, 5 GC contracts, GC dropped 36 points)
-- Costs total: $7,188 (commission + slippage)
-- Note: These results do NOT include TP $600 / SL -$1000 exits
+Config A: beta=1980, zp=20, cp=30, adf=128, cm=0.60, co=40, TP=$300, SL=-$600
 
-## Current Results (backtest_engine_hybrid.py on 229 trades)
-
-- PnL net total: +$29,341
-- Win rate: 73.4% (168/229)
-- 140 LONG / 89 SHORT
-- Exits: 88 TP_DOLLAR, 121 TP_ZSCORE, 13 SL_DOLLAR, 7 SL_ZSCORE
-- Best trade: +$780 | Worst trade: -$2,898
-- Max Drawdown: -$2,898
-- Profit Factor: 1.98
-- Costs total: $26,454
+- PnL net total: +$60,567
+- Win rate: 90.2% (395/438)
+- 252 LONG / 186 SHORT
+- Exits: 356 TP_DOLLAR, 76 TP_ZSCORE, 6 SL_DOLLAR, 0 SL_ZSCORE
+- Best trade: +$499 | Worst trade: -$750
+- Max Drawdown: -$765
+- Profit Factor: 6.90
+- Sharpe (per trade): 14.44
+- Costs total: $50,388 (45% of gross PnL)
+- Avg trade duration: 0.4 min | 9.1 trades/day
 - Trade list exported to `output/backtest_hybrid.csv` (semicolon-separated)
+
+## Optimization History (606+ configs tested)
+
+### 3-step grid search process
+1. **Etape 1 (22 configs)**: beta_lookback (660-7920) x zscore_period (15/20/30)
+   - Finding: beta=660 and beta=1980 dominate. zp=15 and zp=20 best.
+2. **Etape 2 (101 configs)**: top 5 indicators x TP (200-600) x SL (400-1200)
+   - Finding: **TP=$300 + SL=-$600 is optimal**. Smaller TP captures profits faster on mean reversion.
+3. **Etape 3 (481 configs)**: 6 bases x correlation_period x adf_period x corr_min x coint_min
+   - Finding: cointegration_score_min=40 doubles PnL vs 60. correlation_min has zero impact.
+
+### Hurst filter test (12 configs)
+- Tested hurst_max = 0.45/0.50/0.55/1.0 on 3 winning configs
+- Result: **zero impact** -- Hurst < 0.45 on all traded bars (redundant with Cointegration Score)
+
+### 3 archived winning configs
+
+| Config | Params | Trades | WR% | PnL Net | PF | MaxDD | Sharpe | Profile |
+|--------|--------|--------|-----|---------|-----|-------|--------|---------|
+| A | co=40, cp=30 | 438 | 90.2% | $60,567 | 6.90 | -$765 | 14.4 | Max PnL |
+| B | co=50, cp=60 | 231 | 92.6% | $35,127 | 12.99 | -$750 | 20.2 | Max risk-adjusted |
+| E | co=50, cp=30 | 250 | 90.8% | $37,136 | 10.19 | -$765 | 17.7 | Balanced |
+
+Common params: beta=1980, zp=20, TP=$300, SL=-$600, cm=0.60, adf=128
+
+### Key optimization conclusions
+- `correlation_min` is redundant: correlation is always > 0.80 when Z-Score + Coint conditions are met
+- `hurst_max` is redundant: Hurst < 0.45 on all traded bars (already captured by Cointegration Score)
+- `cointegration_score_min` is the most impactful secondary parameter (40 vs 60 = +63% PnL)
+- TP/SL dollar thresholds are the most impactful parameters overall (TP300/SL600 vs TP600/SL1000 = +106% PnL)
+- Optimization log saved in `output/optimization_log.csv` (top 50 + Hurst test batch)
+
+## Next Steps (TODO)
+
+### Priority 1 -- Validation
+- **Walk-forward test**: Split data into train (30 days) / test (18 days), optimize on train, validate on test. Critical to detect overfitting on 606 configs.
+- **Cost stress test**: Run Config A with slippage=2 ticks and commission=$5 to verify robustness.
+
+### Priority 2 -- Additional parameter tests
+- **Z-Score entry thresholds**: Test zscore_long=-2.0/-3.0, zscore_short=+2.0/+3.0 (never tested, kept at default -2.5/+2.5)
+- **Z-Score exit thresholds**: Test zscore_tp_long=-1.5/-1.0, etc. (low impact expected since 81% exits are TP_DOLLAR)
+
+### Priority 3 -- More data
+- **Extend data period**: 48 days is limited. 6-12 months would validate robustness across different market conditions (trending, ranging, volatile).
+- **Paper trading**: Run strategy in real-time simulation before committing capital.
 
 ## Completed Improvements
 
-- **Cointegration Score adaptive**: Reweights score proportionally when ADF/Hurst are NaN, instead of penalizing to 0. No impact on trade count (still 66 trades).
+- **Cointegration Score adaptive**: Reweights score proportionally when ADF/Hurst are NaN, instead of penalizing to 0.
 - **ACSIL formula verification**: Confirmed Python matches ACSIL v1.4 for StdDev (ddof=1), Correlation (Pearson), and OLS Beta.
-- **Hybrid backtest (1min + 5s)**: Dollar exits monitored on 5-second bars for precision. Indicators stay on 1-minute (no x12 lookbacks). Full 5s approach was tested and rejected (too noisy, 70 SL_ZSCORE from transient threshold crossings).
+- **Hybrid backtest (1min + 5s)**: Dollar exits monitored on 5-second bars for precision. Full 5s approach was tested and rejected (too noisy).
 - **Parquet cache**: Synchronized DataFrames cached in `data/processed/` for faster reloads. Invalidated by MD5 hash of source CSV files.
 - **Multi-config optimizer**: `optimizer.py` loads data once and runs N backtest configs in a loop. Used by the /optimize skill for grid search.
-- **Hurst filter**: Independent `hurst_max` parameter in entry conditions (default 1.0 = disabled). Blocks entries when Hurst >= threshold.
+- **Optimization logging**: `optimizer.py` auto-saves results to `output/optimization_log.csv` with batch IDs. Functions: save_results_to_log, load_log, print_log_summary, delete_batch, keep_top_n.
+- **Hurst filter**: Independent `hurst_max` parameter in entry conditions (default 1.0 = disabled). Proven redundant with Cointegration Score on current data.
 - **Config fingerprint validation**: `backtest_engine_hybrid.py` exports a `.meta.json` alongside the CSV. `metrics.py` validates config coherence before archiving.
 - **Index deduplication**: `metrics.py` replaces existing index.csv entries with same Folder_Path + Days_Loaded instead of creating duplicates.
+- **Code factorization**: `common.py` centralizes state constants and shared functions (check_entry_conditions, check_zscore_exit, check_cooldown_reset, calculate_current_pnl, build_config_fingerprint). Removed ~430 lines of duplicated code across signals.py, backtest_engine.py, backtest_engine_hybrid.py, metrics.py.
+- **Hurst bug fix**: Both backtest engines now pass `hurst=hursts[i]` to check_entry_conditions (was silently ignored before). No impact with default hurst_max=1.0.
 
 ## Claude Code Skills
 

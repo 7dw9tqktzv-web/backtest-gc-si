@@ -31,6 +31,12 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import yaml
+try:
+    from data_loader import load_config
+    from common import build_config_fingerprint
+except ImportError:
+    from .data_loader import load_config
+    from .common import build_config_fingerprint
 import matplotlib
 matplotlib.use('Agg')  # Backend sans affichage (pas de fenetre)
 import matplotlib.pyplot as plt
@@ -50,13 +56,6 @@ INDEX_CSV = ARCHIVE_DIR / "index.csv"
 # ============================================================================
 # CHARGEMENT DES DONNEES
 # ============================================================================
-def load_config():
-    """Charge la configuration depuis strategy_params.yaml."""
-    with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-        config = yaml.safe_load(f)
-    return config
-
-
 def load_trades(filepath=None):
     """Charge les trades depuis le CSV du backtest (separateur point-virgule)."""
     if filepath is None:
@@ -695,20 +694,6 @@ def generate_equity_chart(equity_data, output_path):
 # ============================================================================
 # VALIDATION CONFIG / CSV
 # ============================================================================
-def build_config_fingerprint(config):
-    """Construit une empreinte des parametres cles de la config."""
-    ind = config['indicators']
-    ext = config['exit']
-    ent = config['entry']
-    return (f"beta{ind['beta_lookback']}_zp{ind['zscore_period']}"
-            f"_corr{ind['correlation_period']}_adf{ind['adf_hurst_period']}"
-            f"_zE{ent['zscore_long']}_{ent['zscore_short']}"
-            f"_zTP{ext['zscore_tp_long']}_{ext['zscore_tp_short']}"
-            f"_zSL{ext['zscore_sl_long']}_{ext['zscore_sl_short']}"
-            f"_TP{ext['pnl_take_profit']}_SL{ext['pnl_stop_loss']}"
-            f"_corr{ent['correlation_min']}_coint{ent['cointegration_score_min']}")
-
-
 def validate_csv_config(config):
     """Verifie que le CSV a ete genere avec la config actuelle.
     Retourne (True, message) si OK, (False, message) si mismatch.
@@ -891,7 +876,7 @@ def run_metrics():
 
     # Charger
     print("[...] Chargement de la configuration...")
-    config = load_config()
+    config = load_config(str(CONFIG_PATH))
 
     print("[...] Chargement des trades...")
     trades = load_trades()
