@@ -49,7 +49,8 @@ def check_entry_conditions(
     correlation: float,
     cointegration_score: float,
     state: int,
-    config: dict
+    config: dict,
+    hurst: float = 0.0
 ) -> int:
     """
     Verifie si les conditions d'entree sont remplies.
@@ -57,8 +58,9 @@ def check_entry_conditions(
     Logique :
     - On ne peut entrer que si on est FLAT
       (ou COOLDOWN dans la direction opposee)
-    - Il faut que les 3 conditions soient vraies simultanement :
-      Z-Score au-dela du seuil, correlation suffisante, score suffisant
+    - Il faut que les conditions soient vraies simultanement :
+      Z-Score au-dela du seuil, correlation suffisante, score suffisant,
+      et Hurst en dessous du seuil max (si active)
 
     Parametres:
     -----------
@@ -72,6 +74,8 @@ def check_entry_conditions(
         Etat actuel de la machine a etats
     config : dict
         Configuration chargee depuis YAML
+    hurst : float
+        Valeur actuelle de l'exposant de Hurst (< 0.5 = mean reversion)
 
     Retourne:
     ---------
@@ -82,9 +86,14 @@ def check_entry_conditions(
     z_short = config['entry']['zscore_short']           # +3.0
     corr_min = config['entry']['correlation_min']       # 0.70
     score_min = config['entry']['cointegration_score_min']  # 50
+    hurst_max = config['entry'].get('hurst_max', 1.0)  # 1.0 = desactive
 
     # Conditions de qualite communes aux deux directions
     quality_ok = (correlation > corr_min) and (cointegration_score >= score_min)
+
+    # Filtre Hurst independant (si active)
+    if hurst_max < 1.0 and not np.isnan(hurst):
+        quality_ok = quality_ok and (hurst < hurst_max)
 
     if not quality_ok:
         return 0
@@ -244,6 +253,7 @@ def generate_signals(df: pd.DataFrame, config: dict) -> pd.DataFrame:
     zscores = df['ZScore'].values
     correlations = df['Correlation'].values
     coint_scores = df['Cointegration_Score'].values
+    hursts = df['Hurst'].values if 'Hurst' in df.columns else np.full(n, np.nan)
 
     # Etat initial
     state = STATE_FLAT
@@ -254,6 +264,7 @@ def generate_signals(df: pd.DataFrame, config: dict) -> pd.DataFrame:
         z = zscores[i]
         corr = correlations[i]
         score = coint_scores[i]
+        h = hursts[i]
 
         # Ignorer les barres avec des donnees invalides (NaN)
         if np.isnan(z) or np.isnan(corr) or np.isnan(score):
@@ -286,7 +297,7 @@ def generate_signals(df: pd.DataFrame, config: dict) -> pd.DataFrame:
 
         # ---- ETAPE 3 : Verifier les entrees (si FLAT ou cooldown oppose) ----
         if state in (STATE_FLAT, STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT):
-            entry = check_entry_conditions(z, corr, score, state, config)
+            entry = check_entry_conditions(z, corr, score, state, config, hurst=h)
 
             if entry != 0:
                 signals[i] = entry

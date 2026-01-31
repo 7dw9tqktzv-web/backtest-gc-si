@@ -18,12 +18,14 @@ import pandas as pd
 from pathlib import Path
 from typing import Tuple
 
-from data_loader import load_config, load_sierra_chart_data, synchronize_data
+from data_loader import (load_config, load_sierra_chart_data, synchronize_data,
+                         _cache_is_valid, _save_cache, CACHE_DIR)
 
 
 def load_5s_data(
     config: dict,
-    verbose: bool = True
+    verbose: bool = True,
+    use_cache: bool = True
 ) -> pd.DataFrame:
     """
     Charge et synchronise les donnees GC et SI en barres de 5 secondes.
@@ -37,18 +39,32 @@ def load_5s_data(
         Configuration chargee depuis YAML (doit contenir data.gc_file_5s et data.si_file_5s)
     verbose : bool
         Si True, affiche les statistiques de chargement
+    use_cache : bool
+        Si True, utilise le cache Parquet si disponible
 
     Retourne:
     ---------
     pd.DataFrame : DataFrame synchronise avec colonnes _GC et _SI
     """
-    gc_file = config['data']['gc_file_5s']
-    si_file = config['data']['si_file_5s']
+    gc_file = Path(config['data']['gc_file_5s'])
+    si_file = Path(config['data']['si_file_5s'])
+    cache_parquet = CACHE_DIR / "synchronized_5s.parquet"
+    cache_meta = CACHE_DIR / "synchronized_5s.meta.json"
 
+    # Tentative de chargement depuis le cache Parquet
+    if use_cache and _cache_is_valid(cache_parquet, cache_meta, [gc_file, si_file]):
+        if verbose:
+            print("\n[CACHE] Chargement des donnees 5s depuis le cache Parquet...")
+        df_5s = pd.read_parquet(cache_parquet)
+        if verbose:
+            print(f"   {len(df_5s):,} barres chargees depuis le cache")
+            print(f"   Periode : {df_5s['DateTime'].min()} -> {df_5s['DateTime'].max()}")
+        return df_5s
+
+    # Pipeline normal : chargement depuis les CSV
     if verbose:
-        print("\n[...] Chargement des donnees 5 secondes...")
+        print("\n[...] Chargement des donnees 5 secondes depuis les CSV...")
 
-    # Charger les fichiers GC et SI
     gc_data = load_sierra_chart_data(gc_file)
     si_data = load_sierra_chart_data(si_file)
 
@@ -68,6 +84,10 @@ def load_5s_data(
         if barres_perdues > 0:
             print(f"   [!] Barres non appariees : {barres_perdues}")
         print(f"   Periode : {df_5s['DateTime'].min()} -> {df_5s['DateTime'].max()}")
+
+    # Sauvegarder le cache Parquet
+    if use_cache:
+        _save_cache(df_5s, cache_parquet, cache_meta, [gc_file, si_file], verbose=verbose)
 
     return df_5s
 

@@ -10,6 +10,7 @@
 # Manipulation de données
 pandas>=2.0.0
 numpy>=1.24.0
+pyarrow>=10.0.0            # Format Parquet pour cache des donnees
 
 # Configuration
 pyyaml>=6.0

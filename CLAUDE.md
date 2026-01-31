@@ -34,11 +34,13 @@ python validate_data.py --date "2026-01-23 10:30:00"
 
 ### Data Pipeline
 ```
-Sierra Chart CSV -> data_loader.py -> indicators.py -> signals.py -> position.py -> backtest_engine.py -> metrics.py
-                      (sync GC/SI)    (calculate)    (generate)      (sizing)      (simulate)           (analyze)
+Sierra Chart CSV -> data_loader.py -> [Parquet cache] -> indicators.py -> signals.py -> position.py -> backtest_engine.py -> metrics.py
+                      (sync GC/SI)    (data/processed/)   (calculate)    (generate)      (sizing)      (simulate)           (analyze)
 
-Sierra Chart 5s CSV -> data_loader_5s.py -> backtest_engine_hybrid.py
-                         (sync 5s)            (hybrid simulation)
+Sierra Chart 5s CSV -> data_loader_5s.py -> [Parquet cache] -> backtest_engine_hybrid.py
+                         (sync 5s)          (data/processed/)    (hybrid simulation)
+
+optimizer.py: loads data once -> loops N configs -> calculate_all_indicators -> run_hybrid_backtest -> comparison table
 ```
 
 ### Module Status
@@ -52,6 +54,7 @@ Sierra Chart 5s CSV -> data_loader_5s.py -> backtest_engine_hybrid.py
 | `backtest_engine.py` | Complete | Trade simulation with High/Low intra-bar dollar exits |
 | `backtest_engine_hybrid.py` | Complete | Hybrid backtest: 1-min signals + 5s dollar exits |
 | `metrics.py` | Complete | Performance analysis (10 sections) + archiving |
+| `optimizer.py` | Complete | Multi-config backtester (load once, test N configs) |
 
 ### Key Entry Points
 - `load_and_prepare_data()` in `data_loader.py` - returns `(df, config, stats)`
@@ -66,6 +69,8 @@ Sierra Chart 5s CSV -> data_loader_5s.py -> backtest_engine_hybrid.py
 - `run_backtest(df, config)` in `backtest_engine.py` - returns trades DataFrame (1-min High/Low)
 - `run_hybrid_backtest(df_1min, df_5s, config)` in `backtest_engine_hybrid.py` - returns trades DataFrame (hybrid)
 - `run_metrics()` in `metrics.py` - analyzes backtest results, generates report + equity curve, archives everything
+- `run_optimization(configs_list)` in `optimizer.py` - loads data once, runs N backtests, returns comparison table
+- `apply_overrides(config, overrides)` in `optimizer.py` - applies dotted-key overrides to config dict
 
 ### Configuration
 All parameters are in `config/strategy_params.yaml`. Never hardcode values.
@@ -98,8 +103,9 @@ COOLDOWN_SHORT -> FLAT                   [Z <= +1.0]
 ```
 
 ### Entry Conditions
-- LONG spread: Z-Score <= -2.5, Correlation > 0.70, Cointegration Score >= 50
-- SHORT spread: Z-Score >= 2.5, Correlation > 0.70, Cointegration Score >= 50
+- LONG spread: Z-Score <= -2.5, Correlation > 0.70, Cointegration Score >= 50, Hurst < hurst_max
+- SHORT spread: Z-Score >= 2.5, Correlation > 0.70, Cointegration Score >= 50, Hurst < hurst_max
+- Note: hurst_max = 1.0 disables the filter (default). Set to 0.50 for strict mean reversion filtering.
 
 ### Exit Conditions (OR logic)
 | Condition | LONG | SHORT |
@@ -218,6 +224,11 @@ GC_contracts = round( (NotionalSI / NotionalGC) × Beta ) , minimum 1
 - **Cointegration Score adaptive**: Reweights score proportionally when ADF/Hurst are NaN, instead of penalizing to 0. No impact on trade count (still 66 trades).
 - **ACSIL formula verification**: Confirmed Python matches ACSIL v1.4 for StdDev (ddof=1), Correlation (Pearson), and OLS Beta.
 - **Hybrid backtest (1min + 5s)**: Dollar exits monitored on 5-second bars for precision. Indicators stay on 1-minute (no x12 lookbacks). Full 5s approach was tested and rejected (too noisy, 70 SL_ZSCORE from transient threshold crossings).
+- **Parquet cache**: Synchronized DataFrames cached in `data/processed/` for faster reloads. Invalidated by MD5 hash of source CSV files.
+- **Multi-config optimizer**: `optimizer.py` loads data once and runs N backtest configs in a loop. Used by the /optimize skill for grid search.
+- **Hurst filter**: Independent `hurst_max` parameter in entry conditions (default 1.0 = disabled). Blocks entries when Hurst >= threshold.
+- **Config fingerprint validation**: `backtest_engine_hybrid.py` exports a `.meta.json` alongside the CSV. `metrics.py` validates config coherence before archiving.
+- **Index deduplication**: `metrics.py` replaces existing index.csv entries with same Folder_Path + Days_Loaded instead of creating duplicates.
 
 ## Claude Code Skills
 
@@ -229,12 +240,20 @@ Runs the hybrid backtest and affiche les resultats formates. Compare automatique
 - Option de push vers GitHub
 
 ### /optimize
-Teste differents parametres via langage naturel en francais (ex: "teste avec un TP a 500 et un beta lookback de 1320").
-- Modifie `config/strategy_params.yaml` selon la demande
-- Lance le backtest hybrid + metrics
-- Compare les resultats avec le baseline
-- Archive les variations dans `output/archive/`
-- Log dans `output/optimization_log.csv`
+Teste differents parametres via langage naturel en francais. Supporte le grid search avec la syntaxe "/" (ex: "teste beta 1320/2640 avec TP 400/600").
+- Utilise `optimizer.py` : charge les donnees 1 fois, boucle sur N configs en memoire
+- Ne modifie PAS le YAML pendant les tests (travaille en memoire)
+- Affiche un tableau comparatif trie par PnL
+- Option d'archiver le meilleur resultat
+
+### /compare
+Compare tous les backtests archives dans `output/archive/index.csv`.
+- Affiche un tableau trie par PnL net (ou autre critere)
+- Met en evidence le meilleur run et les tendances
+
+## Parquet Cache
+
+Les donnees synchronisees sont cachees en Parquet dans `data/processed/` apres le premier chargement CSV. Invalidation automatique par hash MD5 des fichiers sources. Les indicateurs ne sont PAS caches (dependent de la config).
 
 ## Git Tracking
 

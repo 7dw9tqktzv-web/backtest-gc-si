@@ -46,6 +46,7 @@ entry:
   zscore_short: 2.5         # Entrée SHORT si Z-Score >= cette valeur
   correlation_min: 0.70     # Corrélation minimum requise
   cointegration_score_min: 50  # Score de cointégration minimum (0-100)
+  hurst_max: 1.0              # Hurst maximum (1.0 = desactive, 0.50 = filtre strict mean reversion)
 
 # ----------------------------------------------------------------------------
 # CONDITIONS DE SORTIE

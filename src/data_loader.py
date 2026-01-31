@@ -17,6 +17,8 @@ import numpy as np
 from pathlib import Path
 from typing import Tuple, Optional
 import yaml
+import hashlib
+import json
 
 
 def load_config(config_path: str = "config/strategy_params.yaml") -> dict:
@@ -214,9 +216,58 @@ def validate_data(df: pd.DataFrame, verbose: bool = True) -> dict:
     return stats
 
 
+# ============================================================================
+# CACHE PARQUET - Chargement accelere des donnees synchronisees
+# ============================================================================
+
+CACHE_DIR = Path("data/processed")
+
+
+def _file_hash(filepath):
+    """Calcule le hash MD5 d'un fichier source pour detecter les changements."""
+    h = hashlib.md5()
+    with open(filepath, 'rb') as f:
+        for chunk in iter(lambda: f.read(8192), b''):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _cache_is_valid(cache_parquet, meta_path, source_files):
+    """Verifie si le cache Parquet est valide par rapport aux fichiers sources."""
+    if not cache_parquet.exists() or not meta_path.exists():
+        return False
+    try:
+        with open(meta_path, 'r') as f:
+            meta = json.load(f)
+        for src_file in source_files:
+            expected_hash = meta.get('hashes', {}).get(str(src_file))
+            if expected_hash != _file_hash(src_file):
+                return False
+        return True
+    except (json.JSONDecodeError, KeyError):
+        return False
+
+
+def _save_cache(df, cache_parquet, meta_path, source_files, verbose=True):
+    """Sauvegarde le DataFrame en Parquet avec metadata de validation."""
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(cache_parquet, index=False, compression='snappy')
+    meta = {
+        "rows": len(df),
+        "columns": list(df.columns),
+        "hashes": {str(f): _file_hash(f) for f in source_files}
+    }
+    with open(meta_path, 'w') as f:
+        json.dump(meta, f, indent=2)
+    if verbose:
+        size_mb = cache_parquet.stat().st_size / (1024 * 1024)
+        print(f"   [CACHE] Sauvegarde : {cache_parquet} ({size_mb:.1f} MB)")
+
+
 def load_and_prepare_data(
     config_path: str = "config/strategy_params.yaml",
-    verbose: bool = True
+    verbose: bool = True,
+    use_cache: bool = True
 ) -> Tuple[pd.DataFrame, dict, dict]:
     """
     Fonction principale : charge, synchronise et valide les données.
@@ -245,36 +296,55 @@ def load_and_prepare_data(
     """
     # 1. Charger la configuration
     config = load_config(config_path)
-    
+
+    gc_file = Path(config['data']['gc_file'])
+    si_file = Path(config['data']['si_file'])
+    cache_parquet = CACHE_DIR / "synchronized_1min.parquet"
+    cache_meta = CACHE_DIR / "synchronized_1min.meta.json"
+
+    # 2. Tentative de chargement depuis le cache Parquet
+    if use_cache and _cache_is_valid(cache_parquet, cache_meta, [gc_file, si_file]):
+        if verbose:
+            print("\n[CACHE] Chargement des donnees 1min depuis le cache Parquet...")
+        df = pd.read_parquet(cache_parquet)
+        if verbose:
+            print(f"   {len(df):,} barres chargees depuis le cache")
+        stats = validate_data(df, verbose=verbose)
+        return df, config, stats
+
+    # 3. Pipeline normal : chargement depuis les CSV
     if verbose:
-        print("\n[...] Chargement des donnees...")
-    
-    # 2. Charger les fichiers GC et SI
-    gc_data = load_sierra_chart_data(config['data']['gc_file'])
-    si_data = load_sierra_chart_data(config['data']['si_file'])
-    
+        print("\n[...] Chargement des donnees depuis les CSV...")
+
+    gc_data = load_sierra_chart_data(gc_file)
+    si_data = load_sierra_chart_data(si_file)
+
     if verbose:
-        print(f"   GC chargé : {len(gc_data):,} barres")
-        print(f"   SI chargé : {len(si_data):,} barres")
-    
-    # 3. Synchroniser les données
+        print(f"   GC charge : {len(gc_data):,} barres")
+        print(f"   SI charge : {len(si_data):,} barres")
+
+    # 4. Synchroniser les donnees
     if verbose:
         print("\n[...] Synchronisation GC/SI...")
-    
+
     df = synchronize_data(gc_data, si_data, method="inner")
-    
+
     if verbose:
         barres_perdues = len(gc_data) + len(si_data) - 2 * len(df)
-        print(f"   Barres après synchronisation : {len(df):,}")
+        print(f"   Barres apres synchronisation : {len(df):,}")
         if barres_perdues > 0:
             print(f"   [!] Barres non appariees : {barres_perdues}")
-    
-    # 4. Valider les données
+
+    # 5. Sauvegarder le cache Parquet
+    if use_cache:
+        _save_cache(df, cache_parquet, cache_meta, [gc_file, si_file], verbose=verbose)
+
+    # 6. Valider les donnees
     if verbose:
         print("\n[...] Validation des donnees...")
-    
+
     stats = validate_data(df, verbose=verbose)
-    
+
     return df, config, stats
 
 
