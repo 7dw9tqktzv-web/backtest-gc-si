@@ -278,6 +278,14 @@ def run_hybrid_backtest(
 
             should_exit, reason = check_zscore_exit(z, state, config)
 
+            # Filtre optionnel : bloquer TP_ZSCORE si PnL brut < seuil
+            # Config: exit.zscore_tp_min_pnl (defaut: None = desactive)
+            zscore_tp_min_pnl = config['exit'].get('zscore_tp_min_pnl', None)
+            if should_exit and reason == 'TP_ZSCORE' and zscore_tp_min_pnl is not None:
+                if current_pnl < zscore_tp_min_pnl:
+                    should_exit = False
+                    reason = ''
+
             if should_exit:
                 trade_no += 1
                 costs = calculate_transaction_costs(gc_contracts, si_contracts, config)
