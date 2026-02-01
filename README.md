@@ -12,9 +12,9 @@ backtest_gc_si/
 │
 ├── data/
 │   └── raw/                          <- Exports Sierra Chart (.txt)
-│       ├── GCG26_FUT_CME_scid_BarData.txt      <- GC 1-minute
+│       ├── GCJ26_FUT_CME_scid_BarData.txt      <- GC 1-minute
 │       ├── SIH26_FUT_CME_scid_BarData.txt      <- SI 1-minute
-│       ├── GCG26_FUT_CME_5s.scid_BarData.txt   <- GC 5-secondes
+│       ├── GCJ26_FUT_CME_5s.scid_BarData.txt   <- GC 5-secondes
 │       └── SIH26_FUT_CME_5s.scid_BarData.txt   <- SI 5-secondes
 │
 ├── output/
@@ -32,6 +32,7 @@ backtest_gc_si/
 │
 ├── src/
 │   ├── __init__.py
+│   ├── common.py                     <- [OK] Constantes et fonctions partagees
 │   ├── data_loader.py                <- [OK] Chargement/sync donnees 1-minute
 │   ├── data_loader_5s.py             <- [OK] Chargement/sync donnees 5-secondes
 │   ├── indicators.py                 <- [OK] Beta, Z-Score, Correlation, ADF, Hurst
@@ -39,8 +40,11 @@ backtest_gc_si/
 │   ├── position.py                   <- [OK] Sizing dollar-neutral + PnL
 │   ├── backtest_engine.py            <- [OK] Simulation 1-min (High/Low dollar exits)
 │   ├── backtest_engine_hybrid.py     <- [OK] Simulation hybride 1min + 5s
+│   ├── optimizer.py                  <- [OK] Multi-config backtester
 │   └── metrics.py                    <- [OK] Analyse performances + archivage
 │
+├── run_grid_search.py                <- Grid search 864 configs (optimise)
+├── run_walk_forward.py               <- Walk-forward test (6 fenetres)
 ├── requirements.txt                  <- Dependances Python
 ├── validate_data.py                  <- Script de validation vs Sierra Chart
 ├── CLAUDE.md                         <- Instructions pour Claude Code
@@ -105,8 +109,8 @@ Tous les parametres sont dans `config/strategy_params.yaml`.
 ### Indicateurs (calcules sur barres 1-minute)
 | Parametre | Valeur | Description |
 |-----------|--------|-------------|
-| Beta Lookback | 2640 barres | Fenetre regression OLS (~2 jours) |
-| Z-Score Period | 30 barres | Moyenne/ecart-type du spread |
+| Beta Lookback | 1980 barres | Fenetre regression OLS (~1.5 jours) |
+| Z-Score Period | 20 barres | Moyenne/ecart-type du spread |
 | Correlation Period | 30 barres | Correlation Pearson glissante |
 | ADF/Hurst Period | 128 barres | Tests de stationnarite |
 
@@ -115,8 +119,8 @@ Tous les parametres sont dans `config/strategy_params.yaml`.
 |-----------|--------|
 | Z-Score Entry LONG | <= -2.5 |
 | Z-Score Entry SHORT | >= +2.5 |
-| Correlation min | > 0.70 |
-| Cointegration Score min | >= 50 |
+| Correlation min | > 0.60 |
+| Cointegration Score min | >= 40 |
 
 ### Conditions de sortie (Z-Score)
 | Parametre | LONG | SHORT |
@@ -127,8 +131,8 @@ Tous les parametres sont dans `config/strategy_params.yaml`.
 ### Conditions de sortie (Dollars)
 | Parametre | Valeur |
 |-----------|--------|
-| PnL Take Profit | +$600 |
-| PnL Stop Loss | -$1000 |
+| PnL Take Profit | +$300 |
+| PnL Stop Loss | -$600 |
 
 ### Reentree apres Stop Loss
 | Parametre | Valeur |
@@ -169,22 +173,39 @@ Tous les parametres sont dans `config/strategy_params.yaml`.
 
 ## Donnees
 
-- **Barres 1-min synchronisees** : 44,018
-- **Barres 5s synchronisees** : 378,920
-- **Periode** : 8 dec 2025 - 28 jan 2026
+- **Barres 1-min synchronisees** : 186,639
+- **Barres 5s synchronisees** : 1,312,336
+- **Periode** : 25 mai 2025 - 30 jan 2026 (~8 mois, 182 jours de trading)
+- **Source** : Sierra Chart exports (GCJ26 Gold futures, SIH26 Silver futures)
 
 ## Resultats
 
-### signals.py (Z-Score seul, sans sorties $)
-- 66 trades (43 LONG, 23 SHORT), ratio TP/SL = 12.2
-- PnL net : -$15,513, Win Rate : 62.1%
+### Backtest hybride (config par defaut, 8 mois)
+- 1,473 trades (844 LONG, 629 SHORT)
+- PnL net : +$71,428, Win Rate : 62.3%
+- Profit Factor : 1.95, Max Drawdown : -$20,639
+- Sharpe : 4.25
 
-### backtest_engine_hybrid.py (1min + 5s, avec sorties $)
-- 229 trades (140 LONG, 89 SHORT)
-- PnL net : +$29,341, Win Rate : 73.4%
-- Profit Factor : 1.98, Max Drawdown : -$2,898
-- Exits : 88 TP_DOLLAR, 121 TP_ZSCORE, 13 SL_DOLLAR, 7 SL_ZSCORE
-- Sharpe : 0.266, Calmar : 10.12
+### Grid search (864 configs)
+- Meilleur PnL : $80,833 (beta1320, zp20, cp30, co40, TP400, SL600)
+- Meilleur Sharpe : 14.72 (beta2640, zp20, cp30, co60, zE3, TP200, SL400)
+
+### Walk-forward (6 fenetres, hors echantillon)
+- PnL total hors echantillon : +$44,573
+- 4/6 fenetres positives
+- Retention : 203% du PnL/jour (test > train)
+- Verdict : strategie robuste, pas d'overfitting
+
+### Regimes de marche identifies
+- Mai - Septembre 2025 : mean reversion faible, strategie en perte
+- Octobre 2025 - Janvier 2026 : mean reversion forte, strategie tres profitable
+
+## Scripts utilitaires
+
+```bash
+python run_grid_search.py      # Grid search 864 configs (groupement optimise, ~28 min)
+python run_walk_forward.py     # Walk-forward 6 fenetres x 12 configs (~3 min)
+```
 
 ---
-*Developpe avec Claude AI - Janvier 2026*
+*Developpe avec Claude AI - Janvier/Fevrier 2026*

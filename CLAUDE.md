@@ -193,66 +193,128 @@ GC_contracts = round( (NotionalSI / NotionalGC) × Beta ) , minimum 1
 - Beta varies from ~0.03 to ~6.3 on traded bars -> GC contracts range from 1 to 6
 - Dollar-based exits (TP/SL $) in backtest engines limit large losses from high-contract trades
 
-## Current Results (Config A -- best PnL, 44,018 bars, 48 days)
+## Data
 
-Config A: beta=1980, zp=20, cp=30, adf=128, cm=0.60, co=40, TP=$300, SL=-$600
+- **Source**: Sierra Chart CSV exports (GCJ26 Gold futures, SIH26 Silver futures)
+- **Period**: 2025-05-25 to 2026-01-30 (~8 months, 182 trading days)
+- **1-min bars**: 186,639 synchronized
+- **5s bars**: 1,312,336 synchronized
+- **Parquet cache**: `data/processed/` (auto-invalidated by MD5 hash)
 
-- PnL net total: +$60,567
-- Win rate: 90.2% (395/438)
-- 252 LONG / 186 SHORT
-- Exits: 356 TP_DOLLAR, 76 TP_ZSCORE, 6 SL_DOLLAR, 0 SL_ZSCORE
-- Best trade: +$499 | Worst trade: -$750
-- Max Drawdown: -$765
-- Profit Factor: 6.90
-- Sharpe (per trade): 14.44
-- Costs total: $50,388 (45% of gross PnL)
-- Avg trade duration: 0.4 min | 9.1 trades/day
-- Trade list exported to `output/backtest_hybrid.csv` (semicolon-separated)
+## Current Results (full 8-month backtest, default config)
 
-## Optimization History (606+ configs tested)
+Config: beta=1980, zp=20, cp=30, adf=128, cm=0.60, co=40, TP=$300, SL=-$600
 
-### 3-step grid search process
+- Trades: 1,473 (844 LONG, 629 SHORT)
+- PnL net: +$71,428 | Win rate: 62.3%
+- Profit Factor: 1.95 | Max Drawdown: -$20,639
+- Sharpe: 4.25
+- Two market regimes: May-Sept 2025 (unfavorable, TP_ZSCORE losses) / Oct 2025-Jan 2026 (very favorable)
+
+## Grid Search Results (864 configs, 8 months)
+
+Tested: beta_lookback (1320/1980/2640/3960) x zscore_period (20/30) x correlation_period (30/60) x cointegration_score_min (40/50/60) x zscore_entry (-2.5/+2.5, -3.0/+3.0) x TP (200/300/400) x SL (-400/-600/-800)
+
+### Top 5 by PnL Net
+
+| # | Config | Trades | WR% | PnL Net | PF | MaxDD | Sharpe |
+|---|--------|--------|-----|---------|-----|-------|--------|
+| 1 | beta1320_zp20_cp30_co40_TP400_SL600 | 1,423 | 58.6% | $80,833 | 1.87 | -$20,632 | 3.79 |
+| 2 | beta1320_zp20_cp30_co40_TP400_SL400 | 1,423 | 58.1% | $80,433 | 1.88 | -$20,962 | 3.93 |
+| 3 | beta1320_zp20_cp30_co40_TP400_SL800 | 1,424 | 58.8% | $79,043 | 1.82 | -$20,417 | 3.56 |
+| 4 | beta1980_zp20_cp30_co40_TP400_SL800 | 1,430 | 57.1% | $76,018 | 1.82 | -$23,205 | 3.56 |
+| 5 | beta3960_zp30_cp60_co40_TP400_SL800 | 1,525 | 61.0% | $76,002 | 1.63 | -$25,300 | 2.83 |
+
+Profile: many trades (1400+), moderate WR (57-61%), high absolute PnL, large MaxDD (-$20k to -$25k).
+
+### Top 5 by Sharpe (risk-adjusted)
+
+| # | Config | Trades | WR% | PnL Net | PF | MaxDD | Sharpe |
+|---|--------|--------|-----|---------|-----|-------|--------|
+| 1 | beta2640_zp20_cp30_co60_zE3_TP200_SL400 | 31 | 90.3% | $2,549 | 6.61 | -$332 | 14.72 |
+| 2 | beta2640_zp20_cp30_co50_zE3_TP200_SL400 | 146 | 84.9% | $10,459 | 5.09 | -$574 | 11.65 |
+| 3 | beta3960_zp20_cp60_co60_zE3_TP200_SL400 | 39 | 79.5% | $2,408 | 4.63 | -$277 | 11.65 |
+| 4 | beta2640_zp20_cp30_co50_zE3_TP200_SL600 | 146 | 84.9% | $10,259 | 4.72 | -$774 | 10.37 |
+| 5 | beta2640_zp20_cp60_co60_zE3_TP200_SL400 | 33 | 84.8% | $2,293 | 4.58 | -$410 | 9.50 |
+
+Profile: very few trades (31-146), high WR (80-90%), modest PnL ($2.5k-$10.5k), tiny MaxDD (<$800).
+
+### Key grid search conclusions
+- **PnL vs Sharpe trade-off**: zero configs in common between the two rankings
+- High PnL requires loose filters (co=40, zE=-2.5) and TP=$400
+- High Sharpe requires strict filters (co=50-60, zE=-3.0) and TP=$200
+- SL value has minimal impact on top PnL configs (SL never hit on Sharpe configs)
+- `correlation_min` remains redundant across all 864 configs
+- `beta1320` and `beta1980` dominate PnL; `beta2640` dominates Sharpe
+
+## Walk-Forward Test (6 windows, 12 configs)
+
+Validated the strategy is NOT overfitting. 6 rolling windows (30-day train / 15-day test), 12 configs tested per window, best selected on train PnL.
+
+### Results per window (out-of-sample)
+
+| # | Test Period | Config Selected | Trades | PnL | WR% | PF | MaxDD |
+|---|-------------|-----------------|--------|-----|-----|-----|-------|
+| 1 | Jul 18 - Aug 04 | Sh5 (zE3, TP200) | 10 | -$313 | 30% | 0.50 | -$543 |
+| 2 | Aug 17 - Sep 28 | Sh5 (zE3, TP200) | 10 | -$4 | 50% | 0.99 | -$423 |
+| 3 | Oct 10 - Oct 27 | Sh5 (zE3, TP200) | 17 | +$2,004 | 94% | 112 | $0 |
+| 4 | Nov 09 - Nov 25 | PnL3 (TP300, SL600) | 183 | +$2,270 | 58% | 1.22 | -$2,414 |
+| 5 | Dec 08 - Dec 24 | PnL3 (TP300, SL600) | 153 | +$9,245 | 70% | 1.89 | -$1,822 |
+| 6 | Jan 06 - Jan 22 | PnL6 (TP400, SL800) | 201 | +$31,371 | 83% | 3.40 | -$1,715 |
+
+### Walk-forward summary
+- **Total out-of-sample PnL**: +$44,573 (vs $43,903 in-sample)
+- **Retention**: 203% of daily PnL (test > train)
+- **Positive windows**: 4/6
+- **Verdict**: Strategy is ROBUST out-of-sample, but regime-dependent
+- **Two regimes**: May-Sept 2025 (mean reversion weak, losses) / Oct-Jan 2026 (strong, profits)
+- **Config stability**: Sh5 selected 3/6 windows (defensive), PnL3 2/6 (aggressive), PnL6 1/6
+- Results saved in `output/walk_forward_results.csv`
+
+## Optimization History
+
+### Phase 1 -- 48-day data (606+ configs, Dec 2025 - Jan 2026)
 1. **Etape 1 (22 configs)**: beta_lookback (660-7920) x zscore_period (15/20/30)
-   - Finding: beta=660 and beta=1980 dominate. zp=15 and zp=20 best.
 2. **Etape 2 (101 configs)**: top 5 indicators x TP (200-600) x SL (400-1200)
-   - Finding: **TP=$300 + SL=-$600 is optimal**. Smaller TP captures profits faster on mean reversion.
 3. **Etape 3 (481 configs)**: 6 bases x correlation_period x adf_period x corr_min x coint_min
-   - Finding: cointegration_score_min=40 doubles PnL vs 60. correlation_min has zero impact.
+4. **Hurst filter (12 configs)**: zero impact (redundant with Cointegration Score)
 
-### Hurst filter test (12 configs)
-- Tested hurst_max = 0.45/0.50/0.55/1.0 on 3 winning configs
-- Result: **zero impact** -- Hurst < 0.45 on all traded bars (redundant with Cointegration Score)
-
-### 3 archived winning configs
-
-| Config | Params | Trades | WR% | PnL Net | PF | MaxDD | Sharpe | Profile |
-|--------|--------|--------|-----|---------|-----|-------|--------|---------|
-| A | co=40, cp=30 | 438 | 90.2% | $60,567 | 6.90 | -$765 | 14.4 | Max PnL |
-| B | co=50, cp=60 | 231 | 92.6% | $35,127 | 12.99 | -$750 | 20.2 | Max risk-adjusted |
-| E | co=50, cp=30 | 250 | 90.8% | $37,136 | 10.19 | -$765 | 17.7 | Balanced |
-
-Common params: beta=1980, zp=20, TP=$300, SL=-$600, cm=0.60, adf=128
+### Phase 2 -- 8-month data (864 configs, May 2025 - Jan 2026)
+- Full grid search with optimized grouping (16 indicator groups x 54 entry/exit variants)
+- Completed in 28 minutes (grouped indicator calculation)
+- Walk-forward validation: 6 windows, 12 configs each, no overfitting detected
+- Log saved in `output/optimization_log.csv` (batch_id="grid_8mois")
 
 ### Key optimization conclusions
-- `correlation_min` is redundant: correlation is always > 0.80 when Z-Score + Coint conditions are met
-- `hurst_max` is redundant: Hurst < 0.45 on all traded bars (already captured by Cointegration Score)
+- `correlation_min` is redundant: correlation always > 0.80 when Z-Score + Coint conditions met
+- `hurst_max` is redundant: Hurst < 0.45 on all traded bars (captured by Cointegration Score)
 - `cointegration_score_min` is the most impactful secondary parameter (40 vs 60 = +63% PnL)
-- TP/SL dollar thresholds are the most impactful parameters overall (TP300/SL600 vs TP600/SL1000 = +106% PnL)
-- Optimization log saved in `output/optimization_log.csv` (top 50 + Hurst test batch)
+- TP/SL dollar thresholds are the most impactful parameters overall
+- Strategy performance is regime-dependent (5 months of losses followed by 3 months of large gains)
 
 ## Next Steps (TODO)
 
-### Priority 1 -- Validation
-- **Walk-forward test**: Split data into train (30 days) / test (18 days), optimize on train, validate on test. Critical to detect overfitting on 606 configs.
-- **Cost stress test**: Run Config A with slippage=2 ticks and commission=$5 to verify robustness.
+### Priority 1 -- Regime Filter
+- Add a market regime indicator to avoid trading during unfavorable periods (May-Sept 2025 pattern)
+- Ideas: spread volatility over 30 days, ratio of TP_DOLLAR vs TP_ZSCORE exits, rolling PnL filter
+- Would eliminate 5 months of losses without sacrificing gains in favorable periods
 
-### Priority 2 -- Additional parameter tests
-- **Z-Score entry thresholds**: Test zscore_long=-2.0/-3.0, zscore_short=+2.0/+3.0 (never tested, kept at default -2.5/+2.5)
-- **Z-Score exit thresholds**: Test zscore_tp_long=-1.5/-1.0, etc. (low impact expected since 81% exits are TP_DOLLAR)
+### Priority 2 -- More Data
+- Extend to 2-3 years for more robust walk-forward (15-20 windows instead of 6)
+- More regime cycles = better validation of regime filter
+- Paper trading: run in real-time simulation before committing capital
 
-### Priority 3 -- More data
-- **Extend data period**: 48 days is limited. 6-12 months would validate robustness across different market conditions (trending, ranging, volatile).
-- **Paper trading**: Run strategy in real-time simulation before committing capital.
+### Priority 3 -- Additional Parameter Tests
+- **Z-Score exit thresholds**: zscore_tp_long=-1.5/-1.0 (low impact expected, 80% exits are TP_DOLLAR)
+- **Combine zE=-3.0 with TP=300-400**: grid only tested zE=-3.0 with TP=200
+- **beta_lookback=660**: showed promise in early tests, not included in 8-month grid
+- **Cost stress test**: slippage=2 ticks, commission=$5 to verify robustness
+
+### Priority 4 -- Code Optimizations
+- Rolling beta calculation could use pandas `.rolling()` or Welford's algorithm (save ~30s per run)
+- Cache contract point values outside backtest loop (minor)
+- Add input validation in position.py (gc_price > 0, beta > 0)
+- Add unit tests with pytest for edge cases
 
 ## Completed Improvements
 
@@ -267,6 +329,16 @@ Common params: beta=1980, zp=20, TP=$300, SL=-$600, cm=0.60, adf=128
 - **Index deduplication**: `metrics.py` replaces existing index.csv entries with same Folder_Path + Days_Loaded instead of creating duplicates.
 - **Code factorization**: `common.py` centralizes state constants and shared functions (check_entry_conditions, check_zscore_exit, check_cooldown_reset, calculate_current_pnl, build_config_fingerprint). Removed ~430 lines of duplicated code across signals.py, backtest_engine.py, backtest_engine_hybrid.py, metrics.py.
 - **Hurst bug fix**: Both backtest engines now pass `hurst=hursts[i]` to check_entry_conditions (was silently ignored before). No impact with default hurst_max=1.0.
+- **8-month data upgrade**: Extended from 48 days (GCG26) to 8 months (GCJ26, May 2025 - Jan 2026). Contract rollover handled.
+- **Optimized grid search**: `run_grid_search.py` groups 864 configs into 16 indicator combinations, calculates indicators once per group, then loops 54 entry/exit variants. Reduced time from ~9h to 28 min.
+- **Walk-forward validation**: `run_walk_forward.py` implements 6-window rolling walk-forward (30-day train / 15-day test). Confirmed no overfitting (203% out-of-sample retention).
+
+## Known Code Issues (non-blocking)
+
+- **Rolling beta**: O(n x lookback) manual loop in indicators.py. Could use pandas rolling or Welford's algorithm for ~30s speedup.
+- **Hurst clamp vs default**: Hurst clamped to [0.01, 0.99] in indicators.py but default hurst_max=1.0. Functionally correct but misleading -- 0.99 would be clearer.
+- **Unused import**: `Tuple` imported but unused in data_loader_5s.py.
+- **Hardcoded thresholds**: ADF critical value (-2.86) and correlation threshold (0.6) hardcoded in indicators.py cointegration score calculation. Should reference config values.
 
 ## Claude Code Skills
 

@@ -9,9 +9,9 @@
 # FICHIERS DE DONNÉES
 # ----------------------------------------------------------------------------
 data:
-  gc_file: "data/raw/GCG26_FUT_CME_scid_BarData.txt"
+  gc_file: "data/raw/GCJ26_FUT_CME_scid_BarData.txt"
   si_file: "data/raw/SIH26_FUT_CME_scid_BarData.txt"
-  gc_file_5s: "data/raw/GCG26_FUT_CME_5s.scid_BarData.txt"
+  gc_file_5s: "data/raw/GCJ26_FUT_CME_5s.scid_BarData.txt"
   si_file_5s: "data/raw/SIH26_FUT_CME_5s.scid_BarData.txt"
   
 # ----------------------------------------------------------------------------
