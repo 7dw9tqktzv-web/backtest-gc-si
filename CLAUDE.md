@@ -294,25 +294,56 @@ Validated the strategy is NOT overfitting. 6 rolling windows (30-day train / 15-
 
 ## Next Steps (TODO)
 
-### Priority 1 -- Regime Filter
-- Add a market regime indicator to avoid trading during unfavorable periods (May-Sept 2025 pattern)
-- Ideas: spread volatility over 30 days, ratio of TP_DOLLAR vs TP_ZSCORE exits, rolling PnL filter
-- Would eliminate 5 months of losses without sacrificing gains in favorable periods
+### Priority 1 -- TP_ZSCORE Problem & Regime Filter
+The main weakness: during unfavorable periods (May-Sept 2025), TP_ZSCORE exits fire repeatedly but the spread hasn't moved enough in dollars to cover costs -> net loss per trade. Solutions to explore:
+- **Adjust zscore exit thresholds**: tighter TP (e.g. zscore_tp_long=-1.5 instead of -2.0) forces a stronger reversion before exiting
+- **PnL floor on TP_ZSCORE**: only allow TP_ZSCORE exit if current PnL >= $0 (would require code change in common.py)
+- **Regime filter**: spread volatility over 30 days, or rolling ratio TP_DOLLAR/TP_ZSCORE to detect when dollar exits stop firing
+- This will be addressed by the comprehensive grid search (testing zscore exit thresholds)
 
-### Priority 2 -- More Data
-- Extend to 2-3 years for more robust walk-forward (15-20 windows instead of 6)
-- More regime cycles = better validation of regime filter
-- Paper trading: run in real-time simulation before committing capital
+### Priority 2 -- 3-Year Data + Comprehensive Grid Search
+User will export 3 years of Sierra Chart data. Then run a full parameter sweep in 3 phases:
 
-### Priority 3 -- Additional Parameter Tests
-- **Z-Score exit thresholds**: zscore_tp_long=-1.5/-1.0 (low impact expected, 80% exits are TP_DOLLAR)
-- **Combine zE=-3.0 with TP=300-400**: grid only tested zE=-3.0 with TP=200
-- **beta_lookback=660**: showed promise in early tests, not included in 8-month grid
-- **Cost stress test**: slippage=2 ticks, commission=$5 to verify robustness
+**Phase 1 -- Indicator parameters** (calculate indicators once per group, ~100-200 combos)
+- beta_lookback: 660, 1320, 1980, 2640, 3960
+- zscore_period: 15, 20, 30, 50
+- correlation_period: 20, 30, 60
+- adf_hurst_period: 64, 128, 256
+- Fixed entry/exit at current best (zE=-2.5, TP=300, SL=-600)
+- Select top 10-20 indicator combos for Phase 2
 
-### Priority 4 -- Code Optimizations
-- Rolling beta calculation could use pandas `.rolling()` or Welford's algorithm (save ~30s per run)
-- Cache contract point values outside backtest loop (minor)
+**Phase 2 -- Entry parameters** (on top indicator combos, ~500-1000 configs)
+- zscore_entry: -2.0/+2.0, -2.5/+2.5, -3.0/+3.0, -3.5/+3.5
+- cointegration_score_min: 30, 40, 50, 60
+- hurst_max: 0.45, 0.50, 0.55, 1.0
+- correlation_min: 0.60, 0.70, 0.80
+- Fixed exit at current best (TP=300, SL=-600, zscore exits default)
+- Select top 10-20 combos for Phase 3
+
+**Phase 3 -- Exit parameters** (on top combos from P2, ~500-1500 configs)
+- zscore_tp_long/short: -1.0/+1.0, -1.5/+1.5, -2.0/+2.0 (current), -2.5/+2.5
+- zscore_sl_long/short: -3.0/+3.0, -3.5/+3.5 (current), -4.0/+4.0, -5.0/+5.0
+- pnl_take_profit: 200, 300, 400, 600
+- pnl_stop_loss: -400, -600, -800, -1000
+
+Total estimated: ~2000-3000 configs (feasible in 1-3 hours with grouped optimization)
+Follow with walk-forward on 3-year data (15-20 windows for robust validation)
+
+### Priority 3 -- Multi-Timeframe Testing
+After finding optimal 1-min parameters, test on different bar periods:
+- **5-minute bars**: less noise, fewer trades, potentially better PnL per trade
+- **15-minute bars**: even less noise, requires longer lookback periods
+- Requires resampling data or new Sierra Chart exports at 5min/15min
+- The `indicators.period` config field already supports this but data pipeline needs adaptation
+
+### Priority 4 -- Paper Trading
+- Run best config(s) in real-time simulation before committing capital
+- Validate that backtest results reproduce with real slippage, latency, gaps
+- Cost stress test: slippage=2 ticks, commission=$5
+
+### Priority 5 -- Code Optimizations
+- Rolling beta: use pandas `.rolling()` or Welford's algorithm (save ~30s per run)
+- Cache contract point values outside backtest loop
 - Add input validation in position.py (gc_price > 0, beta > 0)
 - Add unit tests with pytest for edge cases
 
