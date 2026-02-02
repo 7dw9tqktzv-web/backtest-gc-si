@@ -158,7 +158,7 @@ COOLDOWN_SHORT -> FLAT                   [Z <= +1.0]
 | GC (Gold) | $100 | $0.10 | $10 |
 | SI (Silver) | $5000 | $0.005 | $25 |
 
-Commission: $4.00 round-trip per contract ($2.00 per side). Slippage: 1 tick per leg.
+Commission: $4.00 round-trip per contract ($2.00 per side). Slippage: 2 ticks per leg (default, configurable via overrides).
 
 ## DataFrame Columns
 
@@ -196,12 +196,13 @@ GC_contracts = round( (NotionalSI / NotionalGC) × Beta ) , minimum 1
 ## Data
 
 - **Source**: Sierra Chart CSV exports (GCJ26 Gold futures, SIH26 Silver futures)
-- **Period**: 2025-05-25 to 2026-01-30 (~8 months, 182 trading days)
-- **1-min bars**: 186,639 synchronized
-- **5s bars**: 1,312,336 synchronized
+- **Period**: 2023-01-26 to 2026-01-30 (~3 years, 760+ trading days)
+- **1-min bars**: 801,499 synchronized
+- **5s bars**: 4,604,839 synchronized
 - **Parquet cache**: `data/processed/` (auto-invalidated by MD5 hash)
+- **Previous dataset**: 8 months (May 2025 - Jan 2026, 186,639 1-min bars)
 
-## Current Results (full 8-month backtest, default config)
+## Previous Results (8-month data, 1 tick slippage)
 
 Config: beta=1980, zp=20, cp=30, adf=128, cm=0.60, co=40, TP=$300, SL=-$600
 
@@ -211,7 +212,7 @@ Config: beta=1980, zp=20, cp=30, adf=128, cm=0.60, co=40, TP=$300, SL=-$600
 - Sharpe: 4.25
 - Two market regimes: May-Sept 2025 (unfavorable, TP_ZSCORE losses) / Oct 2025-Jan 2026 (very favorable)
 
-## Grid Search Results (864 configs, 8 months)
+## Grid Search Results (864 configs, 8 months, 1 tick slippage)
 
 Tested: beta_lookback (1320/1980/2640/3960) x zscore_period (20/30) x correlation_period (30/60) x cointegration_score_min (40/50/60) x zscore_entry (-2.5/+2.5, -3.0/+3.0) x TP (200/300/400) x SL (-400/-600/-800)
 
@@ -239,13 +240,67 @@ Profile: many trades (1400+), moderate WR (57-61%), high absolute PnL, large Max
 
 Profile: very few trades (31-146), high WR (80-90%), modest PnL ($2.5k-$10.5k), tiny MaxDD (<$800).
 
-### Key grid search conclusions
+### Key grid search conclusions (8 months)
 - **PnL vs Sharpe trade-off**: zero configs in common between the two rankings
 - High PnL requires loose filters (co=40, zE=-2.5) and TP=$400
 - High Sharpe requires strict filters (co=50-60, zE=-3.0) and TP=$200
 - SL value has minimal impact on top PnL configs (SL never hit on Sharpe configs)
 - `correlation_min` remains redundant across all 864 configs
 - `beta1320` and `beta1980` dominate PnL; `beta2640` dominates Sharpe
+
+## Grid Search Results (32,400 configs, 3 years, 2 ticks slippage)
+
+Tested: 300 indicator groups x 108 entry/exit variants = 32,400 configs total.
+- beta_lookback: 660, 1320, 1980, 2640, 3960
+- zscore_period: 15, 20, 30, 50, 60
+- correlation_period: 20, 30, 50
+- adf_hurst_period: 64, 128, 256, 512
+- zscore_entry: -2.5/+2.5, -3.0/+3.0, -3.5/+3.5
+- cointegration_score_min: 40, 50, 60
+- pnl_take_profit: 200, 300, 400
+- pnl_stop_loss: -400, -600, -800, -1000
+
+Run with 8 parallel workers (`multiprocessing.Pool`), completed in ~10 hours.
+Results saved in `output/grid_search_3y_phase1.csv`.
+
+### Key finding: strategy NOT viable with 2 ticks slippage
+
+- **Only 115/32,400 configs profitable (0.4%)**
+- **Best PnL: +$586 over 3 years** (nearly breakeven)
+- Average cost per trade: ~$160-200 (2 ticks slippage doubles costs vs 1 tick)
+- TP_ZSCORE exits lose money even with PnL floor >= $0
+
+### Top 5 by PnL Net (3 years, 2 ticks)
+
+| # | Config | Trades | WR% | PnL Net | PF | MaxDD | Sharpe |
+|---|--------|--------|-----|---------|-----|-------|--------|
+| 1 | b3960_zp20_cp30_adf64_zE3.5_co60_TP400_SL800 | 18 | 50.0% | $586 | 1.49 | -$880 | 2.86 |
+| 2 | b3960_zp20_cp30_adf64_zE3.5_co60_TP300_SL800 | 18 | 61.1% | $531 | 1.53 | -$734 | 3.28 |
+| 3 | b660_zp20_cp60_adf128_zE3.5_co60_TP400_SL600 | 16 | 43.8% | $446 | 1.53 | -$823 | 2.91 |
+| 4 | b660_zp20_cp60_adf128_zE3.5_co60_TP400_SL800 | 16 | 43.8% | $446 | 1.53 | -$823 | 2.91 |
+| 5 | b3960_zp15_cp20_adf256_zE3.5_co40_TP400_SL600 | 29 | 44.8% | $437 | 1.26 | -$721 | 1.59 |
+
+Profile: very few trades (16-29), marginal profitability, only zE=3.5 viable.
+
+### Top 5 with 1 tick slippage (for comparison)
+
+| # | Config | PnL 2tick | PnL 1tick | Delta |
+|---|--------|-----------|-----------|-------|
+| 1 | b3960_zp20_cp30_adf64_zE3.5_co60_TP400_SL800 | +$586 | +$1,946 | +$1,360 |
+| 2 | b3960_zp20_cp30_adf64_zE3.5_co60_TP300_SL800 | +$531 | +$1,891 | +$1,360 |
+| 3 | b660_zp20_cp60_adf128_zE3.5_co60_TP400_SL600 | +$446 | +$1,746 | +$1,300 |
+| 4 | b660_zp20_cp60_adf128_zE3.5_co60_TP400_SL800 | +$446 | +$1,746 | +$1,300 |
+| 5 | b3960_zp15_cp20_adf256_zE3.5_co40_TP400_SL600 | +$437 | +$2,547 | +$2,110 |
+
+### Key grid search conclusions (3 years)
+- **Slippage is the strategy killer**: doubling slippage (1->2 ticks) destroys all profitability
+- **zscore_entry=-3.5 is the only viable threshold**: 112/115 profitable configs use zE=3.5
+- **zscore_period >= 30 produces zero profitable configs** on 3-year data
+- **TP_ZSCORE remains the core problem**: even with PnL floor >= $0, these exits lose money (costs eat small gains)
+- **beta=3960 dominates** the top configs (longest lookback = most stable regression)
+- **cointegration_score_min=60** dominates (strictest filter reduces bad trades)
+- **8-month results were misleading**: the Oct-Jan 2026 regime was exceptionally favorable, inflating PnL
+- Strategy is fundamentally cost-sensitive: average PnL per trade ($20-30) barely covers transaction costs
 
 ## Walk-Forward Test (6 windows, 12 configs)
 
@@ -285,61 +340,50 @@ Validated the strategy is NOT overfitting. 6 rolling windows (30-day train / 15-
 - Walk-forward validation: 6 windows, 12 configs each, no overfitting detected
 - Log saved in `output/optimization_log.csv` (batch_id="grid_8mois")
 
+### Phase 3 -- 3-year data (32,400 configs, Jan 2023 - Jan 2026, 2 ticks slippage)
+- Comprehensive grid search: 300 indicator groups x 108 entry/exit variants
+- Run with multiprocessing (8 workers), completed in ~10 hours
+- Slippage increased to 2 ticks per leg (more realistic)
+- **Result: only 0.4% of configs profitable, best PnL = $586 over 3 years**
+- Conclusion: strategy is NOT viable with realistic slippage on 3-year data
+- Results saved in `output/grid_search_3y_phase1.csv`
+- Script: `run_grid_search_3y.py`
+
 ### Key optimization conclusions
 - `correlation_min` is redundant: correlation always > 0.80 when Z-Score + Coint conditions met
 - `hurst_max` is redundant: Hurst < 0.45 on all traded bars (captured by Cointegration Score)
-- `cointegration_score_min` is the most impactful secondary parameter (40 vs 60 = +63% PnL)
+- `cointegration_score_min` is the most impactful secondary parameter (40 vs 60 = +63% PnL on 8-month data)
 - TP/SL dollar thresholds are the most impactful parameters overall
 - Strategy performance is regime-dependent (5 months of losses followed by 3 months of large gains)
+- **Slippage is the critical factor**: 1 tick -> strategy profitable; 2 ticks -> strategy destroyed
+- **8-month results were overly optimistic**: driven by an exceptionally favorable 3-month regime (Oct 2025 - Jan 2026)
 
 ## Next Steps (TODO)
 
-### Priority 1 -- TP_ZSCORE Problem & Regime Filter
-The main weakness: during unfavorable periods (May-Sept 2025), TP_ZSCORE exits fire repeatedly but the spread hasn't moved enough in dollars to cover costs -> net loss per trade. Solutions to explore:
-- **Adjust zscore exit thresholds**: tighter TP (e.g. zscore_tp_long=-1.5 instead of -2.0) forces a stronger reversion before exiting
-- **PnL floor on TP_ZSCORE**: only allow TP_ZSCORE exit if current PnL >= $0 (would require code change in common.py)
-- **Regime filter**: spread volatility over 30 days, or rolling ratio TP_DOLLAR/TP_ZSCORE to detect when dollar exits stop firing
-- This will be addressed by the comprehensive grid search (testing zscore exit thresholds)
+### Priority 1 -- Strategy Viability Assessment
+The 3-year grid search (32,400 configs, 2 ticks slippage) showed the strategy is not viable in its current form. Options:
+- **Re-run with 1 tick slippage**: verify if strategy becomes viable with optimistic slippage assumption
+- **Test wider TP/SL ranges**: TP=$500-$1000, SL=-$1500-$2000 (let trades run longer to overcome costs)
+- **Remove TP_ZSCORE exits entirely**: rely only on dollar-based TP/SL (TP_ZSCORE is the main source of losses)
+- **Multi-timeframe**: test on 5-min or 15-min bars (fewer trades, higher PnL per trade, lower cost impact)
+- **Alternative cost model**: test with $3 commission (IB) and 1 tick slippage to find the cost threshold
 
-### Priority 2 -- 3-Year Data + Comprehensive Grid Search
-User will export 3 years of Sierra Chart data. Then run a full parameter sweep in 3 phases:
-
-**Phase 1 -- Indicator parameters** (calculate indicators once per group, ~100-200 combos)
-- beta_lookback: 660, 1320, 1980, 2640, 3960
-- zscore_period: 15, 20, 30, 50
-- correlation_period: 20, 30, 60
-- adf_hurst_period: 64, 128, 256
-- Fixed entry/exit at current best (zE=-2.5, TP=300, SL=-600)
-- Select top 10-20 indicator combos for Phase 2
-
-**Phase 2 -- Entry parameters** (on top indicator combos, ~500-1000 configs)
-- zscore_entry: -2.0/+2.0, -2.5/+2.5, -3.0/+3.0, -3.5/+3.5
-- cointegration_score_min: 30, 40, 50, 60
-- hurst_max: 0.45, 0.50, 0.55, 1.0
-- correlation_min: 0.60, 0.70, 0.80
-- Fixed exit at current best (TP=300, SL=-600, zscore exits default)
-- Select top 10-20 combos for Phase 3
-
-**Phase 3 -- Exit parameters** (on top combos from P2, ~500-1500 configs)
-- zscore_tp_long/short: -1.0/+1.0, -1.5/+1.5, -2.0/+2.0 (current), -2.5/+2.5
-- zscore_sl_long/short: -3.0/+3.0, -3.5/+3.5 (current), -4.0/+4.0, -5.0/+5.0
-- pnl_take_profit: 200, 300, 400, 600
-- pnl_stop_loss: -400, -600, -800, -1000
-
-Total estimated: ~2000-3000 configs (feasible in 1-3 hours with grouped optimization)
-Follow with walk-forward on 3-year data (15-20 windows for robust validation)
+### Priority 2 -- TP_ZSCORE Problem
+The fundamental issue: TP_ZSCORE exits fire when the spread mean-reverts in Z-Score space, but the dollar move is often too small to cover transaction costs.
+- **PnL floor on TP_ZSCORE** (already implemented, `exit.zscore_tp_min_pnl`): tested at $0, insufficient
+- **Higher PnL floor**: test $50, $100, $150 to force meaningful profit before Z-Score exit
+- **Disable TP_ZSCORE entirely**: only exit via TP_DOLLAR or SL thresholds
+- **Regime filter**: only allow entries when spread volatility is high enough to generate dollar moves
 
 ### Priority 3 -- Multi-Timeframe Testing
-After finding optimal 1-min parameters, test on different bar periods:
+Test on different bar periods to reduce trade frequency and increase PnL per trade:
 - **5-minute bars**: less noise, fewer trades, potentially better PnL per trade
 - **15-minute bars**: even less noise, requires longer lookback periods
 - Requires resampling data or new Sierra Chart exports at 5min/15min
 - The `indicators.period` config field already supports this but data pipeline needs adaptation
 
-### Priority 4 -- Paper Trading
-- Run best config(s) in real-time simulation before committing capital
-- Validate that backtest results reproduce with real slippage, latency, gaps
-- Cost stress test: slippage=2 ticks, commission=$5
+### Priority 4 -- Walk-Forward on 3-Year Data
+If a viable config is found, validate with walk-forward on the full 3-year dataset (15-20 windows).
 
 ### Priority 5 -- Code Optimizations
 - Rolling beta: use pandas `.rolling()` or Welford's algorithm (save ~30s per run)
@@ -363,6 +407,13 @@ After finding optimal 1-min parameters, test on different bar periods:
 - **8-month data upgrade**: Extended from 48 days (GCG26) to 8 months (GCJ26, May 2025 - Jan 2026). Contract rollover handled.
 - **Optimized grid search**: `run_grid_search.py` groups 864 configs into 16 indicator combinations, calculates indicators once per group, then loops 54 entry/exit variants. Reduced time from ~9h to 28 min.
 - **Walk-forward validation**: `run_walk_forward.py` implements 6-window rolling walk-forward (30-day train / 15-day test). Confirmed no overfitting (203% out-of-sample retention).
+- **PnL floor on TP_ZSCORE**: `exit.zscore_tp_min_pnl` parameter in common.py. Only allows TP_ZSCORE exit if current PnL >= threshold (default $0). Tested but insufficient to fix the TP_ZSCORE problem.
+- **Slippage 2 ticks default**: `costs.slippage_gc_ticks` and `costs.slippage_si_ticks` set to 2 (was 1). More realistic worst-case assumption. Configurable via optimizer overrides.
+- **Hour filter**: `session.entry_start_hour` and `session.entry_end_hour` in backtest_engine_hybrid.py. Blocks new entries outside configured hours (default 0-24 = disabled). Exits are never filtered.
+- **GC contracts cap**: `sizing.gc_contracts_max` in position.py. Caps maximum GC contracts per trade (default 0 = no cap).
+- **Verbose parameter**: `calculate_all_indicators()` and `run_hybrid_backtest()` accept `verbose=False` to suppress print output during mass backtesting.
+- **3-year data upgrade**: Extended from 8 months to 3 years (Jan 2023 - Jan 2026). 801,499 1-min bars, 4,604,839 5s bars.
+- **Multiprocessing grid search**: `run_grid_search_3y.py` uses `mp.Pool(8)` for parallel backtesting. 32,400 configs in ~10 hours.
 
 ## Known Code Issues (non-blocking)
 

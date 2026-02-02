@@ -43,7 +43,8 @@ backtest_gc_si/
 │   ├── optimizer.py                  <- [OK] Multi-config backtester
 │   └── metrics.py                    <- [OK] Analyse performances + archivage
 │
-├── run_grid_search.py                <- Grid search 864 configs (optimise)
+├── run_grid_search.py                <- Grid search 864 configs (8 mois, 1 tick)
+├── run_grid_search_3y.py             <- Grid search 32,400 configs (3 ans, 2 ticks, multiprocessing)
 ├── run_walk_forward.py               <- Walk-forward test (6 fenetres)
 ├── requirements.txt                  <- Dependances Python
 ├── validate_data.py                  <- Script de validation vs Sierra Chart
@@ -144,7 +145,7 @@ Tous les parametres sont dans `config/strategy_params.yaml`.
 | Parametre | Valeur |
 |-----------|--------|
 | Commission | $4.00 round-trip par contrat ($2.00 par side) |
-| Slippage | 1 tick par leg |
+| Slippage | 2 ticks par leg (defaut, configurable via overrides) |
 
 ## Deux moteurs de backtest
 
@@ -173,38 +174,48 @@ Tous les parametres sont dans `config/strategy_params.yaml`.
 
 ## Donnees
 
-- **Barres 1-min synchronisees** : 186,639
-- **Barres 5s synchronisees** : 1,312,336
-- **Periode** : 25 mai 2025 - 30 jan 2026 (~8 mois, 182 jours de trading)
+- **Barres 1-min synchronisees** : 801,499
+- **Barres 5s synchronisees** : 4,604,839
+- **Periode** : 26 jan 2023 - 30 jan 2026 (~3 ans, 760+ jours de trading)
 - **Source** : Sierra Chart exports (GCJ26 Gold futures, SIH26 Silver futures)
+- **Jeu precedent** : 8 mois (mai 2025 - jan 2026, 186,639 barres 1-min)
 
 ## Resultats
 
-### Backtest hybride (config par defaut, 8 mois)
-- 1,473 trades (844 LONG, 629 SHORT)
-- PnL net : +$71,428, Win Rate : 62.3%
-- Profit Factor : 1.95, Max Drawdown : -$20,639
-- Sharpe : 4.25
+### Grid search 3 ans (32,400 configs, 2 ticks slippage)
 
-### Grid search (864 configs)
+**Resultat principal : strategie NON viable avec 2 ticks de slippage.**
+
+- 32,400 configs testees (300 groupes indicateurs x 108 variantes entree/sortie)
+- Seulement 115 configs profitables (0.4%)
+- Meilleur PnL : +$586 sur 3 ans (quasi breakeven)
+- Cout moyen par trade : ~$160-200 (le slippage 2 ticks double les couts)
+
+| # | Config | Trades | WR% | PnL Net | PF | MaxDD | Sharpe |
+|---|--------|--------|-----|---------|-----|-------|--------|
+| 1 | b3960_zp20_cp30_adf64_zE3.5_co60_TP400_SL800 | 18 | 50.0% | +$586 | 1.49 | -$880 | 2.86 |
+| 2 | b3960_zp20_cp30_adf64_zE3.5_co60_TP300_SL800 | 18 | 61.1% | +$531 | 1.53 | -$734 | 3.28 |
+| 3 | b660_zp20_cp60_adf128_zE3.5_co60_TP400_SL600 | 16 | 43.8% | +$446 | 1.53 | -$823 | 2.91 |
+
+### Resultats precedents (8 mois, 1 tick slippage)
+
 - Meilleur PnL : $80,833 (beta1320, zp20, cp30, co40, TP400, SL600)
 - Meilleur Sharpe : 14.72 (beta2640, zp20, cp30, co60, zE3, TP200, SL400)
+- Walk-forward : +$44,573 hors echantillon, 4/6 fenetres positives
+- **Attention** : ces resultats etaient gonflies par un regime tres favorable (Oct 2025 - Jan 2026)
 
-### Walk-forward (6 fenetres, hors echantillon)
-- PnL total hors echantillon : +$44,573
-- 4/6 fenetres positives
-- Retention : 203% du PnL/jour (test > train)
-- Verdict : strategie robuste, pas d'overfitting
-
-### Regimes de marche identifies
-- Mai - Septembre 2025 : mean reversion faible, strategie en perte
-- Octobre 2025 - Janvier 2026 : mean reversion forte, strategie tres profitable
+### Conclusions cles
+- Le slippage est le facteur critique : 1 tick -> profitable, 2 ticks -> detruit
+- zscore_entry=-3.5 est le seul seuil viable sur 3 ans
+- TP_ZSCORE reste le probleme principal (couts > gains sur sorties z-score)
+- La strategie est fondamentalement sensible aux couts de transaction
 
 ## Scripts utilitaires
 
 ```bash
-python run_grid_search.py      # Grid search 864 configs (groupement optimise, ~28 min)
-python run_walk_forward.py     # Walk-forward 6 fenetres x 12 configs (~3 min)
+python run_grid_search.py        # Grid search 864 configs, 8 mois (~28 min)
+python run_grid_search_3y.py     # Grid search 32,400 configs, 3 ans, multiprocessing (~10h)
+python run_walk_forward.py       # Walk-forward 6 fenetres x 12 configs (~3 min)
 ```
 
 ---

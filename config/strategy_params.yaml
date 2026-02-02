@@ -9,10 +9,10 @@
 # FICHIERS DE DONNÉES
 # ----------------------------------------------------------------------------
 data:
-  gc_file: "data/raw/GCJ26_FUT_CME_scid_BarData.txt"
-  si_file: "data/raw/SIH26_FUT_CME_scid_BarData.txt"
-  gc_file_5s: "data/raw/GCJ26_FUT_CME_5s.scid_BarData.txt"
-  si_file_5s: "data/raw/SIH26_FUT_CME_5s.scid_BarData.txt"
+  gc_file: "data/raw/GCJ26_FUT_CME_1mn.scid_BarData.txt"
+  si_file: "data/raw/SIH26_FUT_CME-1mn.scid_BarData.txt"
+  gc_file_5s: "data/raw/GCJ26_FUT_CME_5secondes.scid_BarData.txt"
+  si_file_5s: "data/raw/SIH26_FUT_CME_5secondes.scid_BarData.txt"
   
 # ----------------------------------------------------------------------------
 # SPÉCIFICATIONS DES CONTRATS (CME/COMEX)
@@ -76,6 +76,7 @@ reentry:
 sizing:
   mode: "dollar_neutral_beta"  # Options: "fixed", "dollar_neutral", "dollar_neutral_beta"
   si_contracts: 1              # Nombre de contrats SI de base
+  gc_contracts_max: 0          # Cap sur les contrats GC (0 = pas de cap)
   # Note: Le nombre de contrats GC sera calculé automatiquement :
   # GC_contracts = (SI_notional / GC_notional) × Beta
 
@@ -84,8 +85,8 @@ sizing:
 # ----------------------------------------------------------------------------
 costs:
   commission_per_contract: 4.00   # $ par contrat aller-retour ($2.00 × 2)
-  slippage_gc_ticks: 1            # Slippage estimé en ticks pour GC
-  slippage_si_ticks: 1            # Slippage estimé en ticks pour SI
+  slippage_gc_ticks: 2            # Slippage estimé en ticks pour GC (2 = realiste pour spread 2 legs)
+  slippage_si_ticks: 2            # Slippage estimé en ticks pour SI (2 = realiste pour spread 2 legs)
 
 # ----------------------------------------------------------------------------
 # SESSION DE TRADING
@@ -93,4 +94,6 @@ costs:
 session:
   start_time: "18:00:00"    # Début de session (heure locale Chicago)
   end_time: "17:00:00"      # Fin de session
+  entry_start_hour: 0       # Pas d'entree avant cette heure CT (0 = desactive)
+  entry_end_hour: 24        # Pas d'entree apres cette heure CT (24 = desactive)
   # Note: Les données ont déjà les 30 premières/dernières minutes enlevées

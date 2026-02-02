@@ -51,7 +51,8 @@ except ImportError:
 def run_hybrid_backtest(
     df_1min: pd.DataFrame,
     df_5s: pd.DataFrame,
-    config: dict
+    config: dict,
+    verbose: bool = True
 ) -> pd.DataFrame:
     """
     Backtest hybride : signaux 1-min + suivi PnL sur barres 5s.
@@ -107,6 +108,10 @@ def run_hybrid_backtest(
     pnl_tp = config['exit']['pnl_take_profit']    # +400
     pnl_sl = config['exit']['pnl_stop_loss']       # -800
 
+    # Filtre horaire optionnel (bloque les entrees, pas les sorties)
+    entry_start_hour = config['session'].get('entry_start_hour', 0)
+    entry_end_hour = config['session'].get('entry_end_hour', 24)
+
     # Variables d'etat
     state = STATE_FLAT
     trades = []
@@ -125,7 +130,8 @@ def run_hybrid_backtest(
     # Index courant dans les barres 5s (pour eviter de re-scanner depuis le debut)
     idx_5s_start = 0
 
-    print("\n[...] Simulation du backtest hybride (1min + 5s)...")
+    if verbose:
+        print("\n[...] Simulation du backtest hybride (1min + 5s)...")
 
     for i in range(n):
         z = zscores[i]
@@ -250,7 +256,11 @@ def run_hybrid_backtest(
                     if check_cooldown_reset(z, state, config):
                         state = STATE_FLAT
 
-                if state in (STATE_FLAT, STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT):
+                # Reentree sur meme barre (filtre horaire applique aussi)
+                bar_hour_re = pd.Timestamp(datetimes_1min[i]).hour
+                hour_ok_re = entry_start_hour <= bar_hour_re < entry_end_hour
+
+                if hour_ok_re and state in (STATE_FLAT, STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT):
                     entry = check_entry_conditions(z, corr, score, state, config, hurst=hursts[i])
                     if entry != 0 and not np.isnan(beta):
                         size = calculate_position_size(gc, si, beta, config)
@@ -346,7 +356,11 @@ def run_hybrid_backtest(
                 state = STATE_FLAT
 
         # ---- ETAPE 3 : Verifier les entrees ----
-        if state in (STATE_FLAT, STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT):
+        # Filtre horaire : bloquer les nouvelles entrees hors plage autorisee
+        bar_hour = pd.Timestamp(datetimes_1min[i]).hour
+        hour_ok = entry_start_hour <= bar_hour < entry_end_hour
+
+        if hour_ok and state in (STATE_FLAT, STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT):
             entry = check_entry_conditions(z, corr, score, state, config, hurst=hursts[i])
 
             if entry != 0 and not np.isnan(beta):
@@ -421,15 +435,16 @@ def run_hybrid_backtest(
     n_long = (trades_df['Direction'] == 'LONG').sum() if len(trades_df) > 0 else 0
     n_short = (trades_df['Direction'] == 'SHORT').sum() if len(trades_df) > 0 else 0
 
-    print(f"   Trades total  : {len(trades_df)} ({n_long} LONG, {n_short} SHORT)")
+    if verbose:
+        print(f"   Trades total  : {len(trades_df)} ({n_long} LONG, {n_short} SHORT)")
 
-    if len(trades_df) > 0:
-        for reason in ['TP_ZSCORE', 'TP_DOLLAR', 'SL_ZSCORE', 'SL_DOLLAR', 'STILL_OPEN']:
-            count = (trades_df['Exit_Reason'] == reason).sum()
-            if count > 0:
-                print(f"   {reason:12s} : {count}")
+        if len(trades_df) > 0:
+            for reason in ['TP_ZSCORE', 'TP_DOLLAR', 'SL_ZSCORE', 'SL_DOLLAR', 'STILL_OPEN']:
+                count = (trades_df['Exit_Reason'] == reason).sum()
+                if count > 0:
+                    print(f"   {reason:12s} : {count}")
 
-    print("   [OK] Backtest hybride termine !")
+        print("   [OK] Backtest hybride termine !")
 
     return trades_df
 

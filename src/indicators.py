@@ -535,7 +535,8 @@ def calculate_cointegration_score(
 
 def calculate_all_indicators(
     df: pd.DataFrame,
-    config: dict
+    config: dict,
+    verbose: bool = True
 ) -> pd.DataFrame:
     """
     Fonction principale : calcule TOUS les indicateurs.
@@ -577,46 +578,56 @@ def calculate_all_indicators(
     correlation_period = config['indicators']['correlation_period']
     adf_hurst_period = config['indicators']['adf_hurst_period']
 
-    print("\n[...] Calcul des indicateurs...")
-    print(f"   Beta lookback: {beta_lookback} barres")
-    print(f"   Z-Score period: {zscore_period} barres")
-    print(f"   Correlation period: {correlation_period} barres")
-    print(f"   ADF/Hurst period: {adf_hurst_period} barres")
+    if verbose:
+        print("\n[...] Calcul des indicateurs...")
+        print(f"   Beta lookback: {beta_lookback} barres")
+        print(f"   Z-Score period: {zscore_period} barres")
+        print(f"   Correlation period: {correlation_period} barres")
+        print(f"   ADF/Hurst period: {adf_hurst_period} barres")
 
     # 1. Logarithmes
-    print("   [1/8] Calcul des logarithmes...")
+    if verbose:
+        print("   [1/8] Calcul des logarithmes...")
     df = calculate_log_prices(df)
 
     # 2. Beta (le plus long a calculer)
-    print("   [2/8] Calcul du Beta (regression OLS)...")
+    if verbose:
+        print("   [2/8] Calcul du Beta (regression OLS)...")
     df = calculate_rolling_beta(df, lookback=beta_lookback)
 
     # 3. Spread
-    print("   [3/8] Calcul du Spread...")
+    if verbose:
+        print("   [3/8] Calcul du Spread...")
     df = calculate_spread(df)
 
     # 4. Z-Score
-    print("   [4/8] Calcul du Z-Score...")
+    if verbose:
+        print("   [4/8] Calcul du Z-Score...")
     df = calculate_zscore(df, period=zscore_period)
 
     # 5. Correlation
-    print("   [5/8] Calcul de la Correlation...")
+    if verbose:
+        print("   [5/8] Calcul de la Correlation...")
     df = calculate_correlation(df, period=correlation_period)
 
     # 6. ADF
-    print("   [6/8] Calcul de l'ADF Statistic...")
+    if verbose:
+        print("   [6/8] Calcul de l'ADF Statistic...")
     df = calculate_adf_statistic(df, period=adf_hurst_period)
 
     # 7. Hurst
-    print("   [7/8] Calcul du Hurst Exponent...")
+    if verbose:
+        print("   [7/8] Calcul du Hurst Exponent...")
     df = calculate_hurst_exponent(df, period=adf_hurst_period)
 
     # 8. Half-Life et Cointegration Score
-    print("   [8/8] Calcul du Half-Life et Score de Cointegration...")
+    if verbose:
+        print("   [8/8] Calcul du Half-Life et Score de Cointegration...")
     df = calculate_half_life(df, period=adf_hurst_period)
     df = calculate_cointegration_score(df)
 
-    print("   [OK] Tous les indicateurs calcules !")
+    if verbose:
+        print("   [OK] Tous les indicateurs calcules !")
 
     return df
 

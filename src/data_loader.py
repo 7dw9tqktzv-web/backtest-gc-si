@@ -189,7 +189,7 @@ def validate_data(df: pd.DataFrame, verbose: bool = True) -> dict:
         print("=" * 60)
         print(f"\n   Statistiques Generales:")
         print(f"   Nombre total de barres : {stats['total_bars']:,}")
-        print(f"   Période : {stats['start_date']} → {stats['end_date']}")
+        print(f"   Periode : {stats['start_date']} -> {stats['end_date']}")
         print(f"   Jours de trading : {stats['trading_days']}")
         
         print(f"\n   Prix Gold (GC):")

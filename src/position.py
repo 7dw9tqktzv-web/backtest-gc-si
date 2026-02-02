@@ -84,6 +84,11 @@ def calculate_position_size(
         # Securite : minimum 1 contrat
         gc_contracts = max(gc_contracts, 1)
 
+        # Cap optionnel sur les contrats GC
+        gc_max = config['sizing'].get('gc_contracts_max', 0)
+        if gc_max > 0:
+            gc_contracts = min(gc_contracts, gc_max)
+
     elif mode == "dollar_neutral":
         # Dollar neutral sans ajustement Beta
         notional_gc = gc_price * gc_point_value
