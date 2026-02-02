@@ -37,6 +37,8 @@ indicators:
   zscore_period: 20         # Période pour moyenne et écart-type du Z-Score
   correlation_period: 30    # Période pour la corrélation Pearson
   adf_hurst_period: 128     # Période pour tests ADF et Hurst
+  adf_critical_value: -2.86      # Valeur critique ADF a 5% pour le score de cointegration
+  coint_corr_threshold: 0.6      # Seuil de correlation dans le score de cointegration
 
 # ----------------------------------------------------------------------------
 # CONDITIONS D'ENTRÉE
@@ -53,6 +55,7 @@ entry:
 # ----------------------------------------------------------------------------
 exit:
   # Sortie sur Z-Score
+  zscore_tp_enabled: true    # Activer les sorties TP Z-Score (false = uniquement dollar exits + SL Z-Score)
   zscore_tp_long: -2.0      # Take Profit LONG : sortie si Z >= cette valeur
   zscore_sl_long: -3.5      # Stop Loss LONG : sortie si Z <= cette valeur
   zscore_tp_short: 2.0      # Take Profit SHORT : sortie si Z <= cette valeur
@@ -61,6 +64,7 @@ exit:
   # Sortie sur PnL (en dollars)
   pnl_take_profit: 300      # Take Profit en $ (sortie si PnL >= cette valeur)
   pnl_stop_loss: -600       # Stop Loss en $ (sortie si PnL <= cette valeur)
+  zscore_tp_min_pnl: null   # PnL minimum pour TP_ZSCORE (null = pas de filtre, ex: 100 = $100 min)
 
 # ----------------------------------------------------------------------------
 # CONDITION DE RÉENTRÉE

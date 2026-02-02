@@ -22,8 +22,7 @@ import pandas as pd
 from datetime import datetime
 from pathlib import Path
 
-from data_loader import load_and_prepare_data
-from data_loader_5s import load_5s_data
+from data_loader import load_and_prepare_data, load_5s_data
 from indicators import calculate_all_indicators
 from position import calculate_position_size, calculate_transaction_costs
 try:

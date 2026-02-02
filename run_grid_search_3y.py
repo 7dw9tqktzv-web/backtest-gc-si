@@ -188,8 +188,7 @@ if __name__ == "__main__":
     # Charger les donnees (une seule fois dans le process principal)
     print("\nChargement des donnees...")
     t0 = time.time()
-    from data_loader import load_and_prepare_data
-    from data_loader_5s import load_5s_data
+    from data_loader import load_and_prepare_data, load_5s_data
     df_1min, base_config, stats = load_and_prepare_data(verbose=False)
     df_5s = load_5s_data(base_config, verbose=False)
     print(f"   {len(df_1min):,} barres 1-min, {len(df_5s):,} barres 5s ({time.time()-t0:.1f}s)")

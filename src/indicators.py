@@ -451,7 +451,8 @@ def calculate_half_life(
 
 def calculate_cointegration_score(
     df: pd.DataFrame,
-    adf_critical: float = -2.86
+    adf_critical: float = -2.86,
+    corr_threshold: float = 0.6
 ) -> pd.DataFrame:
     """
     Calcule le score de cointegration composite (0-100).
@@ -473,6 +474,8 @@ def calculate_cointegration_score(
         DataFrame avec colonnes 'ADF_Statistic', 'Hurst', 'Correlation'
     adf_critical : float
         Valeur critique ADF a 5% (defaut: -2.86)
+    corr_threshold : float
+        Seuil de correlation pour le score (defaut: 0.6)
 
     Retourne:
     ---------
@@ -522,8 +525,8 @@ def calculate_cointegration_score(
     score_corr = np.zeros(n)
     corr_vals = df['Correlation'].values
 
-    mask_corr = has_corr & (corr_vals > 0.6)
-    score_corr[mask_corr] = 40.0 * (corr_vals[mask_corr] - 0.6) / 0.4
+    mask_corr = has_corr & (corr_vals > corr_threshold)
+    score_corr[mask_corr] = 40.0 * (corr_vals[mask_corr] - corr_threshold) / (1.0 - corr_threshold)
     score_corr = np.clip(score_corr, 0, 40)
 
     # Score total avec reponderation
@@ -624,7 +627,9 @@ def calculate_all_indicators(
     if verbose:
         print("   [8/8] Calcul du Half-Life et Score de Cointegration...")
     df = calculate_half_life(df, period=adf_hurst_period)
-    df = calculate_cointegration_score(df)
+    adf_critical = config['indicators'].get('adf_critical_value', -2.86)
+    corr_threshold = config['indicators'].get('coint_corr_threshold', 0.6)
+    df = calculate_cointegration_score(df, adf_critical=adf_critical, corr_threshold=corr_threshold)
 
     if verbose:
         print("   [OK] Tous les indicateurs calcules !")

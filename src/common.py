@@ -126,12 +126,15 @@ def check_zscore_exit(
         - doit_sortir : True si on doit cloturer la position
         - raison : 'SL_ZSCORE', 'TP_ZSCORE', ou '' si pas de sortie
     """
+    # Parametre optionnel : desactiver les sorties TP_ZSCORE (defaut: True = actif)
+    tp_enabled = config['exit'].get('zscore_tp_enabled', True)
+
     if state == STATE_LONG:
         # SL LONG : Z-Score continue de baisser -> danger
         if zscore <= config['exit']['zscore_sl_long']:     # <= -3.5
             return True, 'SL_ZSCORE'
         # TP LONG : Z-Score remonte vers la moyenne -> profit
-        if zscore >= config['exit']['zscore_tp_long']:     # >= -2.0
+        if tp_enabled and zscore >= config['exit']['zscore_tp_long']:     # >= -2.0
             return True, 'TP_ZSCORE'
 
     elif state == STATE_SHORT:
@@ -139,7 +142,7 @@ def check_zscore_exit(
         if zscore >= config['exit']['zscore_sl_short']:    # >= +3.5
             return True, 'SL_ZSCORE'
         # TP SHORT : Z-Score redescend vers la moyenne -> profit
-        if zscore <= config['exit']['zscore_tp_short']:    # <= +2.0
+        if tp_enabled and zscore <= config['exit']['zscore_tp_short']:    # <= +2.0
             return True, 'TP_ZSCORE'
 
     return False, ''

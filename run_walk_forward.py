@@ -19,8 +19,7 @@ import pandas as pd
 sys.path.insert(0, "src")
 
 from itertools import product
-from data_loader import load_and_prepare_data
-from data_loader_5s import load_5s_data
+from data_loader import load_and_prepare_data, load_5s_data
 from indicators import calculate_all_indicators
 from backtest_engine_hybrid import run_hybrid_backtest
 from optimizer import apply_overrides, build_label, compute_metrics
