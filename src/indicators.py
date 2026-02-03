@@ -244,8 +244,8 @@ def calculate_adf_statistic(
         start_idx = i - period + 1
         spread_window = spread[start_idx:i+1]
 
-        # Verifier les valeurs valides
-        if np.any(np.isnan(spread_window)) or np.any(spread_window == 0):
+        # Verifier les valeurs valides (spread == 0 est une valeur legitime)
+        if np.any(np.isnan(spread_window)):
             continue
 
         # Variables pour la regression
@@ -258,21 +258,25 @@ def calculate_adf_statistic(
         if n_pts < 20:
             continue
 
-        # Regression OLS : DeltaSpread = gamma x Spread_{t-1}
-        sum_xy = np.sum(lag_spread * delta_spread)
-        sum_x2 = np.sum(lag_spread ** 2)
+        # Regression OLS avec intercept : DeltaSpread = mu + gamma x Spread_{t-1}
+        x_mean = np.mean(lag_spread)
+        y_mean = np.mean(delta_spread)
+
+        sum_xy = np.sum((lag_spread - x_mean) * (delta_spread - y_mean))
+        sum_x2 = np.sum((lag_spread - x_mean) ** 2)
 
         if sum_x2 == 0:
             continue
 
         gamma = sum_xy / sum_x2
+        mu = y_mean - gamma * x_mean
 
         # Calcul de l'erreur standard de gamma
-        residuals = delta_spread - gamma * lag_spread
+        residuals = delta_spread - mu - gamma * lag_spread
         ssr = np.sum(residuals ** 2)
-        variance = ssr / (n_pts - 1)
+        variance = ssr / (n_pts - 2)  # -2 car 2 parametres estimes (mu + gamma)
 
-        if variance < 0:
+        if variance <= 0:
             continue
 
         se_gamma = np.sqrt(variance / sum_x2)

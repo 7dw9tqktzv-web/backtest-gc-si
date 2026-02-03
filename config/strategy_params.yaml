@@ -33,7 +33,7 @@ contracts:
 # ----------------------------------------------------------------------------
 indicators:
   period: "1min"            # Période de calcul des indicateurs (1min, 5min, 15min, 1h, 1d)
-  beta_lookback: 1980       # Période pour calcul du Beta (2 jours × 22h × 60min)
+  beta_lookback: 1320       # Meilleure config 1mn (PnL2 walk-forward: 16/34 fenetres)
   zscore_period: 20         # Période pour moyenne et écart-type du Z-Score
   correlation_period: 30    # Période pour la corrélation Pearson
   adf_hurst_period: 128     # Période pour tests ADF et Hurst
@@ -44,10 +44,10 @@ indicators:
 # CONDITIONS D'ENTRÉE
 # ----------------------------------------------------------------------------
 entry:
-  zscore_long: -2.5         # Entrée LONG si Z-Score <= cette valeur
-  zscore_short: 2.5         # Entrée SHORT si Z-Score >= cette valeur
+  zscore_long: -3.5         # Meilleure config 1mn (PnL2 walk-forward)
+  zscore_short: 3.5         # Meilleure config 1mn (PnL2 walk-forward)
   correlation_min: 0.60     # Corrélation minimum requise
-  cointegration_score_min: 40  # Score de cointégration minimum (0-100)
+  cointegration_score_min: 50  # Meilleure config 1mn (PnL2 walk-forward)
   hurst_max: 1.0              # Hurst maximum (1.0 = desactive, 0.50 = filtre strict mean reversion)
 
 # ----------------------------------------------------------------------------
@@ -55,15 +55,15 @@ entry:
 # ----------------------------------------------------------------------------
 exit:
   # Sortie sur Z-Score
-  zscore_tp_enabled: true    # Activer les sorties TP Z-Score (false = uniquement dollar exits + SL Z-Score)
+  zscore_tp_enabled: false   # Meilleure config 1mn desactive TP_ZSCORE (tpzOFF domine)
   zscore_tp_long: -2.0      # Take Profit LONG : sortie si Z >= cette valeur
   zscore_sl_long: -3.5      # Stop Loss LONG : sortie si Z <= cette valeur
   zscore_tp_short: 2.0      # Take Profit SHORT : sortie si Z <= cette valeur
   zscore_sl_short: 3.5      # Stop Loss SHORT : sortie si Z >= cette valeur
   
   # Sortie sur PnL (en dollars)
-  pnl_take_profit: 300      # Take Profit en $ (sortie si PnL >= cette valeur)
-  pnl_stop_loss: -600       # Stop Loss en $ (sortie si PnL <= cette valeur)
+  pnl_take_profit: 1000     # Meilleure config 1mn (PnL2 walk-forward)
+  pnl_stop_loss: -1200      # Meilleure config 1mn (PnL2 walk-forward)
   zscore_tp_min_pnl: null   # PnL minimum pour TP_ZSCORE (null = pas de filtre, ex: 100 = $100 min)
 
 # ----------------------------------------------------------------------------
@@ -89,8 +89,8 @@ sizing:
 # ----------------------------------------------------------------------------
 costs:
   commission_per_contract: 4.00   # $ par contrat aller-retour ($2.00 × 2)
-  slippage_gc_ticks: 2            # Slippage estimé en ticks pour GC (2 = realiste pour spread 2 legs)
-  slippage_si_ticks: 2            # Slippage estimé en ticks pour SI (2 = realiste pour spread 2 legs)
+  slippage_gc_ticks: 1            # 1 tick = seul scenario rentable sur 3 ans
+  slippage_si_ticks: 1            # 1 tick = seul scenario rentable sur 3 ans
 
 # ----------------------------------------------------------------------------
 # SESSION DE TRADING
