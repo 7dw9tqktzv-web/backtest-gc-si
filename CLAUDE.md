@@ -17,7 +17,12 @@ Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy base
 # Install dependencies
 pip install -r requirements.txt
 
-# Test modules
+# Run unit tests
+pytest tests/ -v                       # Run all tests
+pytest tests/ --cov=src                # Run with coverage
+pytest tests/test_common.py -v         # Run specific test file
+
+# Test modules manually
 python src/data_loader.py
 python src/indicators.py
 python src/signals.py
@@ -297,6 +302,38 @@ Lance un grid search massif en background (milliers de configs), genere un rappo
 ## Git Tracking
 
 `.gitignore` exclut : `.venv/`, `__pycache__/`, `data/raw/`, `DOC SIERRA/`, `.idea/`, `.claude/`, `output/`, `results/`
+
+## Testing
+
+### Test Structure
+```
+tests/
+├── conftest.py          # Fixtures partagees (sample_config, sample_prices_df, etc.)
+├── test_common.py       # Tests common.py (32 tests, 100% coverage)
+├── test_indicators.py   # Tests indicators.py (32 tests, 72% coverage)
+├── test_signals.py      # Tests signals.py (24 tests, 53% coverage)
+└── test_position.py     # Tests position.py (24 tests, 48% coverage)
+```
+
+### Running Tests
+```bash
+pytest tests/ -v                    # All tests (112 tests)
+pytest tests/ --cov=src             # With coverage report
+pytest tests/test_common.py -v      # Single file
+pytest -k "test_long"               # Tests matching pattern
+```
+
+### Test Coverage (as of 2026-02)
+- **common.py**: 100% - Entry/exit conditions, PnL calculation
+- **indicators.py**: 72% - Z-Score, Beta, Correlation, Hurst, ADF
+- **signals.py**: 53% - State machine, signal generation
+- **position.py**: 48% - Position sizing, transaction costs
+
+### Adding New Tests
+Tests use synthetic data (fixtures in conftest.py) to avoid depending on real CSV files. To add tests:
+1. Use `sample_config` fixture for config
+2. Use `sample_prices_df` for price data
+3. Use `sample_df_with_indicators` for data with indicators
 
 ## Reference Files
 - `config/strategy_params.yaml` - All strategy parameters

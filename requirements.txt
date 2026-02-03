@@ -29,3 +29,7 @@ ipykernel>=6.0.0
 # Statistiques avancées (pour ADF test, etc.)
 scipy>=1.10.0
 statsmodels>=0.14.0
+
+# Tests
+pytest>=7.0.0
+pytest-cov>=4.0.0
