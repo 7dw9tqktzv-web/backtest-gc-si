@@ -29,7 +29,6 @@ python src/signals.py
 python src/position.py
 
 # Run backtests
-python src/backtest_engine.py          # 1-min with High/Low dollar exits
 python src/backtest_engine_hybrid.py   # Hybrid 1-min + 5s (recommended)
 python src/metrics.py                  # Performance analysis + archiving
 
@@ -52,11 +51,11 @@ python validate_data.py --date "2026-01-23 10:30:00"
 
 ### Data Pipeline
 ```
-Sierra Chart CSV -> data_loader.py -> [Parquet cache] -> indicators.py -> signals.py -> position.py -> backtest_engine.py -> metrics.py
-                      (sync GC/SI)    (data/processed/)   (calculate)    (generate)      (sizing)      (simulate)           (analyze)
+Sierra Chart CSV -> data_loader.py -> [Parquet cache] -> indicators.py -> signals.py -> position.py -> backtest_engine_hybrid.py -> metrics.py
+                      (sync GC/SI)    (data/processed/)   (calculate)    (generate)      (sizing)         (simulate)               (analyze)
 
 Sierra Chart 5s CSV -> data_loader.py (load_5s_data) -> [Parquet cache] -> backtest_engine_hybrid.py
-                         (sync 5s)                      (data/processed/)    (hybrid simulation)
+                         (sync 5s)                      (data/processed/)    (5s price monitoring)
 
 optimizer.py: loads data once -> loops N configs -> calculate_all_indicators -> run_hybrid_backtest -> comparison table
 report_generator.py: grid search CSV -> latest_summary.txt + CHANGELOG.md section (CLI post-analysis)
@@ -71,8 +70,7 @@ report_generator.py: grid search CSV -> latest_summary.txt + CHANGELOG.md sectio
 - `build_trade_list(df)` in `signals.py` - returns a DataFrame with one row per trade
 - `calculate_position_size(gc_price, si_price, beta, config)` in `position.py` - returns sizing dict
 - `calculate_trade_pnl(direction, entry_gc, entry_si, exit_gc, exit_si, gc_contracts, si_contracts, config)` in `position.py` - returns PnL dict
-- `run_backtest(df, config)` in `backtest_engine.py` - returns trades DataFrame (1-min High/Low)
-- `run_hybrid_backtest(df_1min, df_5s, config)` in `backtest_engine_hybrid.py` - returns trades DataFrame (hybrid)
+- `run_hybrid_backtest(df_1min, df_5s, config)` in `backtest_engine_hybrid.py` - returns trades DataFrame
 - `run_metrics()` in `metrics.py` - analyzes backtest results, generates report + equity curve, archives everything
 - `run_optimization(configs_list)` in `optimizer.py` - loads data once, runs N backtests, returns comparison table
 - `apply_overrides(config, overrides)` in `optimizer.py` - applies dotted-key overrides to config dict
@@ -141,21 +139,16 @@ Default values (1-min best config): TP $1000 / SL -$1200, zTP disabled.
 - Single position at a time
 - Dollar-based exits (TP $300 / SL -$600) handled in backtest engines, not signals.py
 
-## Backtest Engines
+## Backtest Engine
 
-### backtest_engine.py (1-min with High/Low)
-- Iterates on 1-minute bars
-- Dollar exits use High/Low prices to detect intra-bar SL/TP triggers
-- When SL/TP dollar triggered, PnL is fixed at the threshold (-$600 or +$300)
-
-### backtest_engine_hybrid.py (Hybrid 1-min + 5s) -- RECOMMENDED
+### backtest_engine_hybrid.py (Hybrid 1-min + 5s)
 - Indicators and signals computed on 1-minute bars (normal lookbacks)
 - When in position, scans 5-second bars between consecutive 1-min bars
-- Dollar exits (SL/TP) detected on 5s Last prices (more precise than High/Low)
+- Dollar exits (SL/TP) detected on 5s Last prices (precise intra-bar detection)
 - Z-Score exits checked on 1-min bars only (after 5s scan finds no dollar trigger)
 - 5s data used ONLY for price monitoring, no indicators recalculated on 5s
 
-#### Hybrid exit priority per 1-min bar:
+#### Exit priority per 1-min bar:
 ```
 1a. Scan 5s bars: SL_DOLLAR (-$600) -> break
 1a. Scan 5s bars: TP_DOLLAR (+$300) -> break
@@ -254,9 +247,9 @@ Strategy is regime-dependent: profitable 2025-2026, losing 2023-2024.
 - Walk-forward with filter to validate robustness
 
 ### Priority 2 -- Code Quality
-- **Add pytest tests**: unit tests for indicators, signals, position sizing
-- **Merge backtest engines**: ~1286 lines duplicated between 1-min and hybrid
-- **Vectorize Hurst**: only remaining Python loop bottleneck
+- **Add pytest tests**: unit tests for indicators, signals, position sizing (112 tests done)
+- **Consolidate run_*.py scripts**: reduce duplication (done, -66% code)
+- **Remove dead code**: backtest_engine.py deleted (was obsolete)
 
 ### Priority 3 -- Production
 - Implement regime filter (prerequisite for live trading)
@@ -266,13 +259,12 @@ Strategy is regime-dependent: profitable 2025-2026, losing 2023-2024.
 
 - **Bug 2 (ddof)**: Beta uses ddof=0, Z-Score uses ddof=1. Inconsistent but low impact.
 - **Bug 3 (Hurst)**: Single-segment implementation, 3-5 point regression. Acceptable for relative ranking.
-- **Hurst loop**: O(n x period) boucle Python dans indicators.py. Goulot principal (~10s sur 160k barres 5-min).
-- **backtest_engine.py ~= backtest_engine_hybrid.py**: 95% identical, ~1286 lines duplicated. Requires pytest tests before safe merge.
-- **run_backtest() = 388 lines**: 5+ nesting levels. Needs decomposition but requires tests first.
+- **run_hybrid_backtest() = 350+ lines**: 5+ nesting levels. Needs decomposition but requires tests first.
 - **Detailed analysis**: see `analyse.md` for comprehensive code review.
 
 ## Performance Optimizations
 - **Vectorized Beta/ADF**: ~50x speedup using pandas rolling
+- **Vectorized Hurst**: ~42x speedup (4.2s -> 0.1s on 160k bars)
 - **5s scan short-circuit**: ~12x speedup in pure_zscore mode
 - **Pool(24)**: 24 workers via hyperthreading (+17.5% vs 12)
 - **5-min resampling**: Parquet cache in `data/processed/`
