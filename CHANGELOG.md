@@ -2,6 +2,380 @@
 
 Historique des optimisations, resultats detailles et ameliorations du backtest GC/SI.
 
+---
+
+## [2026-02-03] Walk-Forward Beta Long (34 windows, 63d train / 21d test)
+
+**Script**: `run_walk_forward_beta_long.py` | **Configs testees**: Top 5 beta long (b3960)
+
+### Objectif
+
+Valider la robustesse des configs avec beta long (15 jours = 3960 barres 5-min) sur 34 fenetres walk-forward. Comparaison avec le walk-forward b2640 (10 jours).
+
+### Resultats globaux
+
+| Metrique | Beta Long (b3960) | Beta Court (b2640) | Delta |
+|----------|-------------------|-------------------|-------|
+| PnL total TEST | **+$24,694** | +$20,553 | **+$4,141 (+20%)** |
+| Trades TEST | 153 | 93 | +60 |
+| Fenetres positives | **18/34 (53%)** | 11/34 (32%) | **+21%** |
+| Fenetres negatives | 16/34 (47%) | 22/34 (65%) | -18% |
+
+### Analyse par periode
+
+| Periode | Fenetres | PnL TEST | Trades | Win% | Verdict |
+|---------|----------|----------|--------|------|---------|
+| 2023 | 1-9 | -$8,885 | 44 | 3/9 (33%) | Perdant |
+| 2024 | 10-21 | -$1,156 | 45 | 7/12 (58%) | Equilibre |
+| 2025-2026 | 22-34 | +$34,735 | 64 | 8/13 (62%) | **Tres profitable** |
+
+### Top 5 fenetres
+
+| # | Window | Periode TEST | Config | Trades | PnL | WR% |
+|---|--------|-------------|--------|--------|-----|-----|
+| 1 | 33 | Dec 12 - Jan 05 | b3960_zp24_cp24_adf26_zE3.5_co40_zTP-1.0 | 4 | +$14,014 | 100% |
+| 2 | 34 | Jan 06 - Jan 29 | b3960_zp24_cp24_adf26_zE3.5_co40_zTP-1.0 | 13 | +$11,797 | 77% |
+| 3 | 32 | Nov 18 - Dec 11 | b3960_zp24_cp60_adf26_zE3.5_co50_zTP-1.0 | 6 | +$5,664 | 83% |
+| 4 | 31 | Oct 24 - Nov 17 | b3960_zp24_cp60_adf26_zE3.5_co50_zTP-1.0 | 5 | +$4,905 | 100% |
+| 5 | 24 | Mar 14 - Apr 07 | b3960_zp24_cp12_adf26_zE3.5_co40_zTP-1.0 | 3 | +$4,581 | 100% |
+
+### Configs selectionnees (frequence)
+
+| Config | Fenetres | % |
+|--------|----------|---|
+| b3960_zp24_cp12_adf26_zE3.5_co50_zTP-1.0 | 11 | 32% |
+| b3960_zp24_cp60_adf26_zE3.5_co50_zTP-1.0 | 10 | 29% |
+| b3960_zp24_cp12_adf26_zE3.5_co40_zTP-1.0 | 8 | 24% |
+| b3960_zp24_cp24_adf26_zE3.5_co40_zTP-1.0 | 3 | 9% |
+| Autres | 2 | 6% |
+
+### Conclusion
+
+**Beta long (b3960) surpasse beta court (b2640)** en walk-forward:
+- +20% de PnL total
+- +21% de fenetres positives
+- Meilleure performance sur 2024 (equilibre vs perte)
+- zp=24 (2h en 5-min) domine vs zp=20
+
+**Recommandation** : Utiliser b3960 (15 jours) plutot que b2640 (10 jours) pour plus de robustesse.
+
+---
+
+## [2026-02-03] Grid Search Beta Long (4,050 configs)
+
+**Script**: `run_grid_search_beta_long.py` | **Resultats**: `output/grid_search_beta_long.csv`
+
+### Objectif
+
+Tester des lookbacks beta plus longs (15, 20, 30 jours) avec zTP=0 et zTP=-1.0 pour verifier si des beta plus longs ameliorent la robustesse.
+
+### Grille testee
+
+| Parametre | Valeurs | Description |
+|-----------|---------|-------------|
+| beta_lookback | 3960, 5280, 7920 | 15j, 20j, 30j (264 barres/jour) |
+| zscore_period | 12, 24, 36, 48, 60 | 1h-5h |
+| correlation_period | 12, 24, 36, 48, 60 | 1h-5h |
+| adf_hurst_period | 26, 64, 128 | |
+| entry_zscore | 2.5, 3.0, 3.5 | |
+| cointegration_min | 40, 50, 60 | |
+| zscore_tp | 0.0, -1.0 | Sortie a 0 ou overshoot |
+
+**Total** : 225 groupes x 18 variantes = 4,050 configs
+
+### Resultats par beta
+
+| Beta | Jours | Configs rentables | % | PnL Max | Observation |
+|------|-------|-------------------|---|---------|-------------|
+| 3960 | 15j | 147 | 10.9% | $10,733 | **Meilleur ratio** |
+| 5280 | 20j | 89 | 6.6% | $8,916 | Degrade |
+| 7920 | 30j | 32 | 2.4% | $4,209 | Trop long |
+
+### Resultats par zTP
+
+| zTP | Configs rentables | % | PnL Max |
+|-----|-------------------|---|---------|
+| -1.0 | 198 | 14.6% | $10,733 |
+| 0.0 | 70 | 5.2% | $2,848 |
+
+### Conclusion
+
+**Beta court reste optimal pour le PnL brut**, mais beta long (3960) offre une meilleure robustesse en walk-forward (voir section precedente). Le trade-off est:
+- b2640 (10j) : $45,224 backtest, $20,553 walk-forward (32% positives)
+- b3960 (15j) : $10,733 backtest, $24,694 walk-forward (53% positives)
+
+---
+
+## [2026-02-03] Walk-Forward 5-min zTP=-1.0 (34 windows, 63d train / 21d test)
+
+**Script**: `run_walk_forward_5min_ztp.py` | **Resultats**: `output/walk_forward_5min_ztp_results.csv`
+
+### Objectif
+
+Valider la meilleure config zTP=-1.0 (b2640_zp20_cp30_adf26_zE3.5_co40) sur 34 fenetres walk-forward.
+
+### Resultats globaux
+
+| Metrique | Valeur |
+|----------|--------|
+| PnL total TEST | +$20,553 |
+| Trades TEST | 93 |
+| Fenetres positives | 11/34 (32%) |
+| Fenetres negatives | 22/34 (65%) |
+| Fenetres inactives | 1/34 (3%) |
+
+### Analyse par periode
+
+| Periode | Fenetres | PnL TEST | Verdict |
+|---------|----------|----------|---------|
+| 2023 | 1-9 | -$9,435 | **Perdant** |
+| 2024 | 10-21 | -$9,859 | **Perdant** |
+| 2025-2026 | 22-34 | +$39,847 | **Tres profitable** |
+
+### Concentration du PnL
+
+La fenetre #34 (dec 2025 - jan 2026) genere **$32,366**, soit **157% du PnL total**.
+
+### Configs selectionnees (frequence)
+
+| zTP | Fenetres | % |
+|-----|----------|---|
+| zTP=-1.0 | 13 | 38% |
+| zTP=0.0 | 13 | 38% |
+| zTP=1.0 | 8 | 24% |
+
+### Conclusion
+
+**Strategie regime-dependante** : profitable uniquement en 2025-2026, perdante en 2023-2024. La performance est concentree sur quelques fenetres exceptionnelles. **Filtre de regime requis** avant production.
+
+---
+
+## [2026-02-03] Grid Search zTP Etendu (45,360 configs)
+
+**Script**: `run_grid_search_ztp_extended.py` | **Resultats**: `output/grid_search_5min_ztp_extended.csv`
+
+### Objectif
+
+Tester des valeurs de zTP plus agressives (-1.0 "overshoot") pour capturer le momentum du retour a la moyenne.
+
+### Grille testee
+
+| Parametre | Valeurs |
+|-----------|---------|
+| zscore_tp | -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0 |
+| Autres | Identiques au grid search initial |
+
+**Total** : 6,480 groupes x 7 zTP = 45,360 configs
+
+### Resultats par zTP
+
+| zTP | Configs rentables | % | PnL Max | Gain vs zTP=1.0 |
+|-----|-------------------|---|---------|-----------------|
+| **-1.0** | 909 | **14.0%** | **$45,224** | **+100%** |
+| -0.5 | 823 | 12.7% | $41,954 | +86% |
+| 0.0 | 620 | 9.6% | $36,909 | +63% |
+| 0.5 | 446 | 6.9% | $23,564 | +4% |
+| 1.0 | 220 | 3.4% | $22,604 | (baseline) |
+| 1.5 | 231 | 3.6% | $13,304 | -41% |
+| 2.0 | 161 | 2.5% | $8,929 | -60% |
+
+### Top 5 configs zTP=-1.0
+
+| # | Config | Trades | PnL Net | WR | PF | Sharpe |
+|---|--------|--------|---------|-----|-----|--------|
+| 1 | b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0_zSL4.0 | 100 | $45,224 | 53% | 2.41 | 3.02 |
+| 2 | b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0_zSL5.0 | 100 | $45,224 | 53% | 2.41 | 3.02 |
+| 3 | b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0_zSL3.5 | 100 | $44,644 | 52% | 2.38 | 2.99 |
+| 4 | b2640_zp20_cp30_adf26_zE3.5_co40_zTP-0.5_zSL4.0 | 100 | $41,954 | 52% | 2.50 | 2.99 |
+| 5 | b2640_zp20_cp30_adf26_zE3.5_co40_zTP-0.5_zSL5.0 | 100 | $41,954 | 52% | 2.50 | 2.99 |
+
+### Interpretation
+
+**zTP=-1.0 (overshoot)** signifie attendre que le Z-Score depasse 0 de l'autre cote avant de sortir. Cela capture le momentum du retour a la moyenne et **double le PnL** par rapport a la sortie classique (zTP=1.0).
+
+### Archive
+
+Les top 5 PnL et top 5 Sharpe sont archives dans `output/archive/5min_ztp_extended/` avec metrics_report.txt complet (10 sections).
+
+---
+
+## [2026-02-03] Archivage Top 20 Configs 5-MIN (PnL + Sharpe)
+
+**Archives**: 20 configs | **Localisation**: `output/archive/5min/` et `output/archive/_ranking/`
+
+### Objectif
+
+Archiver les meilleures configs 5-min identifiees par le grid search (155,520 configs) avec rapports complets, courbes d'equity et classement par categorie.
+
+### Structure des archives
+
+```
+output/archive/
+    CLASSEMENT.txt           <- Resume complet
+    index.csv                <- 36 configs (16 x 1min + 20 x 5min)
+    _ranking/                <- Classements par categorie
+        5min_top_pnl/        <- Top 10 par PnL
+        5min_top_sharpe/     <- Top 10 par Sharpe
+        1min_top_pnl/        <- Top 10 par PnL
+        1min_top_sharpe/     <- Top 10 par Sharpe
+    5min/                    <- 20 archives detaillees
+    1min/                    <- 16 archives detaillees
+```
+
+### Top 10 par PnL Net (5-min, deduplique)
+
+| # | Config | Trades | WR% | PnL Net | MaxDD | Sharpe | Calmar |
+|---|--------|--------|-----|---------|-------|--------|--------|
+| 1 | b2640_zp20_cp30_adf26_zTP1.0_co40 | 100 | 41.0% | $22,604 | -$12,985 | 0.146 | 1.74 |
+| 2 | b2640_zp20_cp30_adf26_zTP1.0_co40 (zSL4) | 100 | 42.0% | $21,314 | -$14,372 | 0.135 | 1.48 |
+| 3 | b2640_zp20_cp15_adf26_zTP1.0_co50 | 81 | 43.2% | $13,969 | -$8,396 | 0.157 | 1.66 |
+| 4 | b2640_zp20_cp30_adf26_zTP1.5_co40 | 100 | 39.0% | $13,304 | -$10,416 | 0.102 | 1.28 |
+| 5 | b2640_zp20_cp15_adf26_zTP1.0_co50 (zSL3.5) | 81 | 43.2% | $13,229 | -$9,136 | 0.148 | 1.45 |
+| 6 | b2640_zp20_cp50_adf26_zTP1.0_co40 | 104 | 42.3% | $12,312 | -$10,770 | 0.084 | 1.14 |
+| 7 | b5280_zp20_cp30_adf128_zTP1.0_co40 | 68 | 47.1% | $11,446 | -$10,402 | 0.133 | 1.10 |
+| 8 | b1320_zp20_cp30_adf64_zTP1.0_co50 | 30 | 53.3% | $11,420 | -$2,212 | 0.205 | 5.16 |
+| 9 | b2640_zp20_cp15_adf128_zTP1.0_co50 | 36 | 50.0% | $11,299 | -$4,917 | 0.219 | 2.30 |
+| 10 | b2640_zp20_cp30_adf128_zTP1.0_co50 | 23 | 60.9% | $7,818 | -$1,859 | 0.361 | 4.21 |
+
+### Top 10 par Sharpe (5-min, min 10 trades)
+
+| # | Config | Trades | WR% | PnL Net | MaxDD | Sharpe | Calmar |
+|---|--------|--------|-----|---------|-------|--------|--------|
+| 1 | b2640_zp20_cp30_adf128_zTP1.0_co50 | 23 | 60.9% | $7,818 | -$1,859 | **0.361** | 4.21 |
+| 2 | b2640_zp20_cp80_adf128_zTP1.0_co50 | 24 | 50.0% | $5,549 | -$1,113 | 0.289 | 4.99 |
+| 3 | b2640_zp20_cp30_adf128_zTP1.5_co50 | 23 | 56.5% | $2,758 | -$850 | 0.278 | 3.24 |
+| 4 | b2640_zp20_cp50_adf128_zTP1.0_co50 | 21 | 42.9% | $4,808 | -$2,633 | 0.260 | 1.83 |
+| 5 | b5280_zp20_cp30_adf128_zTP1.5_co50 | 27 | 44.4% | $4,134 | -$1,961 | 0.258 | 2.11 |
+| 6 | b2640_zp20_cp30_adf64_zTP1.0_co50 | 26 | 53.8% | $4,768 | -$2,063 | 0.244 | 2.31 |
+| 7 | b2640_zp20_cp30_adf128_zTP2.0_co50 | 23 | 56.5% | $3,468 | -$1,224 | 0.237 | 2.83 |
+| 8 | b2640_zp20_cp50_adf128_zTP1.5_co50 | 21 | 42.9% | $2,518 | -$1,408 | 0.231 | 1.79 |
+| 9 | b2640_zp20_cp15_adf128_zTP1.0_co50 | 36 | 50.0% | $11,299 | -$4,917 | 0.219 | 2.30 |
+| 10 | b5280_zp20_cp30_adf64_zTP1.5_co50 | 24 | 45.8% | $2,425 | -$1,896 | 0.208 | 1.28 |
+
+### Patterns dominants
+
+| Parametre | Valeur dominante | Frequence | Observation |
+|-----------|------------------|-----------|-------------|
+| beta_lookback | 2640 | 80% | 2 jours de barres 5-min |
+| zscore_period | 20 | 100% | 1h40 de lookback Z-Score |
+| zscore_entry | 3.5 | 100% | Seul seuil viable |
+| mode | pure_zscore | 100% | SL -$2000 degrade la perf |
+| zscore_tp | 1.0 | 65% | Retour a 1 sigma optimal |
+| adf_hurst_period | 128 (Sharpe) / 26 (PnL) | - | ADF strict = moins trades mais plus stables |
+
+### Recommandations
+
+| Objectif | Config recommandee | PnL | Sharpe | Trades |
+|----------|-------------------|-----|--------|--------|
+| Max PnL | b2640_zp20_cp30_adf26_zTP1.0_co40 | $22,604 | 0.146 | 100 |
+| Max Sharpe | b2640_zp20_cp30_adf128_zTP1.0_co50 | $7,818 | 0.361 | 23 |
+| Compromis | b1320_zp20_cp30_adf64_zTP1.0_co50 | $11,420 | 0.205 | 30 |
+
+### Prochaines etapes
+
+1. **Walk-forward validation** sur top 5 configs 5-min (34 fenetres)
+2. **Comparaison par annee** : 2023 vs 2024 vs 2025
+3. **Test live paper trading** sur la config recommandee
+
+---
+
+## [2026-02-03] Grid Search 5-MIN -- Phase 4: Pure Z-Score exits, 2 ticks slippage
+
+**Configs**: 155,520 | **Profitable**: 938 (0.6%) | **Duration**: 10.3h
+Results: `output/grid_search_5min_phase1.csv`
+
+### Objectif
+
+Tester le timeframe 5-min avec des exits purement Z-Score (pas de TP/SL dollar), pour verifier si la mean-reversion fonctionne mieux sur un timeframe plus lent.
+
+### Grille testee
+
+**Indicateurs (1,080 groupes)**:
+- beta_lookback: 132, 264, 396, 528, 792, 1320, 2640, 3690, 5280
+- zscore_period: 10, 15, 20, 30, 50, 60, 80, 100
+- correlation_period: 15, 30, 50, 60, 80
+- adf_hurst_period: 26, 64, 128
+
+**Entry/Exit (144 variantes par groupe)**:
+- zscore_entry: 2.0, 2.5, 3.0, 3.5
+- cointegration_min: 40, 50
+- zscore_tp: 1.0, 1.5, 2.0
+- zscore_sl: 3.5, 4.0, 5.0
+- mode: pure_zscore (no dollar exits) | safety (SL -$2000)
+
+**Fixes**: zscore_tp_enabled=True, slippage=2 ticks
+
+### Top 10 by PnL Net
+
+| # | Config | Trades | WR% | PnL | PF | MaxDD | Sharpe |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | b2640_zp20_cp30_adf26_zE3.5_co40_zTP1.0_zSL3.5_pure | 100 | 41.0% | $22,604 | 2.03 | -$12,985 | 2.32 |
+| 2 | b2640_zp20_cp30_adf26_zE3.5_co40_zTP1.0_zSL4.0_pure | 100 | 42.0% | $21,314 | 1.91 | -$14,372 | 2.14 |
+| 3 | b2640_zp20_cp30_adf26_zE3.5_co40_zTP1.0_zSL5.0_pure | 100 | 42.0% | $21,314 | 1.91 | -$14,372 | 2.14 |
+| 4 | b2640_zp20_cp15_adf26_zE3.5_co50_zTP1.0_zSL4.0_pure | 81 | 43.2% | $13,969 | 1.83 | -$8,396 | 2.48 |
+| 5 | b2640_zp20_cp15_adf26_zE3.5_co50_zTP1.0_zSL5.0_pure | 81 | 43.2% | $13,969 | 1.83 | -$8,396 | 2.48 |
+| 6 | b2640_zp20_cp30_adf26_zE3.5_co40_zTP1.5_zSL4.0_pure | 100 | 39.0% | $13,304 | 1.71 | -$10,416 | 1.63 |
+| 7 | b2640_zp20_cp30_adf26_zE3.5_co40_zTP1.5_zSL5.0_pure | 100 | 39.0% | $13,304 | 1.71 | -$10,416 | 1.63 |
+| 8 | b2640_zp20_cp30_adf26_zE3.5_co40_zTP1.5_zSL3.5_pure | 100 | 39.0% | $13,294 | 1.70 | -$10,426 | 1.64 |
+| 9 | b2640_zp20_cp15_adf26_zE3.5_co50_zTP1.0_zSL3.5_pure | 81 | 43.2% | $13,229 | 1.75 | -$9,136 | 2.34 |
+| 10 | b2640_zp20_cp50_adf26_zE3.5_co40_zTP1.0_zSL4.0_pure | 104 | 42.3% | $12,312 | 1.51 | -$10,770 | 1.34 |
+
+### Top 10 by Sharpe (min 10 trades)
+
+| # | Config | Trades | WR% | PnL | PF | MaxDD | Sharpe |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | b2640_zp20_cp30_adf128_zE3.5_co50_zTP1.0_zSL3.5_pure | 23 | 60.9% | $7,818 | 4.09 | -$1,859 | 5.72 |
+| 2 | b2640_zp20_cp30_adf128_zE3.5_co50_zTP1.0_zSL4.0_pure | 23 | 60.9% | $7,818 | 4.09 | -$1,859 | 5.72 |
+| 3 | b2640_zp20_cp30_adf128_zE3.5_co50_zTP1.0_zSL5.0_pure | 23 | 60.9% | $7,818 | 4.09 | -$1,859 | 5.72 |
+| 4 | b2640_zp20_cp80_adf128_zE3.5_co50_zTP1.0_zSL3.5_pure | 24 | 50.0% | $5,549 | 3.17 | -$1,113 | 4.58 |
+| 5 | b2640_zp20_cp80_adf128_zE3.5_co50_zTP1.0_zSL4.0_pure | 24 | 50.0% | $5,549 | 3.17 | -$1,113 | 4.58 |
+| 6 | b2640_zp20_cp80_adf128_zE3.5_co50_zTP1.0_zSL5.0_pure | 24 | 50.0% | $5,549 | 3.17 | -$1,113 | 4.58 |
+| 7 | b2640_zp20_cp30_adf128_zE3.5_co50_zTP1.5_zSL3.5_pure | 23 | 56.5% | $2,758 | 2.70 | -$850 | 4.41 |
+| 8 | b2640_zp20_cp30_adf128_zE3.5_co50_zTP1.5_zSL4.0_pure | 23 | 56.5% | $2,758 | 2.70 | -$850 | 4.41 |
+| 9 | b2640_zp20_cp30_adf128_zE3.5_co50_zTP1.5_zSL5.0_pure | 23 | 56.5% | $2,758 | 2.70 | -$850 | 4.41 |
+| 10 | b2640_zp20_cp50_adf128_zE3.5_co50_zTP1.0_zSL3.5_pure | 21 | 42.9% | $4,808 | 2.54 | -$2,633 | 4.12 |
+
+### Analyse par parametre
+
+| Parametre | Meilleure valeur | Configs rentables | Observation |
+| --- | --- | --- | --- |
+| beta_lookback | 2640 | 268 (1.6%) | Lookback 2 jours 5-min optimal |
+| zscore_period | 20 | 295 (1.5%) | zp=10 et zp=15 ont 0-3% rentables |
+| zscore_entry | 3.5 | 922 (2.4%) | zE=2.0/2.5/3.0 ont 0% rentables |
+| zscore_tp | 1.0 | 327 (0.6%) | TP agressif (retour a 1 sigma) |
+| cointegration_min | 50 | 663 (0.9%) | Filtre plus strict = meilleur |
+| mode | pure_zscore | 621 (0.8%) | Safety (-$2000 SL) degrade: 317 (0.4%) |
+
+### Comparaison 5-min vs 1-min
+
+| Metrique | 5-min (pure Z-Score) | 1-min (dollar exits) | Delta |
+| --- | --- | --- | --- |
+| Meilleure config | b2640_zp20_cp30_adf26_zE3.5_co40_zTP1.0_zSL3.5_pure | beta1320_zE3.5_TP1000/SL1200_tpzOFF | - |
+| PnL Net | $22,604 | $14,829 | +$7,775 (+52%) |
+| Trades | 100 | 62 | +38 |
+| Win Rate | 41.0% | 64.5% | -23.5% |
+| Sharpe | 2.32 | 0.95 | +1.37 |
+| Max Drawdown | -$12,985 | -$6,338 | -$6,647 |
+
+### Key Findings
+
+1. **5-min Z-Score surpasse 1-min dollar** : +$7,775 (+52%) mais avec plus de drawdown
+2. **zE=3.5 obligatoire** : 922/938 configs rentables utilisent zE=3.5 (98%)
+3. **Pure Z-Score > Safety** : le filet SL -$2000 coupe des trades gagnants
+4. **beta=2640 domine** : equivalent a 2 jours de barres 5-min
+5. **zp=20 optimal** : 1h40 de lookback pour le Z-Score
+6. **zTP=1.0 (retour a 1 sigma)** : sortie agressive fonctionne mieux
+7. **adf=26 pour PnL, adf=128 pour Sharpe** : ADF court = plus de trades = plus de PnL
+8. **Win rate faible (41%)** : compense par gros gains moyens (PF=2.03)
+
+### Prochaines etapes
+
+1. **Walk-forward sur top 5 configs 5-min** : valider robustesse hors-echantillon
+2. **Comparer regimes** : verifier si 5-min performe mieux sur 2023-2024 (mauvais pour 1-min)
+3. **Tester beta=1320 en 5-min** : le beta 1-min optimal pourrait aussi fonctionner en 5-min
+
+---
+
 ## [2026-02-02] Grid Search -- Phase 3: 3-year comprehensive, 2 ticks slippage
 
 **Configs**: 32,400 | **Profitable**: 115 (0.4%)

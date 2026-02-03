@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v1.4).
 
-**Current status**: Strategy marginally profitable with 1 tick slippage on 3-year data (1min). Best config PnL2 (TP$1000/SL$1200): $14,829 net, 62 trades, PF=1.69, Sharpe=0.95. Walk-forward 21/34 positive windows. NOT viable with 2 ticks slippage. Next: test 5-min timeframe with pure Z-score exits. See CHANGELOG.md for full history.
+**Current status**: Walk-forward beta long completed. Best robust config: **b3960 (15 days)** with $24,694 PnL over 34 windows (53% positive). Strategy is **regime-dependent**: profitable 2025-2026, losing 2023-2024. **Next: regime detection filters** before production. See `CHANGELOG.md` for detailed backtest history.
 
 ## Commands
 
@@ -29,7 +29,8 @@ python src/backtest_engine_hybrid.py   # Hybrid 1-min + 5s (recommended)
 python src/metrics.py                  # Performance analysis + archiving
 
 # Grid search / walk-forward
-python run_grid_search_3y.py           # 32,400 configs, 3 years, multiprocessing
+python run_grid_search_5min.py         # 155,520 configs 5-min, 3 years, 12 workers (~10h)
+python run_grid_search_3y.py           # 32,400 configs 1-min, 3 years, multiprocessing
 python run_walk_forward.py             # 6-window walk-forward validation
 
 # Post-grid-search analysis
@@ -54,7 +55,8 @@ report_generator.py: grid search CSV -> latest_summary.txt + CHANGELOG.md sectio
 ```
 
 ### Key Entry Points
-- `load_and_prepare_data()` in `data_loader.py` - returns `(df, config, stats)`
+- `load_and_prepare_data()` in `data_loader.py` - returns `(df, config, stats)` for 1-min data
+- `resample_to_5min(df)` in `data_loader.py` - resamples 1-min to 5-min with Parquet cache
 - `load_5s_data(config)` in `data_loader.py` - returns df_5s synchronized
 - `calculate_all_indicators(df, config)` in `indicators.py` - returns df with all indicators
 - `generate_signals(df, config)` in `signals.py` - returns df with Signal, Exit_Signal, Exit_Reason, State columns
@@ -74,11 +76,20 @@ Key field: `indicators.period` defines the calculation timeframe (1min, 5min, 15
 ### Archiving Structure
 ```
 output/archive/
+  CLASSEMENT.txt                                     <- Summary with recommendations
   index.csv                                          <- Global index of all runs
-  {period}/                                          <- Indicator calculation period
-    beta{N}_zp{N}_corr{N}_adf{N}/                   <- Indicator parameters
-      zE{N}_{N}_zTP{N}_{N}_zSL{N}_{N}_TP{N}_SL{N}_corr{N}_coint{N}/
-        backtest_hybrid.csv, metrics_report.txt, equity_curve.png, params_snapshot.yaml
+  5min/
+    top_pnl/                                         <- Top 10 by PnL (01 = best)
+      01_b2640_zp20_cp30_adf26_zTP1.0_co40_pnl22604/
+      02_...
+    top_sharpe/                                      <- Top 10 by Sharpe (01 = best)
+      01_b2640_zp20_cp30_adf128_zTP1.0_co50_sh0.361/
+      02_...
+  1min/
+    top_pnl/                                         <- Top 10 by PnL (05+ = robust 3y)
+    top_sharpe/                                      <- Top 10 by Sharpe (04+ = robust 3y)
+
+Each folder contains: backtest_hybrid.csv, metrics_report.txt, equity_curve.png, params_snapshot.yaml
 ```
 
 ## Trading Logic
@@ -180,13 +191,13 @@ After `generate_signals()`:
 - **Stockage**: 2.73 TB (SSD)
 - **OS**: Windows 64-bit
 
-**Parallelisme** : Utiliser `multiprocessing.Pool(12)` pour les grid searches et backtests lourds (12 workers = 12 cores a 100%). Chaque worker consomme ~2-3 Go RAM, donc 12 workers ~= 30 Go sur 63 Go disponibles (~28 Go libres pour l'OS).
+**Parallelisme** : Utiliser `multiprocessing.Pool(24)` pour les grid searches (24 threads via hyperthreading). Benchmark: +17.5% vs 12 workers. Chaque worker consomme ~600 Mo RAM (df_5min + df_5s), donc 24 workers ~= 15 Go sur 64 Go disponibles.
 
 ## Conventions
 
 - Code in English, comments in French
 - Timezone: Chicago Time (CT)
-- Session: 17:30 - 15:00 CT
+- Session: 17:30 - 15:30 CT (22 hours, 264 bars 5-min per day)
 - User level: Python beginner, Sierra Chart expert
 - Approach: Pedagogical, step-by-step with explanations
 - No emojis or accented characters in print() statements (Windows cp1252 terminal)
@@ -216,46 +227,45 @@ After `generate_signals()`:
 - **Bug 4**: Removed incorrect `spread == 0` skip in ADF calculation
 - **Bug 5**: `zscore_tp_min_pnl` filter now uses net PnL (was using gross)
 
-### Top 5 configs 1-min (3 years, 1 tick slippage, archived in output/archive/)
-| # | Config | Trades | PnL Net | WR | PF | Max DD | Sharpe Ann. |
-|---|--------|--------|---------|-----|-----|--------|-------------|
-| 1 | PnL2 beta1320 zE3.5 TP1000/SL1200 tpzOFF | 62 | $14,829 | 64.5% | 1.69 | -$6,338 | 0.949 |
-| 2 | Sh3 beta660 zE3.0 TP200/SL800 F200 | 200 | $7,426 | 91.0% | 1.49 | -$2,804 | 0.909 |
-| 3 | PnL1 beta1320 zE3.5 TP500/SL1200 tpzOFF | 62 | $6,424 | 79.0% | 1.46 | -$4,340 | 0.611 |
-| 4 | Sh4 beta1320 zE3.5 TP400/SL800 tpzOFF | 74 | $5,661 | 79.7% | 1.43 | -$2,320 | 0.659 |
-| 5 | Sh5 beta1980 zE3.5 TP400/SL800 tpzOFF | 26 | $3,260 | 84.6% | 1.90 | -$1,538 | 0.714 |
-
-### Walk-forward 3y (34 windows, 63d train / 21d test)
-- PnL total TEST: $22,970, 93 trades, retention 85.8%
-- 21/34 positive, 9/34 negative, 4/34 inactive (0 trades)
-- PnL2 selected 16/34 windows (dominant config)
+### Best Configs Summary
+See `CHANGELOG.md` for detailed tables. Key findings:
+- **5-min pure Z-Score** surpasses 1-min dollar exits (+52% PnL with 2 ticks slippage)
+- **zTP=-1.0 (overshoot)** doubles PnL vs zTP=1.0 ($45,224 vs $22,604)
+- **b3960 (15 days)** more robust in walk-forward than b2640 (10 days)
+- **Strategy is regime-dependent**: profitable 2025-2026, losing 2023-2024
 
 ## Next Steps (TODO)
 
-### Priority 1 -- 5-min timeframe exploration
-- **Test 5-min bars** with pure Z-score exits (TP_ZSCORE + SL_ZSCORE only, no dollar TP/SL)
-- **Starting params**: zscore_entry=3.0, zscore_tp=2.0, zscore_sl=3.8
-- **Rationale**: Z-score should drive exits for a mean-reversion strategy, not arbitrary dollar thresholds
-- **Optimize iteratively**: vary entry/exit Z-score levels, beta_lookback, cointegration filters
+### Priority 1 -- Regime Detection (CRITICAL)
+Strategy is regime-dependent: profitable 2025-2026, losing 2023-2024.
+- Create `analyze_regimes.py` to compare winning vs losing periods
+- Test filters: volatility (ATR), correlation stability, volume, VIX
+- Implement `regime_filter` in backtest engine
+- Walk-forward with filter to validate robustness
 
 ### Priority 2 -- Code Quality
-- **Add pytest tests**: unit tests for indicators, signals, position sizing, and PnL calculations
-- **Merge backtest engines**: backtest_engine.py and backtest_engine_hybrid.py (~1286 lines duplicated)
-- **Vectorize indicators**: replace O(n*lookback) loops with pandas rolling (beta, ADF, Hurst)
-- **Known remaining bugs**: ddof inconsistency (Bug 2), Hurst implementation (Bug 3) -- see analyse.md
+- **Add pytest tests**: unit tests for indicators, signals, position sizing
+- **Merge backtest engines**: ~1286 lines duplicated between 1-min and hybrid
+- **Vectorize Hurst**: only remaining Python loop bottleneck
 
-### Priority 3 -- Validation
-- Walk-forward on 5-min configs once viable parameters found
-- Compare 1-min vs 5-min profitability and robustness
+### Priority 3 -- Production
+- Implement regime filter (prerequisite for live trading)
+- Deploy best config on Sierra Chart with filter active
 
 ## Known Code Issues (non-blocking)
 
 - **Bug 2 (ddof)**: Beta uses ddof=0, Z-Score uses ddof=1. Inconsistent but low impact.
 - **Bug 3 (Hurst)**: Single-segment implementation, 3-5 point regression. Acceptable for relative ranking.
-- **Rolling beta**: O(n x lookback) manual loop in indicators.py. Could use pandas rolling.
+- **Hurst loop**: O(n x period) boucle Python dans indicators.py. Goulot principal (~10s sur 160k barres 5-min).
 - **backtest_engine.py ~= backtest_engine_hybrid.py**: 95% identical, ~1286 lines duplicated. Requires pytest tests before safe merge.
 - **run_backtest() = 388 lines**: 5+ nesting levels. Needs decomposition but requires tests first.
 - **Detailed analysis**: see `analyse.md` for comprehensive code review.
+
+## Performance Optimizations
+- **Vectorized Beta/ADF**: ~50x speedup using pandas rolling
+- **5s scan short-circuit**: ~12x speedup in pure_zscore mode
+- **Pool(24)**: 24 workers via hyperthreading (+17.5% vs 12)
+- **5-min resampling**: Parquet cache in `data/processed/`
 
 ## Claude Code Skills
 
@@ -283,14 +293,10 @@ Lance un grid search massif en background (milliers de configs), genere un rappo
 
 `.gitignore` exclut : `.venv/`, `__pycache__/`, `data/raw/`, `DOC SIERRA/`, `.idea/`, `.claude/`, `output/`, `results/`
 
-## Reference Documentation
-
-- `config/strategy_params.yaml` - All strategy parameters (currently set to best 1mn config PnL2)
-- `output/backtest_hybrid.csv` - Hybrid backtest with PnL (1-min + 5s, semicolon-separated)
-- `output/archive/index.csv` - Global index of all archived runs (semicolon-separated)
-- `output/walk_forward_3y_results.csv` - Walk-forward 34-window results
-- `analyse.md` - Comprehensive code analysis and bug documentation
-- `run_walk_forward_3y.py` - Walk-forward 3 years (34 windows, 10 configs)
-- `run_top5_archive.py` - Archive top 5 configs with full metrics
-- `DOC SIERRA/files/GC_SI_SpreadMeanReversion_v1.4.cpp` - ACSIL source code (reference)
-- `CHANGELOG.md` - Full optimization history, detailed results tables, completed improvements
+## Reference Files
+- `config/strategy_params.yaml` - All strategy parameters
+- `CHANGELOG.md` - Full optimization history and detailed results
+- `analyse.md` - Code analysis and bug documentation
+- `output/archive/` - Archived configs with metrics reports
+- `output/grid_search_*.csv` - Grid search results
+- `output/walk_forward_*.csv` - Walk-forward results
