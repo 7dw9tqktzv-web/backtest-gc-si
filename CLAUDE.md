@@ -25,7 +25,6 @@ pytest tests/test_common.py -v         # Run specific test file
 # Test modules manually
 python src/data_loader.py
 python src/indicators.py
-python src/signals.py
 python src/position.py
 
 # Run backtests
@@ -62,8 +61,8 @@ python validate_data.py --date "2026-01-23 10:30:00"
 
 ### Data Pipeline
 ```
-Sierra Chart CSV -> data_loader.py -> [Parquet cache] -> indicators.py -> signals.py -> position.py -> backtest_engine_hybrid.py -> metrics.py
-                      (sync GC/SI)    (data/processed/)   (calculate)    (generate)      (sizing)         (simulate)               (analyze)
+Sierra Chart CSV -> data_loader.py -> [Parquet cache] -> indicators.py -> backtest_engine_hybrid.py -> metrics.py
+                      (sync GC/SI)    (data/processed/)   (calculate)    (signals + position + exits)  (analyze)
 
 Sierra Chart 5s CSV -> data_loader.py (load_5s_data) -> [Parquet cache] -> backtest_engine_hybrid.py
                          (sync 5s)                      (data/processed/)    (5s price monitoring)
@@ -74,7 +73,7 @@ report_generator.py: grid search CSV -> latest_summary.txt + CHANGELOG.md sectio
 
 ### Source Files (src/)
 ```
-Total: 6,152 lines
+Total: 5,818 lines
 ├── metrics.py               (941 lines)  - Performance analysis, equity curve, archiving
 ├── indicators.py            (811 lines)  - Beta, Z-Score, Correlation, ADF, Hurst
 ├── backtest_engine_hybrid.py(597 lines)  - Main backtest engine (1min + 5s)
@@ -82,10 +81,10 @@ Total: 6,152 lines
 ├── grid_search_runner.py    (552 lines)  - Parallel grid search
 ├── data_loader.py           (533 lines)  - CSV loading, sync, Parquet cache
 ├── report_generator.py      (529 lines)  - Post-grid-search analysis
-├── signals.py               (508 lines)  - State machine, signal generation
 ├── walk_forward_runner.py   (406 lines)  - Walk-forward validation
 ├── position.py              (398 lines)  - Dollar-neutral sizing
 ├── common.py                (260 lines)  - Shared constants and functions
+├── run_helpers.py           (174 lines)  - Shared utilities for run scripts
 └── __init__.py               (53 lines)
 ```
 
@@ -94,8 +93,6 @@ Total: 6,152 lines
 - `resample_to_5min(df)` in `data_loader.py` - resamples 1-min to 5-min with Parquet cache
 - `load_5s_data(config)` in `data_loader.py` - returns df_5s synchronized
 - `calculate_all_indicators(df, config)` in `indicators.py` - returns df with all indicators
-- `generate_signals(df, config)` in `signals.py` - returns df with Signal, Exit_Signal, Exit_Reason, State columns
-- `build_trade_list(df)` in `signals.py` - returns a DataFrame with one row per trade
 - `calculate_position_size(gc_price, si_price, beta, config)` in `position.py` - returns sizing dict
 - `calculate_trade_pnl(direction, entry_gc, entry_si, exit_gc, exit_si, gc_contracts, si_contracts, config)` in `position.py` - returns PnL dict
 - `run_hybrid_backtest(df_1min, df_5s, config)` in `backtest_engine_hybrid.py` - returns trades DataFrame
@@ -141,7 +138,7 @@ Each config folder contains: backtest_hybrid.csv, metrics_report.txt, equity_cur
 
 ## Trading Logic
 
-### State Machine (signals.py)
+### State Machine (backtest_engine_hybrid.py)
 ```
 FLAT (0)  -> LONG (1) or SHORT (-1)     [entry conditions met]
 LONG      -> FLAT                        [TP Z-Score: Z >= -2.0]
@@ -178,7 +175,7 @@ Default values (1-min best config): TP $1000 / SL -$1200, zTP disabled.
 - Reversal allowed: close LONG and open SHORT on same bar
 - Exit priority: SL_DOLLAR > SL_ZSCORE > TP_DOLLAR > TP_ZSCORE
 - Single position at a time
-- Dollar-based exits (TP $300 / SL -$600) handled in backtest engines, not signals.py
+- Dollar-based exits (TP $300 / SL -$600) handled in backtest_engine_hybrid.py
 
 ## Backtest Engine
 
@@ -224,8 +221,7 @@ After `calculate_all_indicators()`:
 - Spread: `Spread`, `Spread_Mean`, `Spread_Std`, `ZScore`
 - Quality: `Correlation`, `ADF_Statistic`, `Hurst`, `HalfLife`, `Cointegration_Score`
 
-After `generate_signals()`:
-- Signals: `Signal` (1=LONG, -1=SHORT, 0=none), `Exit_Signal` (1=exit), `Exit_Reason` (TP_ZSCORE/SL_ZSCORE), `State`
+Signal generation happens inside `backtest_engine_hybrid.py` and is not stored as separate DataFrame columns.
 
 ## Hardware
 
@@ -300,10 +296,11 @@ HMM filter tested and validated. Limits losses in unfavorable market conditions.
 - **TP/SL dollar thresholds** are the most impactful parameters overall
 - **Strategy is regime-dependent**: 2023 weak, 2024-2025 profitable (walk-forward confirms)
 
-### Bug fixes applied (indicators.py, backtest_engine_hybrid.py)
+### Bug fixes applied (indicators.py, backtest_engine_hybrid.py, optimizer.py, metrics.py)
 - **Bug 1**: ADF regression now includes intercept (was missing mu term)
 - **Bug 4**: Removed incorrect `spread == 0` skip in ADF calculation
 - **Bug 5**: `zscore_tp_min_pnl` filter now uses net PnL (was using gross)
+- **Sharpe ratio fix**: Harmonized Sharpe calculation (mean/std per trade, not annualized) between optimizer.py and metrics.py
 
 ### Best Configs Summary
 See `CHANGELOG.md` for detailed tables. Key findings:
@@ -377,12 +374,12 @@ Indicator harmonization complete. Remaining tasks for paper trading:
 - 58.1% Win Rate, PF 1.58
 
 ### Priority 2 -- Code Quality
-- **Add pytest tests**: unit tests for indicators, signals, position sizing (112 tests done)
+- **Add pytest tests**: unit tests for indicators, position sizing, backtest engine, optimizer, metrics (131 tests done)
 - **Consolidate run_*.py scripts**: DONE (Phase 1: -66% code, Phase 2: unified YAML runners)
   - 10 scripts replaced by 2 generic runners + 10 YAML configs in `configs/experiments/`
   - 4 special scripts moved to `scripts/` (custom logic not YAML-izable)
 - **Clean up validation scripts**: archive or remove compare_*.py, check_*.py, investigate_*.py
-- **Increase test coverage**: signals.py (53%), position.py (48%) need more tests
+- **Increase test coverage**: position.py (48%) needs more tests
 
 ### Priority 3 -- Production Deployment
 - Validate paper trading results (minimum 2-4 weeks)
@@ -436,7 +433,10 @@ backtest_gc_si/
 ├── data/
 │   ├── raw/                    # Sierra Chart CSV exports (gitignored)
 │   └── processed/              # Parquet cache (auto-generated)
-├── src/                        # Main source code (6,152 lines)
+├── docs/                       # Documentation
+│   ├── STRATEGY.md             # Strategy theory and indicator formulas
+│   └── ARCHITECTURE.md         # Project architecture post-refactoring
+├── src/                        # Main source code (5,818 lines)
 │   ├── backtest_engine_hybrid.py
 │   ├── common.py
 │   ├── data_loader.py
@@ -446,14 +446,17 @@ backtest_gc_si/
 │   ├── optimizer.py
 │   ├── position.py
 │   ├── report_generator.py
-│   ├── signals.py
+│   ├── run_helpers.py
 │   └── walk_forward_runner.py
-├── tests/                      # pytest tests (112 tests)
+├── tests/                      # pytest tests (131 tests)
 │   ├── conftest.py
+│   ├── test_backtest_engine_hybrid.py
 │   ├── test_common.py
 │   ├── test_indicators.py
+│   ├── test_metrics.py
+│   ├── test_optimizer.py
 │   ├── test_position.py
-│   └── test_signals.py
+│   └── test_run_helpers.py
 ├── scripts/                    # Execution scripts
 │   ├── run_grid_search.py      # Generic YAML-driven grid search runner
 │   ├── run_walk_forward.py     # Generic YAML-driven walk-forward runner
@@ -491,16 +494,19 @@ backtest_gc_si/
 ### Test Structure
 ```
 tests/
-├── conftest.py          # Fixtures partagees (sample_config, sample_prices_df, etc.)
-├── test_common.py       # Tests common.py (32 tests, 100% coverage)
-├── test_indicators.py   # Tests indicators.py (32 tests, 72% coverage)
-├── test_signals.py      # Tests signals.py (24 tests, 53% coverage)
-└── test_position.py     # Tests position.py (24 tests, 48% coverage)
+├── conftest.py                      # Shared fixtures (sample_config, sample_prices_df, etc.)
+├── test_common.py                   # 32 tests, 100% coverage
+├── test_indicators.py               # 33 tests, 72% coverage
+├── test_position.py                 # 26 tests, 48% coverage
+├── test_backtest_engine_hybrid.py   # 13 tests
+├── test_optimizer.py                # 9 tests
+├── test_metrics.py                  # 12 tests
+└── test_run_helpers.py              # 6 tests
 ```
 
 ### Running Tests
 ```bash
-pytest tests/ -v                    # All tests (112 tests)
+pytest tests/ -v                    # All tests (131 tests)
 pytest tests/ --cov=src             # With coverage report
 pytest tests/test_common.py -v      # Single file
 pytest -k "test_long"               # Tests matching pattern
@@ -509,8 +515,11 @@ pytest -k "test_long"               # Tests matching pattern
 ### Test Coverage (as of 2026-02)
 - **common.py**: 100% - Entry/exit conditions, PnL calculation
 - **indicators.py**: 72% - Z-Score, Beta, Correlation, Hurst, ADF
-- **signals.py**: 53% - State machine, signal generation
 - **position.py**: 48% - Position sizing, transaction costs
+- **backtest_engine_hybrid.py**: covered (13 tests)
+- **optimizer.py**: covered (9 tests)
+- **metrics.py**: covered (12 tests)
+- **run_helpers.py**: covered (6 tests)
 
 ### Adding New Tests
 Tests use synthetic data (fixtures in conftest.py) to avoid depending on real CSV files. To add tests:
@@ -522,6 +531,8 @@ Tests use synthetic data (fixtures in conftest.py) to avoid depending on real CS
 - `config/strategy_params.yaml` - All strategy parameters
 - `CHANGELOG.md` - Full optimization history and detailed results
 - `analyse.md` - Code analysis and bug documentation
+- `docs/STRATEGY.md` - Strategy theory and indicator formulas
+- `docs/ARCHITECTURE.md` - Project architecture post-refactoring
 - `output/archive/` - Archived configs with metrics reports
 - `output/grid_search_*.csv` - Grid search results
 - `output/walk_forward_*.csv` - Walk-forward results
