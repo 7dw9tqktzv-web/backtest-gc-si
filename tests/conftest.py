@@ -237,3 +237,59 @@ def sample_trades_df():
             'PnL_Net': -828.0,
         },
     ])
+
+
+@pytest.fixture
+def sample_trades_list():
+    """
+    Liste de trades au format CSV (valeurs string).
+    Reproduit le format retourne par csv.DictReader (attendu par metrics.py).
+    PnL_Cumul doit etre coherent : 372, 844, 16.
+    """
+    return [
+        {
+            'Trade_No': '1', 'Direction': 'LONG',
+            'Entry_DateTime': '2026-01-01 10:00:00',
+            'Exit_DateTime': '2026-01-01 11:30:00',
+            'Duration_Min': '90.0',
+            'Entry_GC': '2800.0', 'Entry_SI': '32.0',
+            'Exit_GC': '2798.0', 'Exit_SI': '32.05',
+            'Entry_ZScore': '-3.2', 'Exit_ZScore': '-1.8',
+            'Exit_Reason': 'TP_ZSCORE',
+            'Beta': '1.05', 'GC_Contracts': '6', 'SI_Contracts': '1',
+            'PnL_GC': '200.0', 'PnL_SI': '250.0',
+            'PnL_Gross': '450.0', 'Costs': '78.0', 'PnL_Net': '372.0',
+            'Max_PnL_Intra': '500.0', 'Min_PnL_Intra': '-50.0',
+            'PnL_Cumul': '372.0',
+        },
+        {
+            'Trade_No': '2', 'Direction': 'SHORT',
+            'Entry_DateTime': '2026-01-01 14:00:00',
+            'Exit_DateTime': '2026-01-01 15:00:00',
+            'Duration_Min': '60.0',
+            'Entry_GC': '2805.0', 'Entry_SI': '32.10',
+            'Exit_GC': '2808.0', 'Exit_SI': '32.05',
+            'Entry_ZScore': '3.5', 'Exit_ZScore': '1.5',
+            'Exit_Reason': 'TP_ZSCORE',
+            'Beta': '1.02', 'GC_Contracts': '6', 'SI_Contracts': '1',
+            'PnL_GC': '300.0', 'PnL_SI': '250.0',
+            'PnL_Gross': '550.0', 'Costs': '78.0', 'PnL_Net': '472.0',
+            'Max_PnL_Intra': '600.0', 'Min_PnL_Intra': '-30.0',
+            'PnL_Cumul': '844.0',
+        },
+        {
+            'Trade_No': '3', 'Direction': 'LONG',
+            'Entry_DateTime': '2026-01-02 09:00:00',
+            'Exit_DateTime': '2026-01-02 09:30:00',
+            'Duration_Min': '30.0',
+            'Entry_GC': '2810.0', 'Entry_SI': '32.20',
+            'Exit_GC': '2815.0', 'Exit_SI': '32.15',
+            'Entry_ZScore': '-3.1', 'Exit_ZScore': '-3.6',
+            'Exit_Reason': 'SL_ZSCORE',
+            'Beta': '1.03', 'GC_Contracts': '6', 'SI_Contracts': '1',
+            'PnL_GC': '-500.0', 'PnL_SI': '-250.0',
+            'PnL_Gross': '-750.0', 'Costs': '78.0', 'PnL_Net': '-828.0',
+            'Max_PnL_Intra': '100.0', 'Min_PnL_Intra': '-800.0',
+            'PnL_Cumul': '16.0',
+        },
+    ]
