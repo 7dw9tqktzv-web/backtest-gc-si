@@ -32,39 +32,39 @@ contracts:
 # PARAMÈTRES DES INDICATEURS
 # ----------------------------------------------------------------------------
 indicators:
-  period: "1min"            # Période de calcul des indicateurs (1min, 5min, 15min, 1h, 1d)
-  beta_lookback: 1320       # Best config: b1320_zp24_cp24_adf96 (CHANGELOG 2026-02-04)
-  zscore_period: 24         # Best config: zp24
-  correlation_period: 24    # Best config: cp24
-  adf_hurst_period: 96      # Best config: adf96
-  adf_critical_value: -2.86      # Valeur critique ADF a 5% pour le score de cointegration
-  coint_corr_threshold: 0.6      # Seuil de correlation dans le score de cointegration
+  period: "1min"            # Periode de calcul des indicateurs (1min, 5min, 15min, 1h, 1d)
+  beta_lookback: 1320       # [barres] ~5 jours de trading @ 264 barres/jour en 1-min. TOP 1 config (CHANGELOG 2026-02-05)
+  zscore_period: 20         # [barres] ~20 minutes en 1-min. TOP 1 config: zp20. ATTENTION: >= 30 produit 0 configs rentables
+  correlation_period: 30    # [barres] ~30 minutes en 1-min. TOP 1 config: cp30
+  adf_hurst_period: 128     # [barres] ~2h en 1-min. TOP 1 config: adf128 (filtre strict stationnarite)
+  adf_critical_value: -2.86      # Valeur critique ADF a 5% (table MacKinnon, ~100 observations)
+  coint_corr_threshold: 0.6      # Seuil de correlation pour le score de cointegration (redondant: toujours > 0.80)
 
 # ----------------------------------------------------------------------------
 # CONDITIONS D'ENTRÉE
 # ----------------------------------------------------------------------------
 entry:
-  zscore_long: -3.0         # Best config: zE3.0 (CHANGELOG 2026-02-04)
-  zscore_short: 3.0         # Best config: zE3.0
-  correlation_min: 0.60     # Corrélation minimum requise
-  cointegration_score_min: 50  # Meilleure config 1mn (PnL2 walk-forward)
-  hurst_max: 1.0              # Hurst maximum (1.0 = desactive, 0.50 = filtre strict mean reversion)
+  zscore_long: -3.5         # [sans unite] Seuil d'entree LONG. 3.0-3.5 = seule plage viable (112/115 configs rentables a 3.5)
+  zscore_short: 3.5         # [sans unite] Seuil d'entree SHORT (symetrique)
+  correlation_min: 0.60     # [0-1] Correlation Pearson minimum (redondant: toujours > 0.80 quand Z+Coint OK)
+  cointegration_score_min: 50  # [0-100] Score composite minimum. Equilibre frequence/qualite des trades
+  hurst_max: 1.0              # [0-1] Hurst max (1.0 = desactive). Redondant: Hurst < 0.45 sur toutes les barres tradees
 
 # ----------------------------------------------------------------------------
 # CONDITIONS DE SORTIE
 # ----------------------------------------------------------------------------
 exit:
   # Sortie sur Z-Score
-  zscore_tp_enabled: false   # Meilleure config 1mn desactive TP_ZSCORE (tpzOFF domine)
-  zscore_tp_long: -2.0      # Take Profit LONG : sortie si Z >= cette valeur
-  zscore_sl_long: -3.5      # Stop Loss LONG : sortie si Z <= cette valeur
-  zscore_tp_short: 2.0      # Take Profit SHORT : sortie si Z <= cette valeur
-  zscore_sl_short: 3.5      # Stop Loss SHORT : sortie si Z >= cette valeur
-  
-  # Sortie sur PnL (en dollars)
-  pnl_take_profit: 1000     # Meilleure config 1mn (PnL2 walk-forward)
-  pnl_stop_loss: -1200      # Meilleure config 1mn (PnL2 walk-forward)
-  zscore_tp_min_pnl: null   # PnL minimum pour TP_ZSCORE (null = pas de filtre, ex: 100 = $100 min)
+  zscore_tp_enabled: false   # TP_ZSCORE desactive = optimal (sort quand le mouvement $ est trop petit pour couvrir les couts)
+  zscore_tp_long: -2.0      # [sans unite] TP LONG : sortie si Z >= cette valeur (Z revient vers 0)
+  zscore_sl_long: -3.5      # [sans unite] SL LONG : sortie si Z <= cette valeur (Z continue a baisser)
+  zscore_tp_short: 2.0      # [sans unite] TP SHORT : sortie si Z <= cette valeur (Z revient vers 0)
+  zscore_sl_short: 3.5      # [sans unite] SL SHORT : sortie si Z >= cette valeur (Z continue a monter)
+
+  # Sortie sur PnL (en dollars) - detectee sur barres 5s pour plus de precision
+  pnl_take_profit: 500      # [USD brut] TP $500 (TOP 1 config, 82.8% WR). Parametre le plus impactant
+  pnl_stop_loss: -1200      # [USD brut] SL -$1200 (TOP 1 config). Ratio risque/recompense = 2.4:1
+  zscore_tp_min_pnl: null   # [USD net ou null] PnL min pour TP_ZSCORE (null = desactive, ex: 100 = $100 net min)
 
 # ----------------------------------------------------------------------------
 # CONDITION DE RÉENTRÉE
@@ -88,9 +88,10 @@ sizing:
 # COÛTS DE TRANSACTION
 # ----------------------------------------------------------------------------
 costs:
-  commission_per_contract: 4.00   # $ par contrat aller-retour ($2.00 × 2)
-  slippage_gc_ticks: 1            # 1 tick = seul scenario rentable sur 3 ans
-  slippage_si_ticks: 1            # 1 tick = seul scenario rentable sur 3 ans
+  commission_per_contract: 4.00   # [USD] Aller-retour par contrat ($2.00 x 2 sides)
+  slippage_gc_ticks: 1            # [ticks] GC: 1 tick = $10. CRITIQUE: 2 ticks detruit la strategie
+  slippage_si_ticks: 1            # [ticks] SI: 1 tick = $25. CRITIQUE: 2 ticks detruit la strategie
+  # Cout total typique (1 GC + 1 SI, 1 tick): $8 commission + $70 slippage = $78/trade
 
 # ----------------------------------------------------------------------------
 # SESSION DE TRADING
