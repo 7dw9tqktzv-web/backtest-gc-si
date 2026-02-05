@@ -143,9 +143,9 @@ def compute_metrics(trades_df):
     losses = abs(pnl[pnl <= 0].sum())
     profit_factor = gains / losses if losses > 0 else float('inf')
 
-    # Sharpe (annualise sur ~252 jours)
+    # Sharpe (par trade, non annualise -- coherent avec metrics.py)
     if pnl.std() > 0:
-        sharpe = (pnl.mean() / pnl.std()) * np.sqrt(252)
+        sharpe = pnl.mean() / pnl.std()
     else:
         sharpe = 0.0
 

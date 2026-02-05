@@ -4,6 +4,81 @@ Historique des optimisations, resultats detailles et ameliorations du backtest G
 
 ---
 
+## [2026-02-05] Fix Sharpe Ratio : harmonisation optimizer.py / metrics.py
+
+**Bug**: `optimizer.py` et `metrics.py` utilisaient deux formules de Sharpe differentes.
+- `optimizer.py` : `(mean/std) * sqrt(252)` -- annualisation fixe (suppose 1 trade/jour)
+- `metrics.py` : `mean/std` par trade, puis `* sqrt(trades_per_year)` pour annualiser
+
+Avec ~68 trades/an : `sqrt(252)=15.9` vs `sqrt(68)=8.2` -> **ratio ~1.94x** sur le Sharpe annualise.
+
+**Fix**: `optimizer.py` utilise maintenant `mean/std` (Sharpe par trade, non annualise), coherent avec `metrics.py`. L'annualisation reste disponible dans `metrics.py:compute_advanced_metrics()` via `sharpe_annualise`.
+
+**Impact**: Les valeurs de Sharpe dans les grid search futurs seront ~15.9x plus petites (division par sqrt(252)). Les anciens CSV ne sont pas modifies. Test de coherence ajoute (`test_sharpe_coherence_optimizer_metrics`).
+
+---
+
+## [2026-02-05] TOP 5 Configurations par Timeframe (Analyse Quantitative)
+
+**Analyse**: Revue complete de tous les backtests archives et walk-forward pour identifier les configs optimales.
+
+### TOP 5 Configurations 1-MIN (Dollar exits, 1 tick slippage, 3 ans)
+
+| Rang | Config | PnL | Trades | WR% | PF | Sharpe | Justification |
+|------|--------|-----|--------|-----|-----|--------|---------------|
+| **1** | `b1320_zp20_cp30_adf128_zE3.5_TP500_SL1200_co50` | **$16,585** | 93 | **82.8%** | 2.10 | **0.324** | **BEST OVERALL** - Meilleur Sharpe, WR exceptionnel |
+| **2** | `b1320_zp20_cp30_adf128_zE3.5_TP1000_SL1200_co50` | $15,890 | 93 | 63.4% | 1.44 | 0.175 | TP large = plus de variance, meme trades |
+| **3** | `b1320_zp20_cp30_adf128_zE3.5_TP500_SL1400_co50` | $14,585 | 93 | 82.8% | 1.86 | 0.258 | SL large = moins de stops prematures |
+| **4** | `b1320_zp20_cp30_adf128_zE3.5_TP500_SL800_co50` | $12,600 | 93 | 76.3% | 1.76 | 0.264 | SL serre = drawdown mieux controle |
+| **5** | `b1320_zp20_cp30_adf64_zE3.5_TP1000_SL1200_co50` | $14,829 | 62 | 64.5% | 1.69 | 0.250 | ADF64 = plus de trades, filtre moins strict |
+
+**Patterns dominants 1-MIN**:
+- `beta_lookback=1320` (1 jour) optimal pour reactivite
+- `zscore_entry=3.5` seul seuil viable sur 3 ans
+- `adf_hurst_period=128` filtre les trades de haute qualite
+- `TP=$500` avec `WR=82.8%` > `TP=$1000` avec `WR=63.4%`
+- Dollar exits > Z-Score exits pour ce timeframe
+
+**Config active dans YAML**: #1 (`b1320_zp20_cp30_adf128_zE3.5_TP500_SL1200_co50`)
+
+---
+
+### TOP 5 Configurations 5-MIN (Pure Z-Score, 2 ticks slippage, 3 ans)
+
+| Rang | Config | PnL | Trades | WR% | PF | Sharpe | WF Robustesse | Justification |
+|------|--------|-----|--------|-----|-----|--------|---------------|---------------|
+| **1** | `b3960_zp24_cp12_adf26_zE3.5_zTP-1.0_co50` | $24,694 WF | 153 | ~50% | ~2.0 | - | **53% fenetres+** | **BEST WF** - Beta long = plus stable |
+| **2** | `b2640_zp20_cp30_adf26_zE3.5_zTP-1.0_zSL4.0_co40` | **$45,224** | 100 | 53% | 2.41 | 3.02 | 32% fenetres+ | **MAX PNL** - Overshoot capture le momentum |
+| **3** | `b2640_zp20_cp30_adf128_zE3.5_zTP1.0_co50` | $7,818 | 23 | **60.9%** | 4.09 | **0.361** | - | **MAX SHARPE** - ADF strict = haute qualite |
+| **4** | `b1320_zp20_cp30_adf64_zE3.5_zTP1.0_co50` | $11,420 | 30 | 53.3% | 3.28 | 0.205 | - | Meilleur compromis PnL/Sharpe/Trades |
+| **5** | `b3960_zp24_cp60_adf26_zE3.5_zTP-1.0_co50` | $24,694 WF | 153 | ~50% | ~2.0 | - | **53% fenetres+** | 2eme config WF, cp60 = filtre correl strict |
+
+**Patterns dominants 5-MIN**:
+- `zTP=-1.0` (overshoot) double le PnL vs `zTP=1.0` (+100%)
+- `beta_lookback=3960` (15j) plus robuste en walk-forward que `b2640` (10j)
+- `zscore_entry=3.5` seul seuil viable (98% des configs rentables)
+- `adf=26` pour max PnL, `adf=128` pour max Sharpe
+- Pure Z-Score exits > Dollar exits pour ce timeframe
+
+**Walk-Forward Comparison**:
+- b2640 (10j): $20,553 PnL, **32% fenetres positives** (instable)
+- b3960 (15j): $24,694 PnL, **53% fenetres positives** (recommande)
+
+---
+
+### Recommandations Finales
+
+| Objectif | Config | Timeframe | Commentaire |
+|----------|--------|-----------|-------------|
+| **Paper Trading (securite)** | `b1320_zp20_cp30_adf128_zE3.5_TP500_SL1200_co50` | **1-MIN** | WR 82.8%, Sharpe 0.324, 1 tick slippage |
+| **Max PnL (plus risque)** | `b2640_zp20_cp30_adf26_zE3.5_zTP-1.0_co40` | 5-MIN | $45,224 mais 32% WF positives |
+| **Max Robustesse WF** | `b3960_zp24_cp12_adf26_zE3.5_zTP-1.0_co50` | 5-MIN | 53% WF positives, beta long |
+| **Max Sharpe** | `b2640_zp20_cp30_adf128_zE3.5_zTP1.0_co50` | 5-MIN | Sharpe 0.361, 23 trades haute qualite |
+
+**ATTENTION**: Toutes les configs 5-MIN sont **regime-dependantes** (2023-24 perdant, 2025-26 profitable). Un filtre de regime est recommande avant production.
+
+---
+
 ## [2026-02-03] Walk-Forward Beta Long (34 windows, 63d train / 21d test)
 
 **Script**: `run_walk_forward_beta_long.py` | **Configs testees**: Top 5 beta long (b3960)

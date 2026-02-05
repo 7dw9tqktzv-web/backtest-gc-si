@@ -137,31 +137,22 @@ class TestComputeAdvancedMetrics:
         expected = round(gm['pnl_net'] / abs(gm['max_dd']), 2)
         assert am['calmar'] == expected
 
-    def test_sharpe_discrepancy_documented(self, sample_trades_list):
+    def test_sharpe_coherence_optimizer_metrics(self, sample_trades_list):
         """
-        DOCUMENTATION : divergence Sharpe optimizer.py vs metrics.py
-        -------------------------------------------------------------
-        optimizer.py : Sharpe = (mean/std) * sqrt(252) -> fixe
-        metrics.py   : Sharpe = mean/std -> par trade, puis * sqrt(T/an)
-
-        Avec 3 trades sur 2 jours : T/an = (3/2)*252 = 378
-        sqrt(378)=19.4 vs sqrt(252)=15.9 -> ratio ~1.22
-
-        Ce test verifie que les deux Sharpe different systematiquement
-        quand le nombre de trades/an != 252.
+        Coherence Sharpe : optimizer.py et metrics.py utilisent la meme formule.
+        Les deux calculent Sharpe par trade = mean / stdev (non annualise).
         """
         gm = compute_global_metrics(sample_trades_list)
         am = compute_advanced_metrics(gm)
 
-        # Calcul optimizer.py style
+        # Sharpe par trade (formule optimizer.py apres fix)
         pnl_list = gm['pnl_list']
-        optimizer_sharpe = (statistics.mean(pnl_list) / statistics.stdev(pnl_list)) * math.sqrt(252)
+        optimizer_sharpe = statistics.mean(pnl_list) / statistics.stdev(pnl_list)
 
-        # Calcul metrics.py style (annualise)
-        metrics_sharpe = am['sharpe_annualise']
+        # Sharpe par trade (metrics.py)
+        metrics_sharpe = am['sharpe']
 
-        # Les deux divergent (sauf si exactement 252 trades/an)
-        assert not np.isclose(optimizer_sharpe, metrics_sharpe, atol=0.01)
+        assert np.isclose(optimizer_sharpe, metrics_sharpe, atol=0.001)
 
 
 # ============================================================================

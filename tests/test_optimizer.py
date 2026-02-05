@@ -99,17 +99,9 @@ class TestComputeMetrics:
         assert m['pnl_net'] == 0.0
         assert m['sharpe'] == 0.0
 
-    def test_sharpe_uses_sqrt_252(self, sample_trades_df):
-        """
-        DOCUMENTATION BUG SHARPE
-        -------------------------
-        optimizer.py : Sharpe = (mean/std) * sqrt(252)
-        metrics.py   : Sharpe = mean/std puis * sqrt(trades_per_year)
-
-        Avec ~68 trades/an : sqrt(68)=8.2 vs sqrt(252)=15.9 -> ratio ~1.94x.
-        Ce test verifie que optimizer.py utilise bien sqrt(252).
-        """
+    def test_sharpe_per_trade(self, sample_trades_df):
+        """Sharpe par trade = mean / std (non annualise, coherent metrics.py)."""
         m = compute_metrics(sample_trades_df)
         pnl = sample_trades_df['PnL_Net']
-        expected = (pnl.mean() / pnl.std()) * np.sqrt(252)
+        expected = pnl.mean() / pnl.std()
         assert np.isclose(m['sharpe'], round(expected, 3))
