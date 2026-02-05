@@ -15,6 +15,7 @@ import pandas as pd
 import numpy as np
 
 sys.path.insert(0, "src")
+from run_helpers import count_exit_reasons, check_csv_resumption, save_batch_csv, print_top_configs
 
 # ============================================================================
 # CONFIGURATION
@@ -100,13 +101,8 @@ def process_group(args):
         trades = run_hybrid_backtest(df_ind, df_5s, config_test, verbose=False)
         m = compute_metrics(trades)
 
-        if len(trades) > 0:
-            tp_zscore = (trades['Exit_Reason'] == 'TP_ZSCORE').sum()
-            tp_dollar = (trades['Exit_Reason'] == 'TP_DOLLAR').sum()
-            sl_zscore = (trades['Exit_Reason'] == 'SL_ZSCORE').sum()
-            sl_dollar = (trades['Exit_Reason'] == 'SL_DOLLAR').sum()
-        else:
-            tp_zscore = tp_dollar = sl_zscore = sl_dollar = 0
+        from run_helpers import count_exit_reasons as _count_er
+        exits = _count_er(trades)
 
         beta = cfg_overrides["indicators.beta_lookback"]
         zp = cfg_overrides["indicators.zscore_period"]
@@ -128,8 +124,7 @@ def process_group(args):
             "profit_factor": round(m["profit_factor"], 2),
             "max_dd": round(m["max_dd"], 0),
             "sharpe": round(m["sharpe"], 2),
-            "tp_zscore": tp_zscore, "tp_dollar": tp_dollar,
-            "sl_zscore": sl_zscore, "sl_dollar": sl_dollar,
+            **exits,
         })
 
     return group_key, batch_results, dt_ind
@@ -195,11 +190,7 @@ if __name__ == "__main__":
     print(f"   {len(df_1min):,} barres 1-min, {len(df_5s):,} barres 5s ({time.time()-t0:.1f}s)")
 
     # ---- Verifier reprise ----
-    completed_labels = set()
-    if OUTPUT_CSV.exists():
-        existing = pd.read_csv(OUTPUT_CSV, sep=";")
-        completed_labels = set(existing["label"].values)
-        print(f"\n[RESUME] {len(completed_labels)} configs deja completees")
+    completed_labels = check_csv_resumption(OUTPUT_CSV)
 
     # ---- Preparer les args workers ----
     worker_args = [
@@ -224,11 +215,7 @@ if __name__ == "__main__":
                 continue
 
             # Sauvegarder
-            df_batch = pd.DataFrame(batch_results)
-            if OUTPUT_CSV.exists():
-                df_batch.to_csv(OUTPUT_CSV, mode="a", header=False, index=False, sep=";")
-            else:
-                df_batch.to_csv(OUTPUT_CSV, index=False, sep=";")
+            save_batch_csv(batch_results, OUTPUT_CSV)
 
             total_results += len(batch_results)
             best_in_batch = max(batch_results, key=lambda x: x["pnl_net"])
@@ -262,15 +249,8 @@ if __name__ == "__main__":
     print("=" * 120)
 
     # ---- Top 20 par PnL (1 tick) ----
-    top20 = df_1tick.nlargest(20, "pnl_net")
-    print(f"\n{'='*130}")
-    print("TOP 20 PAR PNL NET (1 TICK SLIPPAGE)")
-    print(f"{'='*130}")
-    print(f"{'#':<3} {'Config':<55} {'Trades':>7} {'WR%':>6} {'PnL 1tick':>12} {'PF':>7} {'MaxDD':>10} {'Sharpe':>7}")
-    print("-" * 130)
-    for i, (_, r) in enumerate(top20.iterrows()):
-        print(f"{i+1:<3} {r['label']:<55} {r['trades']:>7} {r['win_rate']:>5.1f}% "
-              f"${r['pnl_net']:>10,.0f} {r['profit_factor']:>6.2f} ${r['max_dd']:>8,.0f} {r['sharpe']:>6.2f}")
+    print_top_configs(df_1tick, metric="pnl_net", n=20,
+                      title="TOP 20 PAR PNL NET (1 TICK SLIPPAGE)")
 
     # ---- Comparaison 2 ticks vs 1 tick ----
     print(f"\n{'='*130}")

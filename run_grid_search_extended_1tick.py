@@ -21,6 +21,7 @@ import pandas as pd
 import numpy as np
 
 sys.path.insert(0, "src")
+from run_helpers import check_csv_resumption, save_batch_csv, print_top_configs
 
 # ============================================================================
 # PARAMETRES
@@ -139,13 +140,8 @@ def process_group(args):
         trades = run_hybrid_backtest(df_ind, df_5s, config_test, verbose=False)
         m = compute_metrics(trades)
 
-        if len(trades) > 0:
-            tp_zscore = (trades['Exit_Reason'] == 'TP_ZSCORE').sum()
-            tp_dollar = (trades['Exit_Reason'] == 'TP_DOLLAR').sum()
-            sl_zscore = (trades['Exit_Reason'] == 'SL_ZSCORE').sum()
-            sl_dollar = (trades['Exit_Reason'] == 'SL_DOLLAR').sum()
-        else:
-            tp_zscore = tp_dollar = sl_zscore = sl_dollar = 0
+        from run_helpers import count_exit_reasons as _count_er
+        exits = _count_er(trades)
 
         b = ind_group["indicators.beta_lookback"]
         zp = ind_group["indicators.zscore_period"]
@@ -165,8 +161,7 @@ def process_group(args):
             "profit_factor": round(m["profit_factor"], 2),
             "max_dd": round(m["max_dd"], 0),
             "sharpe": round(m["sharpe"], 2),
-            "tp_zscore": tp_zscore, "tp_dollar": tp_dollar,
-            "sl_zscore": sl_zscore, "sl_dollar": sl_dollar,
+            **exits,
         })
 
     return g_idx, batch_results, dt_ind
@@ -205,11 +200,7 @@ if __name__ == "__main__":
 
     # Verifier reprise
     OUTPUT_CSV.parent.mkdir(parents=True, exist_ok=True)
-    completed_labels = set()
-    if OUTPUT_CSV.exists():
-        existing = pd.read_csv(OUTPUT_CSV, sep=";")
-        completed_labels = set(existing["label"].values)
-        print(f"\n[RESUME] {len(completed_labels):,} configs deja completees")
+    completed_labels = check_csv_resumption(OUTPUT_CSV)
 
     remaining = total_configs - len(completed_labels)
     print(f"Configs restantes : {remaining:,}")
@@ -238,11 +229,7 @@ if __name__ == "__main__":
                 continue
 
             # Sauvegarder
-            df_batch = pd.DataFrame(batch_results)
-            if OUTPUT_CSV.exists():
-                df_batch.to_csv(OUTPUT_CSV, mode="a", header=False, index=False, sep=";")
-            else:
-                df_batch.to_csv(OUTPUT_CSV, index=False, sep=";")
+            save_batch_csv(batch_results, OUTPUT_CSV)
 
             total_results += len(batch_results)
             best_in_batch = max(batch_results, key=lambda x: x["pnl_net"])
@@ -280,28 +267,12 @@ if __name__ == "__main__":
     print("=" * 140)
 
     # ---- Top 30 par PnL ----
-    top_pnl = df_all.nlargest(30, "pnl_net")
-    print(f"\n{'='*150}")
-    print("TOP 30 PAR PNL NET")
-    print(f"{'='*150}")
-    print(f"{'#':<3} {'Config':<65} {'Mode':>7} {'Trades':>7} {'WR%':>6} {'PnL':>11} {'PF':>7} {'MaxDD':>10} {'Sharpe':>7}")
-    print("-" * 150)
-    for i, (_, r) in enumerate(top_pnl.iterrows()):
-        print(f"{i+1:<3} {r['label']:<65} {r['tp_zscore_mode']:>7} {r['trades']:>7} {r['win_rate']:>5.1f}% "
-              f"${r['pnl_net']:>9,.0f} {r['profit_factor']:>6.2f} ${r['max_dd']:>8,.0f} {r['sharpe']:>6.2f}")
+    print_top_configs(df_all, metric="pnl_net", n=30,
+                      title="TOP 30 PAR PNL NET")
 
     # ---- Top 30 par Sharpe (min 15 trades) ----
-    df_filt = df_all[df_all["trades"] >= 15]
-    if len(df_filt) > 0:
-        top_sh = df_filt.nlargest(30, "sharpe")
-        print(f"\n{'='*150}")
-        print("TOP 30 PAR SHARPE (min 15 trades)")
-        print(f"{'='*150}")
-        print(f"{'#':<3} {'Config':<65} {'Mode':>7} {'Trades':>7} {'WR%':>6} {'PnL':>11} {'PF':>7} {'MaxDD':>10} {'Sharpe':>7}")
-        print("-" * 150)
-        for i, (_, r) in enumerate(top_sh.iterrows()):
-            print(f"{i+1:<3} {r['label']:<65} {r['tp_zscore_mode']:>7} {r['trades']:>7} {r['win_rate']:>5.1f}% "
-                  f"${r['pnl_net']:>9,.0f} {r['profit_factor']:>6.2f} ${r['max_dd']:>8,.0f} {r['sharpe']:>6.2f}")
+    print_top_configs(df_all, metric="sharpe", n=30, min_trades=15,
+                      title="TOP 30 PAR SHARPE (min 15 trades)")
 
     # ---- Comparaison par mode TP_ZSCORE ----
     print(f"\n{'='*100}")

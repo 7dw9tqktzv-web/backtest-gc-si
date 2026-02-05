@@ -26,6 +26,7 @@ from data_loader import load_and_prepare_data, load_5s_data
 from indicators import calculate_all_indicators
 from backtest_engine_hybrid import run_hybrid_backtest
 from optimizer import apply_overrides, compute_metrics
+from run_helpers import count_exit_reasons, check_csv_resumption, save_batch_csv, print_top_configs
 
 # ============================================================================
 # PARAMETRES
@@ -95,11 +96,7 @@ if __name__ == "__main__":
     print(f"   {len(df_1min):,} barres 1-min, {len(df_5s):,} barres 5s ({time.time()-t0:.1f}s)")
 
     # Verifier reprise
-    completed_labels = set()
-    if OUTPUT_CSV.exists():
-        existing = pd.read_csv(OUTPUT_CSV, sep=";")
-        completed_labels = set(existing["label"].values)
-        print(f"\n[RESUME] {len(completed_labels):,} configs deja completees, reprise...")
+    completed_labels = check_csv_resumption(OUTPUT_CSV)
 
     # Executer
     print(f"\nExecution des backtests...")
@@ -156,14 +153,7 @@ if __name__ == "__main__":
                                 trades = run_hybrid_backtest(df_ind, df_5s, config_test, verbose=False)
                                 m = compute_metrics(trades)
 
-                                # Exit reasons
-                                if len(trades) > 0:
-                                    tp_zscore = (trades['Exit_Reason'] == 'TP_ZSCORE').sum()
-                                    tp_dollar = (trades['Exit_Reason'] == 'TP_DOLLAR').sum()
-                                    sl_zscore = (trades['Exit_Reason'] == 'SL_ZSCORE').sum()
-                                    sl_dollar = (trades['Exit_Reason'] == 'SL_DOLLAR').sum()
-                                else:
-                                    tp_zscore = tp_dollar = sl_zscore = sl_dollar = 0
+                                exits = count_exit_reasons(trades)
 
                                 batch_results.append({
                                     "label": label,
@@ -177,18 +167,15 @@ if __name__ == "__main__":
                                     "profit_factor": round(m["profit_factor"], 2),
                                     "max_dd": round(m["max_dd"], 0),
                                     "sharpe": round(m["sharpe"], 2),
-                                    "tp_zscore_count": tp_zscore, "tp_dollar_count": tp_dollar,
-                                    "sl_zscore_count": sl_zscore, "sl_dollar_count": sl_dollar,
+                                    "tp_zscore_count": exits["tp_zscore"],
+                                    "tp_dollar_count": exits["tp_dollar"],
+                                    "sl_zscore_count": exits["sl_zscore"],
+                                    "sl_dollar_count": exits["sl_dollar"],
                                 })
 
         # Sauvegarder le batch
         if batch_results:
-            df_batch = pd.DataFrame(batch_results)
-            if OUTPUT_CSV.exists():
-                df_batch.to_csv(OUTPUT_CSV, mode="a", header=False, index=False, sep=";")
-            else:
-                OUTPUT_CSV.parent.mkdir(parents=True, exist_ok=True)
-                df_batch.to_csv(OUTPUT_CSV, index=False, sep=";")
+            save_batch_csv(batch_results, OUTPUT_CSV)
 
             configs_done += len(batch_results)
             all_results.extend(batch_results)
@@ -246,33 +233,12 @@ if __name__ == "__main__":
         print(f"   {slip} tick(s) : {n_prof} / {len(sub)} rentables ({n_prof/len(sub)*100:.1f}%)")
 
     # Top 20 global par PnL
-    top_pnl = df_all.nlargest(20, "pnl_net")
-    print(f"\n{'='*140}")
-    print("TOP 20 PAR PNL NET (tous modes confondus)")
-    print(f"{'='*140}")
-    print(f"{'#':<3} {'Config':<65} {'Mode':<10} {'Slip':>4} {'Trades':>7} {'WR%':>6} {'PnL':>11} {'PF':>7} {'MaxDD':>10} {'Sharpe':>7}")
-    print("-" * 140)
-    for i, (_, r) in enumerate(top_pnl.iterrows()):
-        # Label court (sans le mode et slippage qui sont dans des colonnes separees)
-        short_label = f"b{int(r['beta'])}_zp{int(r['zp'])}_zE{r['zE']}_co{int(r['co'])}_TP{int(r['TP'])}_SL{int(r['SL'])}"
-        print(f"{i+1:<3} {short_label:<65} {r['tp_zscore_mode']:<10} {int(r['slippage']):>4} "
-              f"{int(r['trades']):>7} {r['win_rate']:>5.1f}% "
-              f"${r['pnl_net']:>9,.0f} {r['profit_factor']:>6.2f} ${r['max_dd']:>8,.0f} {r['sharpe']:>6.2f}")
+    print_top_configs(df_all, metric="pnl_net", n=20,
+                      title="TOP 20 PAR PNL NET (tous modes confondus)")
 
     # Top 20 par Sharpe (min 10 trades)
-    df_min10 = df_all[df_all["trades"] >= 10]
-    if len(df_min10) > 0:
-        top_sharpe = df_min10.nlargest(20, "sharpe")
-        print(f"\n{'='*140}")
-        print("TOP 20 PAR SHARPE (min 10 trades)")
-        print(f"{'='*140}")
-        print(f"{'#':<3} {'Config':<65} {'Mode':<10} {'Slip':>4} {'Trades':>7} {'WR%':>6} {'PnL':>11} {'PF':>7} {'MaxDD':>10} {'Sharpe':>7}")
-        print("-" * 140)
-        for i, (_, r) in enumerate(top_sharpe.iterrows()):
-            short_label = f"b{int(r['beta'])}_zp{int(r['zp'])}_zE{r['zE']}_co{int(r['co'])}_TP{int(r['TP'])}_SL{int(r['SL'])}"
-            print(f"{i+1:<3} {short_label:<65} {r['tp_zscore_mode']:<10} {int(r['slippage']):>4} "
-                  f"{int(r['trades']):>7} {r['win_rate']:>5.1f}% "
-                  f"${r['pnl_net']:>9,.0f} {r['profit_factor']:>6.2f} ${r['max_dd']:>8,.0f} {r['sharpe']:>6.2f}")
+    print_top_configs(df_all, metric="sharpe", n=20, min_trades=10,
+                      title="TOP 20 PAR SHARPE (min 10 trades)")
 
     print(f"\n[OK] Resultats sauvegardes dans {OUTPUT_CSV}")
     print(f"[OK] Duree totale : {t_total/60:.1f} min")
