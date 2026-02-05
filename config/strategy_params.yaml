@@ -33,10 +33,10 @@ contracts:
 # ----------------------------------------------------------------------------
 indicators:
   period: "1min"            # Période de calcul des indicateurs (1min, 5min, 15min, 1h, 1d)
-  beta_lookback: 1320       # Meilleure config 1mn (PnL2 walk-forward: 16/34 fenetres)
-  zscore_period: 20         # Période pour moyenne et écart-type du Z-Score
-  correlation_period: 30    # Période pour la corrélation Pearson
-  adf_hurst_period: 128     # Période pour tests ADF et Hurst
+  beta_lookback: 1320       # Best config: b1320_zp24_cp24_adf96 (CHANGELOG 2026-02-04)
+  zscore_period: 24         # Best config: zp24
+  correlation_period: 24    # Best config: cp24
+  adf_hurst_period: 96      # Best config: adf96
   adf_critical_value: -2.86      # Valeur critique ADF a 5% pour le score de cointegration
   coint_corr_threshold: 0.6      # Seuil de correlation dans le score de cointegration
 
@@ -44,8 +44,8 @@ indicators:
 # CONDITIONS D'ENTRÉE
 # ----------------------------------------------------------------------------
 entry:
-  zscore_long: -3.5         # Meilleure config 1mn (PnL2 walk-forward)
-  zscore_short: 3.5         # Meilleure config 1mn (PnL2 walk-forward)
+  zscore_long: -3.0         # Best config: zE3.0 (CHANGELOG 2026-02-04)
+  zscore_short: 3.0         # Best config: zE3.0
   correlation_min: 0.60     # Corrélation minimum requise
   cointegration_score_min: 50  # Meilleure config 1mn (PnL2 walk-forward)
   hurst_max: 1.0              # Hurst maximum (1.0 = desactive, 0.50 = filtre strict mean reversion)
@@ -101,3 +101,30 @@ session:
   entry_start_hour: 0       # Pas d'entree avant cette heure CT (0 = desactive)
   entry_end_hour: 24        # Pas d'entree apres cette heure CT (24 = desactive)
   # Note: Les données ont déjà les 30 premières/dernières minutes enlevées
+
+# ----------------------------------------------------------------------------
+# PARAMETRES AVANCES (nouvelles strategies - independantes de l'existant)
+# ----------------------------------------------------------------------------
+advanced:
+  # Mode de calcul des indicateurs
+  # "rolling" = methode actuelle (Rolling OLS pour Beta, rolling window pour Z-Score)
+  # "kalman" = methode Kalman Filter (Beta adaptatif, Z-Score auto-adaptatif)
+  indicator_mode: "rolling"
+
+  # Filtre de regime HMM (Hidden Markov Model)
+  # true = active le filtre (bloque les trades en regime defavorable)
+  # false = desactive (comportement actuel)
+  regime_filter: false
+
+  # Nombre d'etats HMM (si regime_filter = true)
+  # 2 = Mean-Reverting vs Trending
+  # 3 = Mean-Reverting vs Trending vs High-Volatility
+  regime_states: 3
+
+  # Hyperparametre alpha pour Kalman (si indicator_mode = "kalman")
+  # Controle la vitesse d'adaptation du filtre et l'echelle du Z-Score
+  # Valeurs typiques:
+  #   1e-5 : Z-Score compresse (range ~[-1, 1])
+  #   1e-6 : Z-Score comparable au Rolling (range ~[-2, 4]) <- RECOMMANDE
+  #   1e-7 : Z-Score large (range ~[-6, 10])
+  kalman_alpha: 1.0e-6

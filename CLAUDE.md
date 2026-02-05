@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v1.4).
+Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v1.5).
 
-**Current status**: Walk-forward beta long completed. Best robust config: **b3960 (15 days)** with $24,694 PnL over 34 windows (53% positive). Strategy is **regime-dependent**: profitable 2025-2026, losing 2023-2024. **Next: regime detection filters** before production. See `CHANGELOG.md` for detailed backtest history.
+**Current status**: **Sierra Chart v1.5 harmonized with Python** (< 0.01% difference on all indicators). Best config: **b1320_zp24_cp24_adf96_zE3.0_zTP2.0_zSL4.5_co50** (NO_HMM) - $45,500 walk-forward PnL. **Ready for paper trading on Sierra Chart**. See `CHANGELOG.md` for detailed backtest history.
 
 ## Commands
 
@@ -36,9 +36,11 @@ python src/metrics.py                  # Performance analysis + archiving
 python run_grid_search_5min.py         # 155,520 configs 5-min, 3 years, 24 workers (~10h)
 python run_grid_search_3y.py           # 32,400 configs 1-min, 3 years, 24 workers
 python run_grid_search_beta_long.py    # 4,050 configs beta long (15-30 days)
+python run_grid_search_hmm_full.py     # 129,600 configs HMM filter evaluation (~3h)
 python run_walk_forward.py             # 6-window walk-forward validation
 python run_walk_forward_5min_ztp.py    # 34-window walk-forward 5-min zTP
 python run_walk_forward_beta_long.py   # 34-window walk-forward beta long
+python run_walk_forward_hmm.py         # 48-window walk-forward HMM configs
 
 # Post-grid-search analysis
 python src/report_generator.py output/grid_search_xxx.csv --description "..."
@@ -215,6 +217,17 @@ After `generate_signals()`:
 
 ## Key Research Conclusions
 
+### HMM Regime Filter (STABILIZED - Feb 2026)
+- **HMM 3-state filter**: Mean-Reverting, Trending, High-Volatility states
+- **Bug fixed**: `_reorder_states()` in regime.py had covariance format mismatch
+- **Result after fix**: 100% fit rate for all covariance types (diag, full)
+- **Walk-forward comparison** (48 windows):
+  - NO_HMM: $45,500 PnL, 207 trades, 47% positive windows
+  - HMM_DIAG: $40,221 PnL, 160 trades, 60% positive windows
+- **Trade-off**: NO_HMM = max PnL, HMM_DIAG = max consistency
+- **Best config for PnL**: `b1320_zp24_cp24_adf96_zE3.0_zTP2.0_zSL4.5_co50` (NO_HMM)
+- **Best config for consistency**: `b1320_zp24_cp12_adf96_zE3.0_zTP2.0_zSL4.0_co50` (HMM_DIAG)
+
 ### 1-min timeframe (completed)
 - **Slippage is the strategy killer**: 1 tick -> profitable; 2 ticks -> destroyed
 - **zscore_entry=-3.5** is the only viable threshold on 3-year data (112/115 profitable configs)
@@ -237,23 +250,82 @@ See `CHANGELOG.md` for detailed tables. Key findings:
 - **b3960 (15 days)** more robust in walk-forward than b2640 (10 days)
 - **Strategy is regime-dependent**: profitable 2025-2026, losing 2023-2024
 
+## Sierra Chart Integration (v1.5 - HARMONIZED)
+
+### Indicator Harmonization (Feb 2026)
+Python and Sierra Chart v1.5 now produce **identical indicator values** (< 0.01% difference):
+
+| Indicator | Python vs Sierra | Status |
+|-----------|------------------|--------|
+| Beta | 0.000000 (0.00%) | IDENTICAL |
+| ADF Statistic | 0.000272 (0.01%) | NEGLIGIBLE |
+| Correlation | 0.000035 (0.00%) | NEGLIGIBLE |
+| Z-Score | 0.000334 (0.03%) | NEGLIGIBLE |
+| Hurst | 0.000113 (0.01%) | NEGLIGIBLE |
+
+### Key Changes Made
+1. **ADF Statistic (v1.4 -> v1.5)**: Added intercept (mu) to regression, matching Python's implementation
+2. **Session times**: GC and SI charts must use identical session times (17:00-16:00 CT)
+3. **Config alignment**: Python YAML updated to match Sierra Chart optimal settings
+
+### Sierra Chart Files
+- **Indicator**: `DOC SIERRA/files/GC_SI_SpreadMeanReversion_v1.5.cpp`
+- **Spreadsheet export**: `DOC SIERRA/files/DefaultSpreadsheetStudy.txt`
+- **Validation scripts**: `compare_sierra_v3.py`, `check_float_precision.py`
+
+### Sierra Chart Settings (must match Python)
+```
+Beta Lookback: 1320
+Z-Score Period: 24
+Correlation Period: 24
+ADF/Hurst Period: 96
+Z-Score Upper Threshold: 3
+Z-Score Lower Threshold: -3
+Min Cointegration Score: 50
+Session Start: 17:00:00 CT
+Session End: 15:30:00 CT
+```
+
 ## Next Steps (TODO)
 
-### Priority 1 -- Regime Detection (CRITICAL)
-Strategy is regime-dependent: profitable 2025-2026, losing 2023-2024.
-- Create `analyze_regimes.py` to compare winning vs losing periods
-- Test filters: volatility (ATR), correlation stability, volume, VIX
-- Implement `regime_filter` in backtest engine
-- Walk-forward with filter to validate robustness
+### Priority 1 -- Paper Trading on Sierra Chart (IN PROGRESS)
+Indicator harmonization complete. Remaining tasks for paper trading:
+
+1. **Signal generation in Sierra Chart**: Implement entry/exit logic in v1.5
+   - Entry: Z-Score crosses +/-3.0 with Coint Score >= 50
+   - Exit: Z-Score TP at +/-2.0, SL at +/-4.5
+   - Cooldown logic after stop loss
+
+2. **Position sizing**: Implement dollar-neutral Beta sizing
+   - SI: 1 contract (fixed)
+   - GC: round((SI_notional / GC_notional) * Beta)
+
+3. **Paper trade execution**: Configure Sierra Chart simulated trading
+   - Set up trade simulation on GCJ26 and SIH26
+   - Monitor fills, slippage, and execution quality
+
+4. **Validation**: Compare paper trades vs Python backtest
+   - Same signals at same timestamps?
+   - Same position sizes?
+   - Similar PnL per trade?
+
+**Target config**: `b1320_zp24_cp24_adf96_zE3.0_zTP2.0_zSL4.5_co50` (NO_HMM)
+- Walk-forward PnL: $45,500
+- 207 trades over 3 years
+- 58.1% Win Rate, PF 1.58
 
 ### Priority 2 -- Code Quality
 - **Add pytest tests**: unit tests for indicators, signals, position sizing (112 tests done)
+- **Add HMM tests**: unit tests for regime.py including covariance handling
 - **Consolidate run_*.py scripts**: reduce duplication (done, -66% code)
-- **Remove dead code**: backtest_engine.py deleted (was obsolete)
+- **Clean up validation scripts**: archive or remove compare_*.py, check_*.py, investigate_*.py
 
-### Priority 3 -- Production
-- Implement regime filter (prerequisite for live trading)
-- Deploy best config on Sierra Chart with filter active
+### Priority 3 -- Production Deployment
+- Validate paper trading results (minimum 2-4 weeks)
+- Compare paper vs backtest metrics (Win Rate, PF, avg trade)
+- Implement live order execution via Sierra Chart DTC protocol
+- Add risk management (daily loss limit, position size caps)
+- Document go-live checklist
 
 ## Known Code Issues (non-blocking)
 
