@@ -36,21 +36,23 @@ except ImportError:
 
 def apply_overrides(config, overrides):
     """
-    Applique des overrides sur une copie de la config.
+    Apply parameter overrides to a deep copy of the configuration.
 
-    Les cles utilisent la notation a points pour acceder aux cles imbriquees.
-    Ex: "indicators.beta_lookback" -> config['indicators']['beta_lookback']
+    Keys use dot notation to access nested keys.
+    Example: "exit.pnl_take_profit" -> config['exit']['pnl_take_profit']
 
-    Parametres:
-    -----------
+    Parameters
+    ----------
     config : dict
-        Configuration de base chargee depuis le YAML
+        Base configuration loaded from YAML.
     overrides : dict
-        Dict de parametres a modifier (cle: "section.param", valeur: nouvelle valeur)
+        Parameters to modify. Keys are dot-separated paths,
+        values are the new values.
 
-    Retourne:
-    ---------
-    dict : Copie de la config avec les overrides appliques
+    Returns
+    -------
+    dict
+        Deep copy of config with overrides applied.
     """
     cfg = copy.deepcopy(config)
     for dotted_key, value in overrides.items():
@@ -64,10 +66,12 @@ def apply_overrides(config, overrides):
 
 def build_label(overrides):
     """
-    Construit un label court a partir des overrides.
+    Build a short label from overrides using parameter shortcuts.
 
-    Ex: {"exit.pnl_take_profit": 500, "indicators.beta_lookback": 1320}
+    Example: {"exit.pnl_take_profit": 500, "indicators.beta_lookback": 1320}
         -> "TP500_beta1320"
+
+    Returns "baseline" if overrides is empty.
     """
     if not overrides:
         return "baseline"
@@ -106,12 +110,22 @@ def build_label(overrides):
 
 def compute_metrics(trades_df):
     """
-    Calcule les metriques cles a partir d'un DataFrame de trades.
+    Compute key performance metrics from a trades DataFrame.
 
-    Retourne:
-    ---------
-    dict : Metriques cles (trades, long, short, winners, win_rate, pnl_net,
-           pnl_avg, best, worst, max_dd, profit_factor, sharpe)
+    Sharpe ratio is computed per trade (not annualized), consistent
+    with metrics.py: Sharpe = mean(PnL) / std(PnL).
+
+    Parameters
+    ----------
+    trades_df : pd.DataFrame
+        Trade list with 'PnL_Net' and 'Direction' columns.
+
+    Returns
+    -------
+    dict
+        Performance metrics: trades, long, short, winners, win_rate,
+        pnl_net, pnl_avg, best, worst, max_dd, profit_factor, sharpe.
+        All values are 0 if trades_df is empty.
     """
     n = len(trades_df)
     if n == 0:
@@ -180,16 +194,16 @@ LOG_COLUMNS = [
 
 def save_results_to_log(results, overrides_map, batch_id=None):
     """
-    Sauvegarde les resultats d'un run d'optimisation dans le log CSV.
+    Save optimization results to the CSV log file.
 
-    Parametres:
-    -----------
+    Parameters
+    ----------
     results : list of dict
-        Metriques de chaque config (retournees par run_optimization)
+        Metrics for each config (returned by run_optimization).
     overrides_map : dict
-        Mapping label -> overrides dict (pour sauvegarder les parametres testes)
-    batch_id : str, optionnel
-        Identifiant du batch (par defaut: horodatage)
+        Mapping of label -> overrides dict (to record tested parameters).
+    batch_id : str, optional
+        Batch identifier (default: timestamp YYYYmmdd_HHMMSS).
     """
     if batch_id is None:
         batch_id = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -238,11 +252,12 @@ def save_results_to_log(results, overrides_map, batch_id=None):
 
 def load_log():
     """
-    Charge le log d'optimisation complet.
+    Load the full optimization log from CSV.
 
-    Retourne:
-    ---------
-    pd.DataFrame : Toutes les lignes du log, ou DataFrame vide si absent
+    Returns
+    -------
+    pd.DataFrame
+        All log rows, or empty DataFrame if file does not exist.
     """
     if not LOG_PATH.exists():
         print("   Aucun log d'optimisation trouve.")
@@ -255,16 +270,16 @@ def load_log():
 
 def print_log_summary(df=None, top_n=20, sort_by="PnL_Net"):
     """
-    Affiche un resume du log d'optimisation.
+    Print a formatted summary of the optimization log.
 
-    Parametres:
-    -----------
-    df : pd.DataFrame, optionnel
-        Log a afficher. Si None, charge depuis le fichier.
+    Parameters
+    ----------
+    df : pd.DataFrame, optional
+        Log to display. If None, loads from file.
     top_n : int
-        Nombre de resultats a afficher
+        Number of results to display.
     sort_by : str
-        Colonne de tri (PnL_Net, Profit_Factor, Win_Rate, Sharpe, Max_Drawdown)
+        Sort column (PnL_Net, Profit_Factor, Win_Rate, Sharpe, Max_Drawdown).
     """
     if df is None:
         df = load_log()
@@ -302,12 +317,12 @@ def print_log_summary(df=None, top_n=20, sort_by="PnL_Net"):
 
 def delete_batch(batch_id):
     """
-    Supprime un batch entier du log.
+    Delete an entire batch from the optimization log.
 
-    Parametres:
-    -----------
+    Parameters
+    ----------
     batch_id : str
-        Identifiant du batch a supprimer
+        Batch identifier to remove.
     """
     if not LOG_PATH.exists():
         print("   Aucun log trouve.")
@@ -328,14 +343,14 @@ def delete_batch(batch_id):
 
 def keep_top_n(n=50, sort_by="PnL_Net"):
     """
-    Ne garde que les N meilleurs resultats dans le log.
+    Keep only the top N results in the optimization log, removing the rest.
 
-    Parametres:
-    -----------
+    Parameters
+    ----------
     n : int
-        Nombre de resultats a conserver
+        Number of results to keep.
     sort_by : str
-        Critere de tri pour determiner les "meilleurs"
+        Sort criterion to determine "best" results.
     """
     if not LOG_PATH.exists():
         print("   Aucun log trouve.")
@@ -360,24 +375,28 @@ def keep_top_n(n=50, sort_by="PnL_Net"):
 
 def run_single_config(df_1min, df_5s, config, label="", verbose=True):
     """
-    Execute un backtest hybride complet pour une config donnee.
+    Run a complete hybrid backtest for a single configuration.
 
-    Parametres:
-    -----------
+    Computes indicators, runs the backtest, exports results, and
+    returns performance metrics.
+
+    Parameters
+    ----------
     df_1min : pd.DataFrame
-        Donnees synchronisees 1-minute (brutes, sans indicateurs)
+        Synchronized 1-minute data (raw, without indicators).
     df_5s : pd.DataFrame
-        Donnees synchronisees 5-secondes
+        Synchronized 5-second data.
     config : dict
-        Configuration complete avec parametres de la strategie
+        Complete strategy configuration.
     label : str
-        Label pour identifier cette config dans les resultats
+        Label to identify this config in results.
     verbose : bool
-        Si True, affiche la progression
+        Print progress messages (default: True).
 
-    Retourne:
-    ---------
-    dict : Metriques cles + label + fingerprint
+    Returns
+    -------
+    dict
+        Performance metrics with additional 'label' and 'fingerprint' keys.
     """
     if verbose:
         print(f"\n--- Config: {label} ---")
@@ -411,26 +430,28 @@ def run_single_config(df_1min, df_5s, config, label="", verbose=True):
 
 def run_optimization(configs_list, verbose=True):
     """
-    Execute N backtests avec des configs differentes.
+    Run N backtests with different configurations.
 
-    Charge les donnees UNE seule fois, puis boucle sur chaque config.
+    Loads data ONCE, then loops over each config. Results are displayed
+    in a comparison table and saved to the optimization log.
 
-    Parametres:
-    -----------
+    Parameters
+    ----------
     configs_list : list of dict
-        Liste de dicts avec :
-        - "label" (str, optionnel) : nom de la config
-        - "overrides" (dict) : parametres a modifier (notation a points)
-        Ex: [
+        List of config specifications, each with:
+        - "label" (str, optional): config name (auto-generated if missing)
+        - "overrides" (dict): parameters to modify (dot notation)
+        Example: [
             {"label": "baseline", "overrides": {}},
             {"label": "TP500", "overrides": {"exit.pnl_take_profit": 500}},
         ]
     verbose : bool
-        Si True, affiche la progression
+        Print progress messages (default: True).
 
-    Retourne:
-    ---------
-    list of dict : Metriques de chaque config
+    Returns
+    -------
+    list of dict
+        Performance metrics for each configuration.
     """
     print("\n" + "=" * 60)
     print("OPTIMISATION MULTI-CONFIG")
@@ -491,14 +512,14 @@ def run_optimization(configs_list, verbose=True):
 
 def print_comparison_table(results, sort_by="pnl_net"):
     """
-    Affiche un tableau comparatif des resultats, trie par le critere choisi.
+    Print a formatted comparison table of results, sorted by chosen criterion.
 
-    Parametres:
-    -----------
+    Parameters
+    ----------
     results : list of dict
-        Liste des metriques de chaque config
+        Metrics for each config (from run_optimization).
     sort_by : str
-        Critere de tri (pnl_net, profit_factor, win_rate, sharpe, max_dd)
+        Sort criterion (pnl_net, profit_factor, win_rate, sharpe, max_dd).
     """
     if not results:
         print("   Aucun resultat a afficher.")

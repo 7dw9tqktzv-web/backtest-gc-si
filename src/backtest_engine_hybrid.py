@@ -54,29 +54,38 @@ def run_hybrid_backtest(
     verbose: bool = True
 ) -> pd.DataFrame:
     """
-    Backtest hybride : signaux 1-min + suivi PnL sur barres 5s.
+    Run a hybrid backtest: 1-min signals + 5s dollar exit monitoring.
 
-    Logique :
-    - On itere barre par barre sur le df_1min
-    - Les entrees et sorties Z-Score sont evaluees sur les barres 1-min
-    - Quand on est en position, on recupere les barres 5s dans l'intervalle
-      [barre_1min_precedente, barre_1min_courante] pour surveiller le PnL
-    - Si le PnL touche SL (-$800) ou TP (+$400) sur une barre 5s, on sort
-      au seuil exact
-    - Si aucun trigger 5s, on verifie les sorties Z-Score sur la barre 1-min
+    Processing flow for each 1-min bar:
+        1. Check state transitions (cooldown reset, entry conditions)
+        2. If in position, scan 5s bars between previous and current 1-min bar:
+           a. SL_DOLLAR: PnL <= stop_loss threshold -> exit (highest priority)
+           a. TP_DOLLAR: PnL >= take_profit threshold -> exit
+        3. If no 5s trigger, check Z-Score exits on the 1-min bar:
+           b. SL_ZSCORE: Z-Score beyond stop loss threshold
+           b. TP_ZSCORE: Z-Score reverted to take profit threshold (if enabled)
 
-    Parametres:
-    -----------
+    The 5s data is used ONLY for price monitoring (dollar exit detection).
+    No indicators are recalculated on 5s bars.
+
+    Parameters
+    ----------
     df_1min : pd.DataFrame
-        Donnees 1-minute avec indicateurs calcules
+        1-minute data with all indicators calculated (from calculate_all_indicators).
     df_5s : pd.DataFrame
-        Donnees 5-secondes synchronisees (colonnes: DateTime, Last_GC, Last_SI)
+        5-second synchronized data (columns: DateTime, Last_GC, Last_SI).
     config : dict
-        Configuration chargee depuis YAML
+        Strategy configuration loaded from YAML.
+    verbose : bool
+        Print progress messages (default: True).
 
-    Retourne:
-    ---------
-    pd.DataFrame : Liste des trades
+    Returns
+    -------
+    pd.DataFrame
+        Trade list with one row per completed trade. Columns include:
+        Entry_DateTime, Exit_DateTime, Direction, Entry_GC, Entry_SI,
+        Exit_GC, Exit_SI, GC_Contracts, SI_Contracts, PnL_GC, PnL_SI,
+        PnL_Gross, Costs, PnL_Net, PnL_Cumul, Exit_Reason, Beta, ZScore_Entry.
     """
     # Verification des colonnes requises
     required_1min = ['ZScore', 'Correlation', 'Cointegration_Score',
@@ -455,8 +464,10 @@ def run_hybrid_backtest(
 # ============================================================================
 
 def export_backtest(trades_df: pd.DataFrame, config: dict, filepath: str = "output/backtest_hybrid.csv"):
-    """Exporte les resultats du backtest hybride dans un fichier CSV.
-    Sauvegarde aussi un fichier meta JSON pour valider la coherence config/CSV.
+    """Export backtest results to CSV with a companion JSON metadata file.
+
+    The metadata file stores the config fingerprint to verify that
+    the CSV was generated with the current configuration.
     """
     Path(filepath).parent.mkdir(parents=True, exist_ok=True)
     trades_df.to_csv(filepath, index=False, sep=';')
@@ -475,7 +486,7 @@ def export_backtest(trades_df: pd.DataFrame, config: dict, filepath: str = "outp
 
 
 def print_backtest_summary(trades_df: pd.DataFrame, title: str = "BACKTEST HYBRIDE"):
-    """Affiche un resume des resultats."""
+    """Print a formatted summary of backtest results (trades, PnL, drawdown)."""
     if len(trades_df) == 0:
         print("   Aucun trade a afficher.")
         return
