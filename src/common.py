@@ -41,33 +41,38 @@ def check_entry_conditions(
     hurst: float = 0.0
 ) -> int:
     """
-    Verifie si les conditions d'entree sont remplies.
+    Check whether entry conditions are met for a new trade.
 
-    Logique :
-    - On ne peut entrer que si on est FLAT
-      (ou COOLDOWN dans la direction opposee)
-    - Il faut que les conditions soient vraies simultanement :
-      Z-Score au-dela du seuil, correlation suffisante, score suffisant,
-      et Hurst en dessous du seuil max (si active)
+    All conditions must be satisfied simultaneously:
+    - Z-Score beyond entry threshold (negative for LONG, positive for SHORT)
+    - Pearson correlation above minimum
+    - Cointegration score above minimum
+    - Hurst exponent below maximum (if enabled, i.e. hurst_max < 1.0)
 
-    Parametres:
-    -----------
+    State constraints:
+    - Can only enter from FLAT or opposite-direction COOLDOWN
+    - COOLDOWN_LONG blocks LONG entries (but allows SHORT)
+    - COOLDOWN_SHORT blocks SHORT entries (but allows LONG)
+
+    Parameters
+    ----------
     zscore : float
-        Valeur actuelle du Z-Score
+        Current Z-Score value.
     correlation : float
-        Valeur actuelle de la correlation Pearson
+        Current Pearson correlation between log(GC) and log(SI).
     cointegration_score : float
-        Score de cointegration actuel (0-100)
+        Current composite cointegration score (0-100).
     state : int
-        Etat actuel de la machine a etats
+        Current state machine state (STATE_FLAT, STATE_LONG, etc.).
     config : dict
-        Configuration chargee depuis YAML
+        Strategy configuration loaded from YAML.
     hurst : float
-        Valeur actuelle de l'exposant de Hurst (< 0.5 = mean reversion)
+        Current Hurst exponent (H < 0.5 = mean-reverting, H > 0.5 = trending).
 
-    Retourne:
-    ---------
-    int : 1 (LONG), -1 (SHORT), ou 0 (pas d'entree)
+    Returns
+    -------
+    int
+        1 (LONG entry), -1 (SHORT entry), or 0 (no entry).
     """
     # Recuperer les seuils depuis la config
     z_long = config['entry']['zscore_long']            # -3.0
@@ -105,26 +110,34 @@ def check_zscore_exit(
     config: dict
 ) -> Tuple[bool, str]:
     """
-    Verifie les conditions de sortie basees sur le Z-Score.
+    Check Z-Score-based exit conditions for an open position.
 
-    Logique :
-    - Priorite 1 : Stop Loss (protection du capital)
-    - Priorite 2 : Take Profit (prise de benefice)
+    Exit priority (checked in order):
+    1. Stop Loss (SL_ZSCORE) -- capital protection, highest priority
+    2. Take Profit (TP_ZSCORE) -- profit taking, can be disabled via config
 
-    Parametres:
-    -----------
+    For LONG positions:
+    - SL triggers when Z-Score drops further (Z <= zscore_sl_long)
+    - TP triggers when Z-Score reverts toward mean (Z >= zscore_tp_long)
+
+    For SHORT positions:
+    - SL triggers when Z-Score rises further (Z >= zscore_sl_short)
+    - TP triggers when Z-Score reverts toward mean (Z <= zscore_tp_short)
+
+    Parameters
+    ----------
     zscore : float
-        Valeur actuelle du Z-Score
+        Current Z-Score value.
     state : int
-        Etat actuel (doit etre LONG ou SHORT)
+        Current state (must be STATE_LONG or STATE_SHORT).
     config : dict
-        Configuration chargee depuis YAML
+        Strategy configuration loaded from YAML.
 
-    Retourne:
-    ---------
-    Tuple[bool, str] : (doit_sortir, raison)
-        - doit_sortir : True si on doit cloturer la position
-        - raison : 'SL_ZSCORE', 'TP_ZSCORE', ou '' si pas de sortie
+    Returns
+    -------
+    tuple[bool, str]
+        (should_exit, reason) where reason is 'SL_ZSCORE', 'TP_ZSCORE',
+        or '' if no exit triggered.
     """
     # Parametre optionnel : desactiver les sorties TP_ZSCORE (defaut: True = actif)
     tp_enabled = config['exit'].get('zscore_tp_enabled', True)
@@ -154,24 +167,29 @@ def check_cooldown_reset(
     config: dict
 ) -> bool:
     """
-    Verifie si le cooldown est termine (Z-Score revenu a la zone neutre).
+    Check whether the cooldown period has ended (Z-Score returned to neutral zone).
 
-    Apres un Stop Loss, on attend que le Z-Score revienne vers zero
-    avant d'autoriser une nouvelle entree dans la meme direction.
-    Cela evite de "re-rentrer trop vite" dans un mouvement adverse.
+    After a stop loss exit, the strategy waits for the Z-Score to revert
+    toward zero before allowing re-entry in the same direction. This prevents
+    re-entering too quickly into an adverse move.
 
-    Parametres:
-    -----------
+    Cooldown reset thresholds:
+    - COOLDOWN_LONG: Z-Score must rise back to zscore_reset_long (e.g. -1.0)
+    - COOLDOWN_SHORT: Z-Score must fall back to zscore_reset_short (e.g. +1.0)
+
+    Parameters
+    ----------
     zscore : float
-        Valeur actuelle du Z-Score
+        Current Z-Score value.
     state : int
-        Etat actuel (doit etre COOLDOWN_LONG ou COOLDOWN_SHORT)
+        Current state (must be STATE_COOLDOWN_LONG or STATE_COOLDOWN_SHORT).
     config : dict
-        Configuration chargee depuis YAML
+        Strategy configuration loaded from YAML.
 
-    Retourne:
-    ---------
-    bool : True si le cooldown est termine -> retour a FLAT
+    Returns
+    -------
+    bool
+        True if cooldown is over and state should transition back to FLAT.
     """
     if state == STATE_COOLDOWN_LONG:
         # Z-Score doit remonter a -1.0 pour autoriser un nouveau LONG
@@ -199,28 +217,40 @@ def calculate_current_pnl(
     config: dict
 ) -> float:
     """
-    Calcule le PnL brut courant d'une position ouverte.
+    Calculate the current gross PnL of an open position.
 
-    Utilise par backtest_engine.py et backtest_engine_hybrid.py pour
-    surveiller le PnL intra-trade (exits en dollars).
+    Used by backtest engines to monitor intra-trade PnL for dollar-based
+    exit detection (TP_DOLLAR and SL_DOLLAR).
 
-    Parametres:
-    -----------
+    Formula:
+        LONG spread (long SI, short GC):
+            PnL = (current_SI - entry_SI) * SI_pv * SI_qty
+                + (entry_GC - current_GC) * GC_pv * GC_qty
+
+        SHORT spread (short SI, long GC):
+            PnL = (entry_SI - current_SI) * SI_pv * SI_qty
+                + (current_GC - entry_GC) * GC_pv * GC_qty
+
+        where GC_pv = $100/point, SI_pv = $5,000/point.
+
+    Parameters
+    ----------
     direction : int
-        1 = LONG spread (long SI, short GC)
-       -1 = SHORT spread (short SI, long GC)
+        1 = LONG spread (long SI, short GC),
+       -1 = SHORT spread (short SI, long GC).
     entry_gc, entry_si : float
-        Prix d'entree GC et SI
+        Entry prices for GC and SI.
     current_gc, current_si : float
-        Prix courant GC et SI
+        Current prices for GC and SI.
     gc_contracts, si_contracts : int
-        Nombre de contrats
+        Number of contracts for each leg.
     config : dict
-        Configuration (pour point values)
+        Strategy configuration (for point values).
 
-    Retourne:
-    ---------
-    float : PnL brut en dollars (sans couts de transaction)
+    Returns
+    -------
+    float
+        Gross PnL in USD (before transaction costs).
     """
     gc_pv = config['contracts']['gc_point_value']   # 100
     si_pv = config['contracts']['si_point_value']   # 5000
@@ -243,10 +273,16 @@ def calculate_current_pnl(
 
 def build_config_fingerprint(config):
     """
-    Construit une empreinte des parametres cles de la config.
-    Permet de verifier que le CSV a ete genere avec la config actuelle.
+    Build a fingerprint string from key configuration parameters.
 
-    Utilise par backtest_engine_hybrid.py (export) et metrics.py (validation).
+    Used to verify that a backtest CSV was generated with the current
+    configuration. Compared by backtest_engine_hybrid.py (export) and
+    metrics.py (validation).
+
+    Returns
+    -------
+    str
+        Fingerprint like 'beta1320_zp24_corr24_adf96_zE-3.5_3.5_zTP-2.0_2.0_...'
     """
     ind = config['indicators']
     ext = config['exit']
