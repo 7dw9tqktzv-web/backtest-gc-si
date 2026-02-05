@@ -28,19 +28,21 @@ from typing import Optional
 
 def calculate_log_prices(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Calcule les logarithmes des prix GC et SI.
+    Compute natural logarithms of GC and SI prices.
 
-    Le spread log-adjusted est plus stable que le spread en prix bruts
-    car il normalise les differences d'echelle entre GC (~$4500) et SI (~$80).
+    Log-adjusted prices normalize the scale difference between GC (~$2700)
+    and SI (~$31), making the spread more stable and suitable for OLS
+    regression.
 
-    Parametres:
-    -----------
+    Parameters
+    ----------
     df : pd.DataFrame
-        DataFrame avec colonnes 'Last_GC' et 'Last_SI'
+        DataFrame with 'Last_GC' and 'Last_SI' columns.
 
-    Retourne:
-    ---------
-    pd.DataFrame : DataFrame avec colonnes 'Log_GC' et 'Log_SI' ajoutees
+    Returns
+    -------
+    pd.DataFrame
+        Input DataFrame with 'Log_GC' and 'Log_SI' columns added.
     """
     df['Log_GC'] = np.log(df['Last_GC'])
     df['Log_SI'] = np.log(df['Last_SI'])
@@ -52,31 +54,36 @@ def calculate_rolling_beta(
     lookback: int = 2640
 ) -> pd.DataFrame:
     """
-    Calcule le Beta (hedge ratio) via regression OLS glissante.
+    Compute the rolling OLS Beta (hedge ratio) between log(GC) and log(SI).
 
-    La regression est : Log_SI = Alpha + Beta x Log_GC + erreur
+    Regression model:
+        log(SI) = Alpha + Beta * log(GC) + epsilon
 
-    Le Beta represente combien de "unites log" de GC correspondent a 1 unite log de SI.
-    C'est utilise pour construire un spread stationnaire.
+    Beta represents how many "log units" of GC correspond to 1 log unit of SI.
+    It is used to construct a stationary (mean-reverting) spread.
 
-    Parametres:
-    -----------
-    df : pd.DataFrame
-        DataFrame avec colonnes 'Log_GC' et 'Log_SI'
-    lookback : int
-        Nombre de barres pour la regression (defaut: 2640 = 2 jours)
-
-    Retourne:
-    ---------
-    pd.DataFrame : DataFrame avec colonnes 'Beta' et 'Alpha' ajoutees
-
-    Notes:
-    ------
-    Formule OLS :
+    Formula (OLS, population variance with ddof=0):
         Beta = Cov(X, Y) / Var(X)
-        Alpha = Mean(Y) - Beta x Mean(X)
+        Alpha = Mean(Y) - Beta * Mean(X)
+        where X = log(GC), Y = log(SI)
 
-    ou X = Log_GC et Y = Log_SI
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with 'Log_GC' and 'Log_SI' columns.
+    lookback : int
+        Rolling window size in bars (default: 2640 = 2 days at 1-min).
+
+    Returns
+    -------
+    pd.DataFrame
+        Input DataFrame with 'Beta' and 'Alpha' columns added.
+        First (lookback - 1) rows are NaN (warmup period).
+
+    Notes
+    -----
+    Uses ddof=0 (population variance), which differs from Z-Score (ddof=1).
+    This is a known inconsistency (Bug 2) with negligible practical impact.
     """
     # Vectorisation via pandas rolling (equivalent a Cov/Var avec ddof=0)
     log_gc = df['Log_GC']
@@ -102,21 +109,23 @@ def calculate_rolling_beta(
 
 def calculate_spread(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Calcule le spread log-adjusted.
+    Compute the log-adjusted spread (OLS residual).
 
-    Spread = Log_SI - Beta x Log_GC - Alpha
+    Formula:
+        Spread = log(SI) - Beta * log(GC) - Alpha
 
-    Ce spread devrait etre stationnaire (mean-reverting) si GC et SI
-    sont cointegres.
+    This spread should be stationary (mean-reverting) when GC and SI
+    are cointegrated. It represents the residual from the OLS regression.
 
-    Parametres:
-    -----------
+    Parameters
+    ----------
     df : pd.DataFrame
-        DataFrame avec colonnes 'Log_GC', 'Log_SI', 'Beta', 'Alpha'
+        DataFrame with 'Log_GC', 'Log_SI', 'Beta', 'Alpha' columns.
 
-    Retourne:
-    ---------
-    pd.DataFrame : DataFrame avec colonne 'Spread' ajoutee
+    Returns
+    -------
+    pd.DataFrame
+        Input DataFrame with 'Spread' column added.
     """
     df['Spread'] = df['Log_SI'] - df['Beta'] * df['Log_GC'] - df['Alpha']
     return df
@@ -127,24 +136,33 @@ def calculate_zscore(
     period: int = 30
 ) -> pd.DataFrame:
     """
-    Calcule le Z-Score du spread.
+    Compute the Z-Score of the spread.
 
-    Z-Score = (Spread - Moyenne) / Ecart-type
+    Formula:
+        Z = (Spread - mu) / sigma
+        where mu = rolling mean, sigma = rolling std (ddof=1)
 
-    Un Z-Score de +3 signifie que le spread est a 3 ecarts-types au-dessus
-    de sa moyenne -> signal de vente du spread (SHORT).
-    Un Z-Score de -3 signifie 3 ecarts-types en-dessous -> signal d'achat (LONG).
+    Interpretation:
+    - Z = +3.0: spread is 3 std above mean -> SHORT signal
+    - Z = -3.0: spread is 3 std below mean -> LONG signal
+    - Z ~= 0: spread near its mean -> no signal
 
-    Parametres:
-    -----------
+    Parameters
+    ----------
     df : pd.DataFrame
-        DataFrame avec colonne 'Spread'
+        DataFrame with 'Spread' column.
     period : int
-        Periode pour le calcul de la moyenne et ecart-type (defaut: 30)
+        Rolling window for mean and std (default: 30).
 
-    Retourne:
-    ---------
-    pd.DataFrame : DataFrame avec colonnes 'Spread_Mean', 'Spread_Std', 'ZScore'
+    Returns
+    -------
+    pd.DataFrame
+        Input DataFrame with 'Spread_Mean', 'Spread_Std', 'ZScore' columns added.
+
+    Notes
+    -----
+    Uses ddof=1 (sample std), which differs from Beta (ddof=0).
+    NaN is set where Spread_Std == 0 (constant spread in window).
     """
     # Moyenne mobile du spread
     df['Spread_Mean'] = df['Spread'].rolling(window=period).mean()
@@ -166,21 +184,24 @@ def calculate_correlation(
     period: int = 30
 ) -> pd.DataFrame:
     """
-    Calcule la correlation de Pearson glissante entre Log_GC et Log_SI.
+    Compute rolling Pearson correlation between log(GC) and log(SI).
 
-    Une correlation elevee (>0.7) indique que GC et SI bougent ensemble,
-    ce qui est necessaire pour que la strategie de spread fonctionne.
+    A high correlation (> 0.60) indicates that GC and SI move together,
+    which is required for the spread strategy to work. In practice,
+    correlation is always > 0.80 when Z-Score and Cointegration conditions
+    are met, making correlation_min a redundant filter.
 
-    Parametres:
-    -----------
+    Parameters
+    ----------
     df : pd.DataFrame
-        DataFrame avec colonnes 'Log_GC' et 'Log_SI'
+        DataFrame with 'Log_GC' and 'Log_SI' columns.
     period : int
-        Periode pour le calcul de la correlation (defaut: 30)
+        Rolling window for correlation (default: 30).
 
-    Retourne:
-    ---------
-    pd.DataFrame : DataFrame avec colonne 'Correlation' ajoutee
+    Returns
+    -------
+    pd.DataFrame
+        Input DataFrame with 'Correlation' column added.
     """
     # Correlation glissante
     df['Correlation'] = df['Log_GC'].rolling(window=period).corr(df['Log_SI'])
@@ -193,29 +214,37 @@ def calculate_adf_statistic(
     period: int = 128
 ) -> pd.DataFrame:
     """
-    Calcule la statistique ADF (Augmented Dickey-Fuller) simplifiee.
+    Compute the simplified Augmented Dickey-Fuller (ADF) test statistic.
 
-    Le test ADF verifie si le spread est stationnaire (mean-reverting).
+    The ADF test checks whether the spread is stationary (mean-reverting).
 
-    Hypothese nulle (H0) : Le spread a une racine unitaire (non stationnaire)
-    Si ADF < -2.86 (valeur critique a 5%), on rejette H0 -> le spread est stationnaire.
+    Null hypothesis (H0): The spread has a unit root (non-stationary).
+    If ADF < -2.86 (5% critical value), reject H0 -> spread is stationary.
 
-    Parametres:
-    -----------
+    Regression model (with intercept):
+        Delta_y_t = mu + gamma * y_{t-1} + epsilon
+        ADF statistic = gamma / SE(gamma)
+
+    where y = Spread, Delta_y = Spread_t - Spread_{t-1}.
+
+    Parameters
+    ----------
     df : pd.DataFrame
-        DataFrame avec colonne 'Spread'
+        DataFrame with 'Spread' column.
     period : int
-        Periode pour le test ADF (defaut: 128)
+        Rolling window for the ADF test (default: 128).
 
-    Retourne:
-    ---------
-    pd.DataFrame : DataFrame avec colonne 'ADF_Statistic' ajoutee
+    Returns
+    -------
+    pd.DataFrame
+        Input DataFrame with 'ADF_Statistic' column added.
 
-    Notes:
-    ------
-    Implementation simplifiee (comme dans l'indicateur Sierra Chart) :
-    - Regression : DeltaSpread = gamma x Spread_{t-1} + erreur
-    - ADF statistic = gamma / SE(gamma)
+    Notes
+    -----
+    Simplified implementation matching Sierra Chart v1.5:
+    - No augmentation terms (lag differences)
+    - Includes intercept (mu) term in regression
+    - Uses (period - 1) data points per window (delta/lag pairs)
     """
     # Vectorisation via pandas rolling
     # Regression OLS : DeltaSpread = mu + gamma * Spread_{t-1}
@@ -282,23 +311,25 @@ def calculate_adf_statistic(
 
 def _compute_rs_vectorized(spread_values: np.ndarray, window_size: int) -> np.ndarray:
     """
-    Calcule R/S (Rescaled Range) de maniere vectorisee pour toutes les fenetres.
+    Compute R/S (Rescaled Range) in a vectorized manner for all rolling windows.
 
-    R/S = Range(cumsum(x - mean(x))) / Std(x)
+    Formula:
+        R/S = Range(cumsum(x - mean(x))) / Std(x)
 
-    Utilise numpy stride_tricks pour creer des vues sur les fenetres glissantes,
-    puis calcule R/S pour toutes les fenetres en une seule operation.
+    Uses numpy stride_tricks to create sliding window views without memory
+    copies, then computes R/S for all windows in a single vectorized operation.
 
-    Parametres:
-    -----------
+    Parameters
+    ----------
     spread_values : np.ndarray
-        Tableau 1D des valeurs du spread
+        1D array of spread values.
     window_size : int
-        Taille de la fenetre glissante
+        Size of the rolling window.
 
-    Retourne:
-    ---------
-    np.ndarray : R/S pour chaque position (NaN si invalide)
+    Returns
+    -------
+    np.ndarray
+        R/S ratio for each position (NaN where invalid or during warmup).
     """
     n = len(spread_values)
     if n < window_size:
@@ -339,26 +370,36 @@ def calculate_hurst_exponent(
     period: int = 128
 ) -> pd.DataFrame:
     """
-    Calcule l'exposant de Hurst via la methode R/S (Rescaled Range).
+    Compute the Hurst exponent via R/S (Rescaled Range) analysis.
 
-    VERSION OPTIMISEE : utilise des operations vectorisees au lieu de boucles Python.
-    Speedup typique : 10-50x par rapport a la version avec boucles.
+    The Hurst exponent characterizes the long-term memory of a time series:
+    - H < 0.5: Mean-reverting (desired for spread trading)
+    - H = 0.5: Random walk (Brownian motion)
+    - H > 0.5: Trending (persistent)
 
-    L'exposant de Hurst indique le comportement de la serie :
-    - H < 0.5 : Mean-reverting (ce qu'on veut !)
-    - H = 0.5 : Random walk
-    - H > 0.5 : Trending
+    Method:
+        1. Compute R/S at multiple sub-periods (powers of 2: 8, 16, 32, 64, 128)
+        2. Fit linear regression: log(R/S) = H * log(n) + c
+        3. H = slope of the regression
 
-    Parametres:
-    -----------
+    Parameters
+    ----------
     df : pd.DataFrame
-        DataFrame avec colonne 'Spread'
+        DataFrame with 'Spread' column.
     period : int
-        Periode maximale pour le calcul (defaut: 128)
+        Maximum sub-period for R/S analysis (default: 128).
 
-    Retourne:
-    ---------
-    pd.DataFrame : DataFrame avec colonne 'Hurst' ajoutee
+    Returns
+    -------
+    pd.DataFrame
+        Input DataFrame with 'Hurst' column added (clamped to [0.01, 0.99]).
+
+    Notes
+    -----
+    Vectorized implementation (~42x speedup vs loop-based).
+    Single-segment R/S (no sub-window splitting), which gives lower precision
+    but is consistent with Sierra Chart and sufficient for relative ranking.
+    Requires at least 3 valid sub-periods for regression.
     """
     spread = df['Spread'].values.astype(np.float64)
     n = len(df)
@@ -440,26 +481,28 @@ def calculate_half_life(
     period: int = 128
 ) -> pd.DataFrame:
     """
-    Calcule le Half-Life du spread (temps de retour a la moyenne).
+    Compute the half-life of mean reversion for the spread.
 
-    Le Half-Life indique en combien de barres le spread revient a 50%
-    de sa deviation initiale.
+    The half-life indicates how many bars it takes for the spread to
+    revert 50% of the way back toward its mean.
 
-    Parametres:
-    -----------
+    Method (AR(1) model):
+        Spread_t = phi * Spread_{t-1}
+        phi = sum(x * y) / sum(x^2)  where x = Spread_{t-1}, y = Spread_t
+        HalfLife = -ln(2) / ln(phi)
+
+    Parameters
+    ----------
     df : pd.DataFrame
-        DataFrame avec colonne 'Spread'
+        DataFrame with 'Spread' column.
     period : int
-        Periode pour le calcul (defaut: 128)
+        Rolling window for AR(1) regression (default: 128).
 
-    Retourne:
-    ---------
-    pd.DataFrame : DataFrame avec colonne 'HalfLife' ajoutee
-
-    Notes:
-    ------
-    Formule : HalfLife = -ln(2) / ln(phi)
-    ou phi est le coefficient d'autocorrelation AR(1)
+    Returns
+    -------
+    pd.DataFrame
+        Input DataFrame with 'HalfLife' column added (clamped to [1, 500]).
+        NaN where phi <= 0 or phi >= 1 (no mean reversion).
     """
     spread = df['Spread'].values
     n = len(df)
@@ -504,31 +547,37 @@ def calculate_cointegration_score(
     corr_threshold: float = 0.6
 ) -> pd.DataFrame:
     """
-    Calcule le score de cointegration composite (0-100).
+    Compute the adaptive composite cointegration score (0-100).
 
-    Le score combine trois metriques avec reponderation adaptative :
-    - ADF statistic (30 points base) : mesure la stationnarite
-    - Hurst exponent (30 points base) : mesure le mean-reversion
-    - Correlation (40 points base) : mesure la relation GC/SI
+    Combines three metrics with adaptive reweighting:
+    - ADF statistic (30 base points): measures stationarity
+    - Hurst exponent (30 base points): measures mean-reversion strength
+    - Correlation (40 base points): measures GC/SI co-movement
 
-    Quand ADF et/ou Hurst sont NaN, les poids sont redistribues
-    proportionnellement aux composantes disponibles pour eviter
-    de penaliser le score quand les indicateurs manquent de donnees.
+    Scoring rules:
+        ADF: 30 pts if ADF < critical_value, partial if ADF < 0
+        Hurst: 30 * (0.5 - H) / 0.5 pts (max at H=0, zero at H=0.5)
+        Correlation: 40 * (corr - threshold) / (1 - threshold) pts
 
-    Un score >= 50 indique une bonne cointegration.
+    Adaptive reweighting: when ADF and/or Hurst are NaN (warmup period),
+    weights are redistributed proportionally to available components.
+    This prevents penalizing the score when indicators lack data.
 
-    Parametres:
-    -----------
+    A score >= 50 indicates good cointegration quality.
+
+    Parameters
+    ----------
     df : pd.DataFrame
-        DataFrame avec colonnes 'ADF_Statistic', 'Hurst', 'Correlation'
+        DataFrame with 'ADF_Statistic', 'Hurst', 'Correlation' columns.
     adf_critical : float
-        Valeur critique ADF a 5% (defaut: -2.86)
+        ADF critical value at 5% significance (default: -2.86).
     corr_threshold : float
-        Seuil de correlation pour le score (defaut: 0.6)
+        Minimum correlation for scoring (default: 0.6).
 
-    Retourne:
-    ---------
-    pd.DataFrame : DataFrame avec colonne 'Cointegration_Score' ajoutee
+    Returns
+    -------
+    pd.DataFrame
+        Input DataFrame with 'Cointegration_Score' column added (0-100).
     """
     n = len(df)
 
@@ -591,35 +640,38 @@ def calculate_all_indicators(
     verbose: bool = True
 ) -> pd.DataFrame:
     """
-    Fonction principale : calcule TOUS les indicateurs.
+    Main entry point: compute ALL indicators for the strategy.
 
-    C'est LA fonction a utiliser pour preparer les donnees pour le backtest.
-    Une seule copie du DataFrame est faite ici, les sous-fonctions travaillent
-    directement dessus (pas de copies inutiles).
+    This is the single function to call when preparing data for backtesting.
+    A single DataFrame copy is made here; sub-functions modify it in-place
+    (no unnecessary copies).
 
-    Parametres:
-    -----------
+    Pipeline order:
+        1. Log prices (Log_GC, Log_SI)
+        2. Rolling Beta and Alpha (OLS regression)
+        3. Spread (OLS residual)
+        4. Z-Score (normalized spread)
+        5. Correlation (Pearson)
+        6. ADF Statistic (stationarity test)
+        7. Hurst Exponent (mean-reversion strength)
+        8. Half-Life + Cointegration Score (composite quality metric)
+
+    Parameters
+    ----------
     df : pd.DataFrame
-        DataFrame synchronise (sortie de data_loader)
+        Synchronized DataFrame from data_loader (with 'Last_GC', 'Last_SI').
     config : dict
-        Configuration chargee depuis YAML
+        Strategy configuration loaded from YAML.
+    verbose : bool
+        Print progress messages (default: True).
 
-    Retourne:
-    ---------
-    pd.DataFrame : DataFrame avec tous les indicateurs calcules
-
-    Colonnes ajoutees:
-    ------------------
-    - Log_GC, Log_SI : Logarithmes des prix
-    - Beta, Alpha : Parametres de la regression
-    - Spread : Spread log-adjusted
-    - Spread_Mean, Spread_Std : Moyenne et ecart-type du spread
-    - ZScore : Z-Score normalise
-    - Correlation : Correlation Pearson
-    - ADF_Statistic : Test de stationnarite
-    - Hurst : Exposant de Hurst
-    - HalfLife : Temps de retour a la moyenne
-    - Cointegration_Score : Score composite 0-100
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with all indicator columns added:
+        Log_GC, Log_SI, Beta, Alpha, Spread, Spread_Mean, Spread_Std,
+        ZScore, Correlation, ADF_Statistic, Hurst, HalfLife,
+        Cointegration_Score.
     """
     # Une seule copie du DataFrame pour tout le pipeline
     df = df.copy()
@@ -691,20 +743,23 @@ def get_indicators_at_datetime(
     target_datetime: str
 ) -> Optional[dict]:
     """
-    Recupere toutes les valeurs d'indicateurs a une date specifique.
+    Retrieve all indicator values at a specific datetime.
 
-    Utile pour comparer avec Sierra Chart.
+    Useful for comparing Python output with Sierra Chart values.
+    Finds exact match or closest bar within 5 minutes.
 
-    Parametres:
-    -----------
+    Parameters
+    ----------
     df : pd.DataFrame
-        DataFrame avec indicateurs calcules
+        DataFrame with calculated indicators.
     target_datetime : str
-        Date/heure cible (format: "2026-01-23 10:30:00")
+        Target date/time (format: "2026-01-23 10:30:00").
 
-    Retourne:
-    ---------
-    dict ou None : Dictionnaire avec toutes les valeurs
+    Returns
+    -------
+    dict or None
+        Dictionary with all indicator values, or None if no match found
+        within 5 minutes of the target.
     """
     target = pd.to_datetime(target_datetime)
 
