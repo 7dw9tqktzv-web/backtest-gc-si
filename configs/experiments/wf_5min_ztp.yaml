@@ -1,0 +1,95 @@
+# Walk-Forward Test 5-min avec variantes zTP sur 3 ans
+# 4 configs (zTP=-1.0, -0.5, 0.0, 1.0), ~30 fenetres
+#
+# Usage: python scripts/run_walk_forward.py --config configs/experiments/wf_5min_ztp.yaml
+
+type: walk_forward
+title: "WALK-FORWARD TEST 5-MIN - CONFIG zTP=-1.0"
+
+execution:
+  timeframe: 5min
+  output_path: output/walk_forward_5min_ztp_results.csv
+
+walk_forward:
+  train_days: 63
+  test_days: 21
+  step_days: 21
+  warmup_bars: 3000
+  selection_criterion: pnl_net
+
+configs:
+  - label: "zTP-1.0_b2640_zp20_cp30_adf26_co40_zSL4.0"
+    overrides:
+      indicators.beta_lookback: 2640
+      indicators.zscore_period: 20
+      indicators.correlation_period: 30
+      indicators.adf_hurst_period: 26
+      entry.zscore_long: -3.5
+      entry.zscore_short: 3.5
+      entry.cointegration_score_min: 40
+      exit.zscore_tp_enabled: true
+      exit.zscore_tp_long: 1.0
+      exit.zscore_tp_short: -1.0
+      exit.zscore_sl_long: -4.0
+      exit.zscore_sl_short: 4.0
+      exit.pnl_take_profit: 99999
+      exit.pnl_stop_loss: -99999
+      costs.slippage_gc_ticks: 2
+      costs.slippage_si_ticks: 2
+
+  - label: "zTP-0.5_b2640_zp20_cp30_adf26_co40_zSL4.0"
+    overrides:
+      indicators.beta_lookback: 2640
+      indicators.zscore_period: 20
+      indicators.correlation_period: 30
+      indicators.adf_hurst_period: 26
+      entry.zscore_long: -3.5
+      entry.zscore_short: 3.5
+      entry.cointegration_score_min: 40
+      exit.zscore_tp_enabled: true
+      exit.zscore_tp_long: 0.5
+      exit.zscore_tp_short: -0.5
+      exit.zscore_sl_long: -4.0
+      exit.zscore_sl_short: 4.0
+      exit.pnl_take_profit: 99999
+      exit.pnl_stop_loss: -99999
+      costs.slippage_gc_ticks: 2
+      costs.slippage_si_ticks: 2
+
+  - label: "zTP0.0_b2640_zp20_cp30_adf26_co40_zSL4.0"
+    overrides:
+      indicators.beta_lookback: 2640
+      indicators.zscore_period: 20
+      indicators.correlation_period: 30
+      indicators.adf_hurst_period: 26
+      entry.zscore_long: -3.5
+      entry.zscore_short: 3.5
+      entry.cointegration_score_min: 40
+      exit.zscore_tp_enabled: true
+      exit.zscore_tp_long: 0.0
+      exit.zscore_tp_short: 0.0
+      exit.zscore_sl_long: -4.0
+      exit.zscore_sl_short: 4.0
+      exit.pnl_take_profit: 99999
+      exit.pnl_stop_loss: -99999
+      costs.slippage_gc_ticks: 2
+      costs.slippage_si_ticks: 2
+
+  - label: "zTP1.0_b2640_zp20_cp30_adf26_co40_zSL4.0"
+    overrides:
+      indicators.beta_lookback: 2640
+      indicators.zscore_period: 20
+      indicators.correlation_period: 30
+      indicators.adf_hurst_period: 26
+      entry.zscore_long: -3.5
+      entry.zscore_short: 3.5
+      entry.cointegration_score_min: 40
+      exit.zscore_tp_enabled: true
+      exit.zscore_tp_long: -1.0
+      exit.zscore_tp_short: 1.0
+      exit.zscore_sl_long: -4.0
+      exit.zscore_sl_short: 4.0
+      exit.pnl_take_profit: 99999
+      exit.pnl_stop_loss: -99999
+      costs.slippage_gc_ticks: 2
+      costs.slippage_si_ticks: 2

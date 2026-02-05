@@ -1,0 +1,35 @@
+# Grid Search 5-min - zTP etendu (-1.0 a +2.0)
+# 1,080 groupes x 42 variantes = 45,360 configs
+# zTP negatif = overshoot, zTP positif = reversion partielle
+#
+# Usage: python scripts/run_grid_search.py --config configs/experiments/grid_ztp_extended.yaml
+
+type: grid_search
+title: "GRID SEARCH 5-MIN - ZTP ETENDU (-1.0 a +2.0)"
+exit_mode: zscore
+
+execution:
+  timeframe: 5min
+  num_workers: 24
+  output_path: output/grid_search_5min_ztp_extended.csv
+  min_trades_for_sharpe: 10
+
+indicators:
+  beta_lookback: [132, 264, 396, 528, 792, 1320, 2640, 3960, 5280]
+  zscore_period: [10, 15, 20, 30, 50, 60, 80, 100]
+  correlation_period: [15, 30, 50, 60, 80]
+  adf_hurst_period: [26, 64, 128]
+
+entry_exit:
+  zscore_entry: [3.5]           # Fixe (seul qui fonctionne)
+  cointegration_min: [40, 50]
+  zscore_tp: [-1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0]   # Etendu !
+  zscore_sl: [3.5, 4.0, 5.0]
+  dollar_modes: [pure_zscore]
+
+fixed_overrides:
+  exit.zscore_tp_enabled: true
+  exit.pnl_take_profit: 99999
+  exit.pnl_stop_loss: -99999
+  costs.slippage_gc_ticks: 2
+  costs.slippage_si_ticks: 2

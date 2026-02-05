@@ -32,17 +32,24 @@ python src/position.py
 python src/backtest_engine_hybrid.py   # Hybrid 1-min + 5s (recommended)
 python src/metrics.py                  # Performance analysis + archiving
 
-# Grid search / walk-forward
-python run_grid_search_3y.py           # 32,400 configs 1-min, 3 years, 24 workers
-python run_grid_search_5min.py         # 155,520 configs 5-min, 3 years, 24 workers (~10h)
-python run_grid_search_beta_long.py    # 4,050 configs beta long (15-30 days)
-python run_grid_search_ztp_extended.py # Extended Z-Score TP grid search
-python run_grid_search_extended_1tick.py  # Extended grid with 1-tick slippage
-python run_grid_search_top100_1tick.py    # Top 100 configs with 1-tick slippage
-python run_walk_forward.py             # 6-window walk-forward validation
-python run_walk_forward_3y.py          # Full 3-year walk-forward analysis
-python run_walk_forward_5min_ztp.py    # 34-window walk-forward 5-min zTP
-python run_walk_forward_beta_long.py   # 34-window walk-forward beta long
+# Grid search (YAML-driven, unified runner)
+python scripts/run_grid_search.py --config configs/experiments/grid_3y.yaml          # 32,400 configs 1-min
+python scripts/run_grid_search.py --config configs/experiments/grid_5min.yaml        # 155,520 configs 5-min
+python scripts/run_grid_search.py --config configs/experiments/grid_beta_long.yaml   # 4,050 configs beta long
+python scripts/run_grid_search.py --config configs/experiments/grid_ztp_extended.yaml # Extended Z-Score TP
+python scripts/run_grid_search.py --config configs/experiments/grid_5min_test.yaml   # 12 configs smoke test
+
+# Walk-forward (YAML-driven, unified runner)
+python scripts/run_walk_forward.py --config configs/experiments/wf_base.yaml         # 6-window validation
+python scripts/run_walk_forward.py --config configs/experiments/wf_3y.yaml           # Full 3-year analysis
+python scripts/run_walk_forward.py --config configs/experiments/wf_5min_ztp.yaml     # 34-window 5-min zTP
+python scripts/run_walk_forward.py --config configs/experiments/wf_beta_long.yaml    # 34-window beta long
+
+# Special scripts (custom logic, not YAML-izable)
+python scripts/run_grid_no_tp_zscore.py        # 6 TP_ZSCORE modes with manual loop
+python scripts/run_grid_search_extended_1tick.py  # 3 TP_ZSCORE modes + custom worker
+python scripts/run_grid_search_top100_1tick.py    # Retest top 100 from CSV + comparison
+python scripts/run_top5_archive.py                # Archive top 5 with metrics + equity curve
 
 # Post-grid-search analysis
 python src/report_generator.py output/grid_search_xxx.csv --description "..."
@@ -371,7 +378,9 @@ Indicator harmonization complete. Remaining tasks for paper trading:
 
 ### Priority 2 -- Code Quality
 - **Add pytest tests**: unit tests for indicators, signals, position sizing (112 tests done)
-- **Consolidate run_*.py scripts**: reduce duplication (done, -66% code)
+- **Consolidate run_*.py scripts**: DONE (Phase 1: -66% code, Phase 2: unified YAML runners)
+  - 10 scripts replaced by 2 generic runners + 10 YAML configs in `configs/experiments/`
+  - 4 special scripts moved to `scripts/` (custom logic not YAML-izable)
 - **Clean up validation scripts**: archive or remove compare_*.py, check_*.py, investigate_*.py
 - **Increase test coverage**: signals.py (53%), position.py (48%) need more tests
 
@@ -445,10 +454,28 @@ backtest_gc_si/
 │   ├── test_indicators.py
 │   ├── test_position.py
 │   └── test_signals.py
+├── scripts/                    # Execution scripts
+│   ├── run_grid_search.py      # Generic YAML-driven grid search runner
+│   ├── run_walk_forward.py     # Generic YAML-driven walk-forward runner
+│   ├── run_grid_no_tp_zscore.py         # Special: 6 TP_ZSCORE modes
+│   ├── run_grid_search_extended_1tick.py # Special: custom worker
+│   ├── run_grid_search_top100_1tick.py   # Special: retest from CSV
+│   └── run_top5_archive.py              # Special: archiving workflow
+├── configs/
+│   └── experiments/            # YAML configs for grid search & walk-forward
+│       ├── grid_3y.yaml        # 32,400 configs 1-min dollar mode
+│       ├── grid_5min.yaml      # 155,520 configs 5-min zscore mode
+│       ├── grid_beta_long.yaml # 4,050 configs beta long
+│       ├── grid_ztp_extended.yaml # 45,360 configs zscore TP extended
+│       ├── grid_5min_test.yaml # 12 configs smoke test
+│       ├── grid_5min_hybrid.yaml # 4,032 configs hybrid
+│       ├── wf_base.yaml        # Walk-forward 6 windows
+│       ├── wf_3y.yaml          # Walk-forward 3 years
+│       ├── wf_5min_ztp.yaml    # Walk-forward 5-min zTP
+│       └── wf_beta_long.yaml   # Walk-forward beta long
 ├── output/
 │   ├── archive/                # Archived backtest results
 │   └── *.csv                   # Grid search results
-├── run_*.py                    # Execution scripts (10 scripts)
 ├── DOC SIERRA/                 # Sierra Chart files (gitignored)
 ├── CLAUDE.md                   # This file
 ├── CHANGELOG.md                # Optimization history

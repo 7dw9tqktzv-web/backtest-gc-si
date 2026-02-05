@@ -1,0 +1,154 @@
+# Walk-Forward 3 ans - Top configs du grid search etendu (1 tick slippage)
+# 10 configs (5 top PnL + 5 top Sharpe, Sharpe >= 1.0), 34 fenetres
+#
+# Usage: python scripts/run_walk_forward.py --config configs/experiments/wf_3y.yaml
+
+type: walk_forward
+title: "WALK-FORWARD 3 ANS - TOP CONFIGS (1 TICK SLIPPAGE)"
+
+execution:
+  timeframe: 1min
+  output_path: output/walk_forward_3y_results.csv
+
+walk_forward:
+  train_days: 63
+  test_days: 21
+  step_days: 21
+  warmup_bars: 4000
+  selection_criterion: pnl_net
+
+# Defaults : appliques sauf si le config les override
+# (ex: Sh1-3 overrident exit.zscore_tp_enabled avec true)
+defaults:
+  costs.slippage_gc_ticks: 1
+  costs.slippage_si_ticks: 1
+  exit.zscore_tp_enabled: false
+
+configs:
+  # --- Top 5 par PnL (Sharpe >= 1.0) ---
+  - label: "PnL1_b1320_zp20_cp30_zE3.5_co50_TP500_SL1200"
+    overrides:
+      indicators.beta_lookback: 1320
+      indicators.zscore_period: 20
+      indicators.correlation_period: 30
+      indicators.adf_hurst_period: 128
+      entry.zscore_long: -3.5
+      entry.zscore_short: 3.5
+      entry.cointegration_score_min: 50
+      exit.pnl_take_profit: 500
+      exit.pnl_stop_loss: -1200
+
+  - label: "PnL2_b1320_zp20_cp30_zE3.5_co50_TP1000_SL1200"
+    overrides:
+      indicators.beta_lookback: 1320
+      indicators.zscore_period: 20
+      indicators.correlation_period: 30
+      indicators.adf_hurst_period: 128
+      entry.zscore_long: -3.5
+      entry.zscore_short: 3.5
+      entry.cointegration_score_min: 50
+      exit.pnl_take_profit: 1000
+      exit.pnl_stop_loss: -1200
+
+  - label: "PnL3_b1320_zp20_cp30_zE3.5_co50_TP500_SL1400"
+    overrides:
+      indicators.beta_lookback: 1320
+      indicators.zscore_period: 20
+      indicators.correlation_period: 30
+      indicators.adf_hurst_period: 128
+      entry.zscore_long: -3.5
+      entry.zscore_short: 3.5
+      entry.cointegration_score_min: 50
+      exit.pnl_take_profit: 500
+      exit.pnl_stop_loss: -1400
+
+  - label: "PnL4_b1320_zp20_cp30_zE3.5_co50_TP500_SL800"
+    overrides:
+      indicators.beta_lookback: 1320
+      indicators.zscore_period: 20
+      indicators.correlation_period: 30
+      indicators.adf_hurst_period: 128
+      entry.zscore_long: -3.5
+      entry.zscore_short: 3.5
+      entry.cointegration_score_min: 50
+      exit.pnl_take_profit: 500
+      exit.pnl_stop_loss: -800
+
+  - label: "PnL5_b1320_zp20_cp30_zE3.5_co50_TP500_SL1000"
+    overrides:
+      indicators.beta_lookback: 1320
+      indicators.zscore_period: 20
+      indicators.correlation_period: 30
+      indicators.adf_hurst_period: 128
+      entry.zscore_long: -3.5
+      entry.zscore_short: 3.5
+      entry.cointegration_score_min: 50
+      exit.pnl_take_profit: 500
+      exit.pnl_stop_loss: -1000
+
+  # --- Top 5 par Sharpe (min 15 trades, Sharpe >= 1.0) ---
+  - label: "Sh1_b660_zp15_cp20_zE3.0_co60_TP300_SL800"
+    overrides:
+      indicators.beta_lookback: 660
+      indicators.zscore_period: 15
+      indicators.correlation_period: 20
+      indicators.adf_hurst_period: 128
+      entry.zscore_long: -3.0
+      entry.zscore_short: 3.0
+      entry.cointegration_score_min: 60
+      exit.pnl_take_profit: 300
+      exit.pnl_stop_loss: -800
+      exit.zscore_tp_enabled: true
+      exit.zscore_tp_min_pnl: 0
+
+  - label: "Sh2_b660_zp15_cp60_zE3.0_co60_TP400_SL800"
+    overrides:
+      indicators.beta_lookback: 660
+      indicators.zscore_period: 15
+      indicators.correlation_period: 60
+      indicators.adf_hurst_period: 128
+      entry.zscore_long: -3.0
+      entry.zscore_short: 3.0
+      entry.cointegration_score_min: 60
+      exit.pnl_take_profit: 400
+      exit.pnl_stop_loss: -800
+      exit.zscore_tp_enabled: true
+      exit.zscore_tp_min_pnl: 0
+
+  - label: "Sh3_b660_zp15_cp20_zE3.0_co50_TP200_SL800_F200"
+    overrides:
+      indicators.beta_lookback: 660
+      indicators.zscore_period: 15
+      indicators.correlation_period: 20
+      indicators.adf_hurst_period: 128
+      entry.zscore_long: -3.0
+      entry.zscore_short: 3.0
+      entry.cointegration_score_min: 50
+      exit.pnl_take_profit: 200
+      exit.pnl_stop_loss: -800
+      exit.zscore_tp_enabled: true
+      exit.zscore_tp_min_pnl: 200
+
+  - label: "Sh4_b1320_zp20_cp20_zE3.5_co50_TP400_SL800"
+    overrides:
+      indicators.beta_lookback: 1320
+      indicators.zscore_period: 20
+      indicators.correlation_period: 20
+      indicators.adf_hurst_period: 128
+      entry.zscore_long: -3.5
+      entry.zscore_short: 3.5
+      entry.cointegration_score_min: 50
+      exit.pnl_take_profit: 400
+      exit.pnl_stop_loss: -800
+
+  - label: "Sh5_b1980_zp20_cp20_zE3.5_co60_TP400_SL800"
+    overrides:
+      indicators.beta_lookback: 1980
+      indicators.zscore_period: 20
+      indicators.correlation_period: 20
+      indicators.adf_hurst_period: 128
+      entry.zscore_long: -3.5
+      entry.zscore_short: 3.5
+      entry.cointegration_score_min: 60
+      exit.pnl_take_profit: 400
+      exit.pnl_stop_loss: -800

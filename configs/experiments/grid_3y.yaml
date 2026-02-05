@@ -1,0 +1,31 @@
+# Grid Search Phase 1 - Donnees 3 ans (Jan 2023 - Jan 2026)
+# 300 groupes indicateurs x 108 entry/exit = 32,400 configs
+#
+# Usage: python scripts/run_grid_search.py --config configs/experiments/grid_3y.yaml
+
+type: grid_search
+title: "GRID SEARCH PHASE 1 - DONNEES 3 ANS (PARALLELE)"
+exit_mode: dollar
+
+execution:
+  timeframe: 1min
+  num_workers: 24
+  output_path: output/grid_search_3y_phase1.csv
+  min_trades_for_sharpe: 20
+
+indicators:
+  beta_lookback: [660, 1320, 1980, 2640, 3960]
+  zscore_period: [15, 20, 30, 50, 60]
+  correlation_period: [20, 30, 50, 60]
+  adf_hurst_period: [64, 128, 256]
+
+entry_exit:
+  zscore_entry: [2.0, 2.5, 3.0, 3.5]
+  cointegration_min: [40, 50, 60]
+  pnl_take_profit: [200, 300, 400]
+  pnl_stop_loss: [-400, -600, -800]
+
+fixed_overrides:
+  exit.zscore_tp_min_pnl: 0
+  costs.slippage_gc_ticks: 2
+  costs.slippage_si_ticks: 2

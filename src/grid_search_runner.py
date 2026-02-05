@@ -408,55 +408,51 @@ def create_standard_entry_exit_generator(
     return generator
 
 
-def create_standard_label_builder() -> Callable[[str, Dict], str]:
-    """
-    Cree un label builder standard pour le mode dollar.
+def _standard_label_builder(group_prefix: str, ee: Dict) -> str:
+    """Label builder standard pour le mode dollar (module-level, picklable)."""
+    zE = abs(ee.get("entry.zscore_long", 0))
+    co = ee.get("entry.cointegration_score_min", 0)
+    tp = ee.get("exit.pnl_take_profit", 0)
+    sl = abs(ee.get("exit.pnl_stop_loss", 0))
+    return f"{group_prefix}_zE{zE}_co{co}_TP{tp}_SL{sl}"
 
-    Returns:
-        Fonction(group_prefix, ee_variant) -> label
-    """
-    def builder(group_prefix: str, ee: Dict) -> str:
-        zE = abs(ee.get("entry.zscore_long", 0))
-        co = ee.get("entry.cointegration_score_min", 0)
-        tp = ee.get("exit.pnl_take_profit", 0)
-        sl = abs(ee.get("exit.pnl_stop_loss", 0))
-        return f"{group_prefix}_zE{zE}_co{co}_TP{tp}_SL{sl}"
-    return builder
+
+def _standard_result_builder(label, ind_ov, ee, m, tp_zscore, tp_dollar, sl_zscore, sl_dollar):
+    """Result builder standard (module-level, picklable)."""
+    beta = ind_ov.get("indicators.beta_lookback", 0)
+    zp = ind_ov.get("indicators.zscore_period", 0)
+    cp = ind_ov.get("indicators.correlation_period", 0)
+    adf = ind_ov.get("indicators.adf_hurst_period", 0)
+
+    zE = abs(ee.get("entry.zscore_long", 0))
+    co = ee.get("entry.cointegration_score_min", 0)
+    tp = ee.get("exit.pnl_take_profit", 0)
+    sl = abs(ee.get("exit.pnl_stop_loss", 0))
+
+    return {
+        "label": label,
+        "beta": beta, "zp": zp, "cp": cp, "adf": adf,
+        "zE": zE, "co": co, "TP": tp, "SL": sl,
+        "trades": m["trades"], "long": m["long"], "short": m["short"],
+        "win_rate": round(m["win_rate"], 1),
+        "pnl_net": round(m["pnl_net"], 0),
+        "pnl_avg": round(m["pnl_avg"], 2),
+        "profit_factor": round(m["profit_factor"], 2),
+        "max_dd": round(m["max_dd"], 0),
+        "sharpe": round(m["sharpe"], 2),
+        "tp_zscore": tp_zscore, "tp_dollar": tp_dollar,
+        "sl_zscore": sl_zscore, "sl_dollar": sl_dollar,
+    }
+
+
+def create_standard_label_builder() -> Callable[[str, Dict], str]:
+    """Retourne le label builder standard pour le mode dollar."""
+    return _standard_label_builder
 
 
 def create_standard_result_builder() -> Callable:
-    """
-    Cree un result builder standard.
-
-    Returns:
-        Fonction qui construit le dict resultat
-    """
-    def builder(label, ind_ov, ee, m, tp_zscore, tp_dollar, sl_zscore, sl_dollar):
-        beta = ind_ov.get("indicators.beta_lookback", 0)
-        zp = ind_ov.get("indicators.zscore_period", 0)
-        cp = ind_ov.get("indicators.correlation_period", 0)
-        adf = ind_ov.get("indicators.adf_hurst_period", 0)
-
-        zE = abs(ee.get("entry.zscore_long", 0))
-        co = ee.get("entry.cointegration_score_min", 0)
-        tp = ee.get("exit.pnl_take_profit", 0)
-        sl = abs(ee.get("exit.pnl_stop_loss", 0))
-
-        return {
-            "label": label,
-            "beta": beta, "zp": zp, "cp": cp, "adf": adf,
-            "zE": zE, "co": co, "TP": tp, "SL": sl,
-            "trades": m["trades"], "long": m["long"], "short": m["short"],
-            "win_rate": round(m["win_rate"], 1),
-            "pnl_net": round(m["pnl_net"], 0),
-            "pnl_avg": round(m["pnl_avg"], 2),
-            "profit_factor": round(m["profit_factor"], 2),
-            "max_dd": round(m["max_dd"], 0),
-            "sharpe": round(m["sharpe"], 2),
-            "tp_zscore": tp_zscore, "tp_dollar": tp_dollar,
-            "sl_zscore": sl_zscore, "sl_dollar": sl_dollar,
-        }
-    return builder
+    """Retourne le result builder standard."""
+    return _standard_result_builder
 
 
 # ============================================================================
@@ -494,8 +490,8 @@ def create_zscore_entry_exit_generator(
                                 "entry.zscore_long": -abs(zE),
                                 "entry.zscore_short": abs(zE),
                                 "entry.cointegration_score_min": co,
-                                "exit.zscore_tp_long": -abs(zTP),
-                                "exit.zscore_tp_short": abs(zTP),
+                                "exit.zscore_tp_long": -zTP,
+                                "exit.zscore_tp_short": zTP,
                                 "exit.zscore_sl_long": -abs(zSL),
                                 "exit.zscore_sl_short": abs(zSL),
                             }
@@ -516,37 +512,43 @@ def create_zscore_entry_exit_generator(
     return generator
 
 
+def _zscore_label_builder(group_prefix: str, ee: Dict) -> str:
+    """Label builder pour le mode Z-Score pur (module-level, picklable)."""
+    mode_tag = "pure" if ee.get("mode") == "pure_zscore" else "safe"
+    return (f"{group_prefix}_zE{ee['zE']}_co{ee['co']}"
+            f"_zTP{ee['zTP']}_zSL{ee['zSL']}_{mode_tag}")
+
+
+def _zscore_result_builder(label, ind_ov, ee, m, tp_zscore, tp_dollar, sl_zscore, sl_dollar):
+    """Result builder pour le mode Z-Score pur (module-level, picklable)."""
+    beta = ind_ov.get("indicators.beta_lookback", 0)
+    zp = ind_ov.get("indicators.zscore_period", 0)
+    cp = ind_ov.get("indicators.correlation_period", 0)
+    adf = ind_ov.get("indicators.adf_hurst_period", 0)
+
+    return {
+        "label": label,
+        "beta": beta, "zp": zp, "cp": cp, "adf": adf,
+        "zE": ee["zE"], "co": ee["co"],
+        "zTP": ee["zTP"], "zSL": ee["zSL"],
+        "mode": ee["mode"],
+        "trades": m["trades"], "long": m["long"], "short": m["short"],
+        "win_rate": round(m["win_rate"], 1),
+        "pnl_net": round(m["pnl_net"], 0),
+        "pnl_avg": round(m["pnl_avg"], 2),
+        "profit_factor": round(m["profit_factor"], 2),
+        "max_dd": round(m["max_dd"], 0),
+        "sharpe": round(m["sharpe"], 2),
+        "tp_zscore": tp_zscore, "tp_dollar": tp_dollar,
+        "sl_zscore": sl_zscore, "sl_dollar": sl_dollar,
+    }
+
+
 def create_zscore_label_builder() -> Callable[[str, Dict], str]:
-    """Cree un label builder pour le mode Z-Score pur."""
-    def builder(group_prefix: str, ee: Dict) -> str:
-        mode_tag = "pure" if ee.get("mode") == "pure_zscore" else "safe"
-        return (f"{group_prefix}_zE{ee['zE']}_co{ee['co']}"
-                f"_zTP{ee['zTP']}_zSL{ee['zSL']}_{mode_tag}")
-    return builder
+    """Retourne le label builder pour le mode Z-Score pur."""
+    return _zscore_label_builder
 
 
 def create_zscore_result_builder() -> Callable:
-    """Cree un result builder pour le mode Z-Score pur."""
-    def builder(label, ind_ov, ee, m, tp_zscore, tp_dollar, sl_zscore, sl_dollar):
-        beta = ind_ov.get("indicators.beta_lookback", 0)
-        zp = ind_ov.get("indicators.zscore_period", 0)
-        cp = ind_ov.get("indicators.correlation_period", 0)
-        adf = ind_ov.get("indicators.adf_hurst_period", 0)
-
-        return {
-            "label": label,
-            "beta": beta, "zp": zp, "cp": cp, "adf": adf,
-            "zE": ee["zE"], "co": ee["co"],
-            "zTP": ee["zTP"], "zSL": ee["zSL"],
-            "mode": ee["mode"],
-            "trades": m["trades"], "long": m["long"], "short": m["short"],
-            "win_rate": round(m["win_rate"], 1),
-            "pnl_net": round(m["pnl_net"], 0),
-            "pnl_avg": round(m["pnl_avg"], 2),
-            "profit_factor": round(m["profit_factor"], 2),
-            "max_dd": round(m["max_dd"], 0),
-            "sharpe": round(m["sharpe"], 2),
-            "tp_zscore": tp_zscore, "tp_dollar": tp_dollar,
-            "sl_zscore": sl_zscore, "sl_dollar": sl_dollar,
-        }
-    return builder
+    """Retourne le result builder pour le mode Z-Score pur."""
+    return _zscore_result_builder

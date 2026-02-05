@@ -14,7 +14,7 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 
-sys.path.insert(0, "src")
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 from run_helpers import count_exit_reasons, check_csv_resumption, save_batch_csv, print_top_configs
 
 # ============================================================================

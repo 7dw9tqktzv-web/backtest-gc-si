@@ -20,7 +20,7 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 
-sys.path.insert(0, "src")
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from data_loader import load_and_prepare_data, load_5s_data
 from indicators import calculate_all_indicators

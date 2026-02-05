@@ -1,0 +1,35 @@
+# Grid Search 5-min - Beta longs (15j, 20j, 30j)
+# 225 groupes x 18 variantes = 4,050 configs
+# zTP negatif = overshoot (LONG TP au-dela de 0)
+#
+# Usage: python scripts/run_grid_search.py --config configs/experiments/grid_beta_long.yaml
+
+type: grid_search
+title: "GRID SEARCH 5-MIN - BETA LONGS (15j, 20j, 30j)"
+exit_mode: zscore
+
+execution:
+  timeframe: 5min
+  num_workers: 24
+  output_path: output/grid_search_beta_long.csv
+  min_trades_for_sharpe: 10
+
+indicators:
+  beta_lookback: [3960, 5280, 7920]
+  zscore_period: [12, 24, 36, 48, 60]
+  correlation_period: [12, 24, 36, 48, 60]
+  adf_hurst_period: [26, 64, 128]
+
+entry_exit:
+  zscore_entry: [2.5, 3.0, 3.5]
+  cointegration_min: [40, 50, 60]
+  zscore_tp: [0.0, -1.0]       # 0.0=reversion complete, -1.0=overshoot
+  zscore_sl: [4.0]              # Fixe
+  dollar_modes: [pure_zscore]
+
+fixed_overrides:
+  exit.zscore_tp_enabled: true
+  exit.pnl_take_profit: 99999
+  exit.pnl_stop_loss: -99999
+  costs.slippage_gc_ticks: 2
+  costs.slippage_si_ticks: 2
