@@ -33,14 +33,16 @@ python src/backtest_engine_hybrid.py   # Hybrid 1-min + 5s (recommended)
 python src/metrics.py                  # Performance analysis + archiving
 
 # Grid search / walk-forward
-python run_grid_search_5min.py         # 155,520 configs 5-min, 3 years, 24 workers (~10h)
 python run_grid_search_3y.py           # 32,400 configs 1-min, 3 years, 24 workers
+python run_grid_search_5min.py         # 155,520 configs 5-min, 3 years, 24 workers (~10h)
 python run_grid_search_beta_long.py    # 4,050 configs beta long (15-30 days)
-python run_grid_search_hmm_full.py     # 129,600 configs HMM filter evaluation (~3h)
+python run_grid_search_ztp_extended.py # Extended Z-Score TP grid search
+python run_grid_search_extended_1tick.py  # Extended grid with 1-tick slippage
+python run_grid_search_top100_1tick.py    # Top 100 configs with 1-tick slippage
 python run_walk_forward.py             # 6-window walk-forward validation
+python run_walk_forward_3y.py          # Full 3-year walk-forward analysis
 python run_walk_forward_5min_ztp.py    # 34-window walk-forward 5-min zTP
 python run_walk_forward_beta_long.py   # 34-window walk-forward beta long
-python run_walk_forward_hmm.py         # 48-window walk-forward HMM configs
 
 # Post-grid-search analysis
 python src/report_generator.py output/grid_search_xxx.csv --description "..."
@@ -61,6 +63,23 @@ Sierra Chart 5s CSV -> data_loader.py (load_5s_data) -> [Parquet cache] -> backt
 
 optimizer.py: loads data once -> loops N configs -> calculate_all_indicators -> run_hybrid_backtest -> comparison table
 report_generator.py: grid search CSV -> latest_summary.txt + CHANGELOG.md section (CLI post-analysis)
+```
+
+### Source Files (src/)
+```
+Total: 6,152 lines
+├── metrics.py               (941 lines)  - Performance analysis, equity curve, archiving
+├── indicators.py            (811 lines)  - Beta, Z-Score, Correlation, ADF, Hurst
+├── backtest_engine_hybrid.py(597 lines)  - Main backtest engine (1min + 5s)
+├── optimizer.py             (564 lines)  - Multi-config optimization
+├── grid_search_runner.py    (552 lines)  - Parallel grid search
+├── data_loader.py           (533 lines)  - CSV loading, sync, Parquet cache
+├── report_generator.py      (529 lines)  - Post-grid-search analysis
+├── signals.py               (508 lines)  - State machine, signal generation
+├── walk_forward_runner.py   (406 lines)  - Walk-forward validation
+├── position.py              (398 lines)  - Dollar-neutral sizing
+├── common.py                (260 lines)  - Shared constants and functions
+└── __init__.py               (53 lines)
 ```
 
 ### Key Entry Points
@@ -84,20 +103,33 @@ Key field: `indicators.period` defines the calculation timeframe (1min, 5min, 15
 ### Archiving Structure
 ```
 output/archive/
-  CLASSEMENT.txt                                     <- Summary with recommendations
-  index.csv                                          <- Global index of all runs
-  5min/
-    top_pnl/                                         <- Top 10 by PnL (01 = best)
-      01_b2640_zp20_cp30_adf26_zTP1.0_co40_pnl22604/
-      02_...
-    top_sharpe/                                      <- Top 10 by Sharpe (01 = best)
-      01_b2640_zp20_cp30_adf128_zTP1.0_co50_sh0.361/
-      02_...
-  1min/
-    top_pnl/                                         <- Top 10 by PnL (05+ = robust 3y)
-    top_sharpe/                                      <- Top 10 by Sharpe (04+ = robust 3y)
+├── _PRODUCTION/                    <- Config active en paper trading
+│   └── [config_name]/
+├── 1min_1tick/                     <- Timeframe 1min, slippage 1 tick ($70/trade)
+│   ├── no_hmm/                     <- Sans filtre HMM (deployable Sierra Chart)
+│   │   ├── top_pnl/                <- Top 10 par PnL
+│   │   ├── top_sharpe/             <- Top 10 par Sharpe
+│   │   ├── top_calmar/             <- Top 10 par Calmar (PnL/|DD|)
+│   │   └── top_equilibre/          <- Top 5 equilibrees
+│   ├── hmm/                        <- Avec filtre HMM (Python only)
+│   └── walk_forward/               <- Resultats walk-forward
+├── 5min_2tick/                     <- Timeframe 5min, slippage 2 ticks ($140/trade)
+│   ├── no_hmm/
+│   │   ├── top_pnl/
+│   │   ├── top_sharpe/
+│   │   ├── top_calmar/
+│   │   └── top_equilibre/
+│   ├── hmm/
+│   └── walk_forward/
+├── CLASSEMENT.txt                  <- Resume global
+├── index.csv                       <- Index de toutes les configs
+└── README.md                       <- Documentation structure
 
-Each folder contains: backtest_hybrid.csv, metrics_report.txt, equity_curve.png, params_snapshot.yaml
+IMPORTANT - Slippage:
+- 1min_1tick: 1 tick = $70/trade (seul scenario rentable sur 3 ans)
+- 5min_2tick: 2 ticks = $140/trade (plus conservateur)
+
+Each config folder contains: backtest_hybrid.csv, metrics_report.txt, equity_curve.png, params_snapshot.yaml
 ```
 
 ## Trading Logic
@@ -205,7 +237,30 @@ After `generate_signals()`:
 - Session: 17:30 - 15:30 CT (22 hours, 264 bars 5-min per day)
 - User level: Python beginner, Sierra Chart expert
 - Approach: Pedagogical, step-by-step with explanations
-- No emojis or accented characters in print() statements (Windows cp1252 terminal)
+
+## Gotchas
+
+### Terminal Windows
+- **No emojis/accents in print()**: Windows cp1252 encoding crashes on special characters
+
+### Strategy Parameters
+- **Slippage is the strategy killer**: 1 tick -> profitable; 2 ticks -> destroyed
+- **zscore_period >= 30**: Produces 0 profitable configs on 3-year data
+- **zscore_entry=-3.5**: Only viable threshold (112/115 profitable configs)
+- **correlation_min is redundant**: Always > 0.80 when Z-Score + Coint conditions met
+- **hurst_max is redundant**: Hurst < 0.45 on all traded bars (use Cointegration Score instead)
+
+### Code Quirks
+- **ddof inconsistency**: Beta uses ddof=0, Z-Score uses ddof=1 (low impact but confusing)
+- **hmmlearn covariance bug**: Getter returns (n_components, n_features, n_features), setter expects (n_components, n_features) - use `model._covars_` directly
+
+### Grid Search
+- **24 workers optimal**: AMD Ryzen 9 7900X with 24 threads, each worker ~600 MB RAM
+- **grid_temp/ grows to 11+ GB**: Delete after grid search to free space
+- **indicator_cache_*.pkl**: Temporary files, safe to delete after run
+
+### Git
+- **Never git add -A**: Risk of committing .env or credentials - add files by name
 
 ## Data
 
@@ -217,16 +272,16 @@ After `generate_signals()`:
 
 ## Key Research Conclusions
 
-### HMM Regime Filter (STABILIZED - Feb 2026)
-- **HMM 3-state filter**: Mean-Reverting, Trending, High-Volatility states
-- **Bug fixed**: `_reorder_states()` in regime.py had covariance format mismatch
-- **Result after fix**: 100% fit rate for all covariance types (diag, full)
+### HMM Regime Filter (PYTHON-ONLY - Feb 2026)
+HMM filter tested and validated. Limits losses in unfavorable market conditions.
+- **Status**: Python-only feature (cannot be replicated bar-by-bar in Sierra Chart)
+- **Code**: `regime.py` to be recreated when needed (was removed during cleanup)
 - **Walk-forward comparison** (48 windows):
   - NO_HMM: $45,500 PnL, 207 trades, 47% positive windows
   - HMM_DIAG: $40,221 PnL, 160 trades, 60% positive windows
-- **Trade-off**: NO_HMM = max PnL, HMM_DIAG = max consistency
-- **Best config for PnL**: `b1320_zp24_cp24_adf96_zE3.0_zTP2.0_zSL4.5_co50` (NO_HMM)
-- **Best config for consistency**: `b1320_zp24_cp12_adf96_zE3.0_zTP2.0_zSL4.0_co50` (HMM_DIAG)
+- **Trade-off**: NO_HMM = max PnL, HMM = better consistency + loss protection
+- **Config**: `advanced.regime_filter` in YAML (disabled for Sierra Chart deployment)
+- **Future work**: Refine HMM or find Sierra Chart-compatible alternative
 
 ### 1-min timeframe (completed)
 - **Slippage is the strategy killer**: 1 tick -> profitable; 2 ticks -> destroyed
@@ -316,9 +371,9 @@ Indicator harmonization complete. Remaining tasks for paper trading:
 
 ### Priority 2 -- Code Quality
 - **Add pytest tests**: unit tests for indicators, signals, position sizing (112 tests done)
-- **Add HMM tests**: unit tests for regime.py including covariance handling
 - **Consolidate run_*.py scripts**: reduce duplication (done, -66% code)
 - **Clean up validation scripts**: archive or remove compare_*.py, check_*.py, investigate_*.py
+- **Increase test coverage**: signals.py (53%), position.py (48%) need more tests
 
 ### Priority 3 -- Production Deployment
 - Validate paper trading results (minimum 2-4 weeks)
@@ -362,6 +417,43 @@ Lance un grid search massif en background (milliers de configs), genere un rappo
 - Utilise `report_generator.py` pour l'analyse post-grid-search
 - Pattern Bash background + haiku post-analyse
 - Produit: CSV de resultats, `output/latest_summary.txt`, section CHANGELOG.md
+
+## Project Structure
+
+```
+backtest_gc_si/
+├── config/
+│   └── strategy_params.yaml    # All strategy parameters
+├── data/
+│   ├── raw/                    # Sierra Chart CSV exports (gitignored)
+│   └── processed/              # Parquet cache (auto-generated)
+├── src/                        # Main source code (6,152 lines)
+│   ├── backtest_engine_hybrid.py
+│   ├── common.py
+│   ├── data_loader.py
+│   ├── grid_search_runner.py
+│   ├── indicators.py
+│   ├── metrics.py
+│   ├── optimizer.py
+│   ├── position.py
+│   ├── report_generator.py
+│   ├── signals.py
+│   └── walk_forward_runner.py
+├── tests/                      # pytest tests (112 tests)
+│   ├── conftest.py
+│   ├── test_common.py
+│   ├── test_indicators.py
+│   ├── test_position.py
+│   └── test_signals.py
+├── output/
+│   ├── archive/                # Archived backtest results
+│   └── *.csv                   # Grid search results
+├── run_*.py                    # Execution scripts (10 scripts)
+├── DOC SIERRA/                 # Sierra Chart files (gitignored)
+├── CLAUDE.md                   # This file
+├── CHANGELOG.md                # Optimization history
+└── analyse.md                  # Code analysis
+```
 
 ## Git Tracking
 
