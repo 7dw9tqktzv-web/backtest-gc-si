@@ -35,36 +35,43 @@ def calculate_position_size(
     config: dict
 ) -> dict:
     """
-    Calcule le nombre de contrats pour chaque leg du spread.
+    Calculate the number of contracts for each leg of the spread.
 
-    Le mode "dollar_neutral_beta" reproduit exactement le calcul de
-    l'indicateur Sierra Chart v1.4 :
-      - Notional GC = prix GC x valeur du point ($100)
-      - Notional SI = prix SI x valeur du point ($5000)
-      - GC contrats = (Notional SI / Notional GC) x Beta
+    Implements dollar-neutral Beta-weighted sizing, matching the Sierra Chart
+    ACSIL v1.4 formula (lines 988-991):
 
-    Parametres:
-    -----------
+        Notional_GC = GC_price * GC_point_value ($100)
+        Notional_SI = SI_price * SI_point_value ($5,000)
+        GC_contracts = round((Notional_SI / Notional_GC) * Beta * SI_contracts)
+
+    Sizing modes:
+    - "dollar_neutral_beta": Beta-adjusted (default, matches Sierra Chart)
+    - "dollar_neutral": Equal notional without Beta adjustment
+    - "fixed": 1:1 contract ratio
+
+    Parameters
+    ----------
     gc_price : float
-        Prix actuel du Gold (GC)
+        Current Gold (GC) price (e.g. ~2700).
     si_price : float
-        Prix actuel du Silver (SI)
+        Current Silver (SI) price (e.g. ~31).
     beta : float
-        Beta OLS actuel (hedge ratio)
+        Current OLS Beta (hedge ratio). Typically 0.03-6.3 on traded bars.
     config : dict
-        Configuration chargee depuis YAML
+        Strategy configuration loaded from YAML.
 
-    Retourne:
-    ---------
-    dict : Informations de sizing avec les cles :
-        - si_contracts : int, nombre de contrats SI
-        - gc_contracts : int, nombre de contrats GC (arrondi)
-        - gc_contracts_raw : float, nombre de contrats GC (exact)
-        - notional_gc : float, valeur notionnelle GC par contrat
-        - notional_si : float, valeur notionnelle SI par contrat
-        - notional_gc_total : float, exposition GC totale
-        - notional_si_total : float, exposition SI totale
-        - imbalance_pct : float, desequilibre en % entre les deux legs
+    Returns
+    -------
+    dict
+        Sizing details with keys:
+        - si_contracts (int): Number of SI contracts (fixed from config).
+        - gc_contracts (int): Number of GC contracts (rounded, min 1).
+        - gc_contracts_raw (float): Exact GC contracts before rounding.
+        - notional_gc (float): GC notional per contract (GC_price * $100).
+        - notional_si (float): SI notional per contract (SI_price * $5,000).
+        - notional_gc_total (float): Total GC exposure.
+        - notional_si_total (float): Total SI exposure.
+        - imbalance_pct (float): Imbalance between legs (0% = perfectly neutral).
     """
     mode = config['sizing']['mode']
     si_contracts = config['sizing']['si_contracts']
@@ -142,31 +149,39 @@ def calculate_transaction_costs(
     config: dict
 ) -> dict:
     """
-    Calcule les couts de transaction pour un trade (entree + sortie).
+    Calculate transaction costs for a complete trade (entry + exit).
 
-    Couts inclus :
-    - Commission : $5.00 round-trip par contrat (chaque leg)
-    - Slippage : 1 tick par leg, a l'entree et a la sortie
+    Cost components:
+    - Commission: round-trip per contract (e.g. $4.00 = $2.00 per side)
+    - Slippage: N ticks per leg, at both entry and exit (x2)
 
-    Parametres:
-    -----------
+    Formula:
+        Commission = commission_per_contract * contracts (each leg)
+        Slippage_GC = ticks * tick_value ($10) * contracts * 2 (entry+exit)
+        Slippage_SI = ticks * tick_value ($25) * contracts * 2 (entry+exit)
+        Total = Commission_GC + Commission_SI + Slippage_GC + Slippage_SI
+
+    Example (1 GC + 1 SI, 1 tick slippage):
+        Commission: $4.00 + $4.00 = $8.00
+        Slippage: 1*$10*1*2 + 1*$25*1*2 = $20 + $50 = $70
+        Total: $78.00
+
+    Parameters
+    ----------
     gc_contracts : int
-        Nombre de contrats GC
+        Number of GC contracts.
     si_contracts : int
-        Nombre de contrats SI
+        Number of SI contracts.
     config : dict
-        Configuration chargee depuis YAML
+        Strategy configuration loaded from YAML.
 
-    Retourne:
-    ---------
-    dict : Details des couts :
-        - commission_gc : float, commission totale GC
-        - commission_si : float, commission totale SI
-        - commission_total : float, commission totale
-        - slippage_gc : float, slippage total GC en $
-        - slippage_si : float, slippage total SI en $
-        - slippage_total : float, slippage total en $
-        - total_cost : float, cout total (commission + slippage)
+    Returns
+    -------
+    dict
+        Cost breakdown with keys:
+        - commission_gc, commission_si, commission_total (float): Commissions.
+        - slippage_gc, slippage_si, slippage_total (float): Slippage in USD.
+        - total_cost (float): Total cost (commission + slippage).
     """
     commission = config['costs']['commission_per_contract']    # $5.00
     slip_gc_ticks = config['costs']['slippage_gc_ticks']       # 1
@@ -212,39 +227,43 @@ def calculate_trade_pnl(
     config: dict
 ) -> dict:
     """
-    Calcule le PnL d'un trade spread complet.
+    Calculate the PnL of a completed spread trade.
 
-    Pour un LONG spread (on est long le spread = long SI, short GC) :
-      - PnL SI = (exit_SI - entry_SI) x SI_point_value x SI_contracts
-      - PnL GC = (entry_GC - exit_GC) x GC_point_value x GC_contracts
-      (On est SHORT GC donc on gagne quand GC baisse)
+    LONG spread (long SI, short GC):
+        PnL_SI = (exit_SI - entry_SI) * SI_point_value * SI_contracts
+        PnL_GC = (entry_GC - exit_GC) * GC_point_value * GC_contracts
+        (Short GC profits when GC falls)
 
-    Pour un SHORT spread (on est short le spread = short SI, long GC) :
-      - PnL SI = (entry_SI - exit_SI) x SI_point_value x SI_contracts
-      - PnL GC = (exit_GC - entry_GC) x GC_point_value x GC_contracts
-      (On est LONG GC donc on gagne quand GC monte)
+    SHORT spread (short SI, long GC):
+        PnL_SI = (entry_SI - exit_SI) * SI_point_value * SI_contracts
+        PnL_GC = (exit_GC - entry_GC) * GC_point_value * GC_contracts
+        (Long GC profits when GC rises)
 
-    Parametres:
-    -----------
+    PnL_Gross = PnL_GC + PnL_SI
+    PnL_Net = PnL_Gross - transaction_costs
+
+    Parameters
+    ----------
     direction : int
-        1 = LONG spread, -1 = SHORT spread
+        1 = LONG spread, -1 = SHORT spread.
     entry_gc, entry_si : float
-        Prix d'entree GC et SI
+        Entry prices for GC and SI.
     exit_gc, exit_si : float
-        Prix de sortie GC et SI
+        Exit prices for GC and SI.
     gc_contracts, si_contracts : int
-        Nombre de contrats pour chaque leg
+        Number of contracts for each leg.
     config : dict
-        Configuration chargee depuis YAML
+        Strategy configuration loaded from YAML.
 
-    Retourne:
-    ---------
-    dict : Details du PnL :
-        - pnl_gc : float, PnL de la leg GC
-        - pnl_si : float, PnL de la leg SI
-        - pnl_gross : float, PnL brut (avant couts)
-        - costs : float, couts de transaction totaux
-        - pnl_net : float, PnL net (apres couts)
+    Returns
+    -------
+    dict
+        PnL breakdown with keys:
+        - pnl_gc (float): GC leg PnL in USD.
+        - pnl_si (float): SI leg PnL in USD.
+        - pnl_gross (float): Gross PnL before costs.
+        - costs (float): Total transaction costs.
+        - pnl_net (float): Net PnL after costs.
     """
     gc_point_value = config['contracts']['gc_point_value']   # 100
     si_point_value = config['contracts']['si_point_value']   # 5000
