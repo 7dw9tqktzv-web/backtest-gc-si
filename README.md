@@ -1,59 +1,24 @@
-# Backtest GC/SI - Spread Mean Reversion
+# GC/SI Spread Trading Backtest System
 
-Systeme de backtesting Python pour la strategie de spread trading Gold/Silver basee sur la cointegration et la mean reversion. **Harmonise avec Sierra Chart v1.5** (< 0.01% de difference sur tous les indicateurs).
+Python backtesting system for a Gold/Silver spread trading strategy based on cointegration and mean reversion. **Harmonized with Sierra Chart v1.5** (< 0.01% difference on all indicators).
 
-## Statut du Projet
+## Project Status
 
-| Etape | Statut |
-|-------|--------|
-| Backtest Python | COMPLETE |
+| Milestone | Status |
+|-----------|--------|
+| Python backtest | COMPLETE |
 | Walk-forward validation | COMPLETE |
-| Harmonisation Sierra Chart v1.5 | COMPLETE |
-| Paper trading | EN COURS |
+| Sierra Chart v1.5 harmonization | COMPLETE |
+| Code refactoring (Phases 1-4) | COMPLETE |
+| Paper trading | IN PROGRESS |
 
-**Meilleure config**: `b1320_zp24_cp24_adf96_zE3.0_zTP2.0_zSL4.5_co50`
-- PnL walk-forward (3 ans): **$45,500**
+**Best config**: `b1320_zp24_cp24_adf96_zE3.0_zTP2.0_zSL4.5_co50`
+- Walk-forward PnL (3 years): **$45,500**
 - 207 trades, 58.1% Win Rate, PF 1.58
 
-## Structure du Projet
+## Quick Start
 
-```
-backtest_gc_si/
-│
-├── config/
-│   └── strategy_params.yaml          <- Tous les parametres (modifie ici!)
-│
-├── data/
-│   ├── raw/                          <- Exports Sierra Chart (.txt)
-│   └── processed/                    <- Cache Parquet (auto-genere)
-│
-├── output/
-│   ├── backtest_hybrid.csv           <- Derniers trades
-│   ├── archive/                      <- Resultats archives CLASSES
-│   │   ├── CLASSEMENT.txt            <- Resume avec recommandations
-│   │   ├── index.csv                 <- Index global de tous les runs
-│   │   └── hmm_grid_search/          <- Archives HMM filter
-│   └── grid_search_*.csv             <- Resultats grid search
-│
-├── src/
-│   ├── common.py                     <- Constantes et fonctions partagees
-│   ├── data_loader.py                <- Chargement/sync donnees 1-min et 5-min
-│   ├── indicators.py                 <- Beta, Z-Score, Correlation, ADF, Hurst
-│   ├── signals.py                    <- Signaux entree/sortie (Z-Score)
-│   ├── position.py                   <- Sizing dollar-neutral + PnL
-│   ├── backtest_engine_hybrid.py     <- Simulation hybride 1min + 5s
-│   ├── optimizer.py                  <- Multi-config backtester
-│   ├── metrics.py                    <- Analyse performances + archivage
-│   └── regime.py                     <- Filtre HMM (optionnel)
-│
-├── tests/                            <- 112 tests unitaires
-├── DOC SIERRA/                       <- Indicateur Sierra Chart v1.5
-├── CLAUDE.md                         <- Instructions pour Claude Code
-├── CHANGELOG.md                      <- Historique complet des optimisations
-└── README.md                         <- Ce fichier
-```
-
-## Installation
+### Installation
 
 ```bash
 cd backtest_gc_si
@@ -62,106 +27,158 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-## Utilisation
+### Run Backtest
 
-### Lancer le backtest
 ```bash
-python src/backtest_engine_hybrid.py   # Backtest hybride 1min + 5s
-python src/metrics.py                  # Analyse performances + archivage
+python src/backtest_engine_hybrid.py   # Hybrid backtest (1-min + 5s)
+python src/metrics.py                  # Performance analysis + archiving
 ```
 
-### Lancer les tests
+### Run Tests
+
 ```bash
-pytest tests/ -v                       # 112 tests
-pytest tests/ --cov=src                # Avec coverage
+pytest tests/ -v                       # 131 tests
+pytest tests/ --cov=src                # With coverage report
 ```
 
-### Grid search et walk-forward
+### Grid Search and Walk-Forward
+
 ```bash
-python run_grid_search_hmm_full.py     # 129,600 configs (~3h)
-python run_walk_forward_hmm.py         # 48 fenetres walk-forward
+# YAML-driven grid search (unified runner)
+python scripts/run_grid_search.py --config configs/experiments/grid_3y.yaml          # 32,400 configs
+python scripts/run_grid_search.py --config configs/experiments/grid_5min_test.yaml   # 12 configs (smoke test)
+
+# YAML-driven walk-forward
+python scripts/run_walk_forward.py --config configs/experiments/wf_3y.yaml           # Full 3-year analysis
 ```
 
-## Configuration Optimale
+## Project Structure
 
-Parametres dans `config/strategy_params.yaml` (harmonises avec Sierra Chart v1.5):
+```
+backtest_gc_si/
+├── config/
+│   └── strategy_params.yaml            <- All strategy parameters
+├── data/
+│   ├── raw/                            <- Sierra Chart CSV exports
+│   └── processed/                      <- Parquet cache (auto-generated)
+├── src/                                <- Source code (6,152 lines, 10 modules)
+│   ├── common.py                       <- State machine constants + shared functions
+│   ├── data_loader.py                  <- CSV loading, sync, Parquet cache
+│   ├── indicators.py                   <- Beta, Z-Score, Correlation, ADF, Hurst
+│   ├── position.py                     <- Dollar-neutral sizing + PnL calculation
+│   ├── backtest_engine_hybrid.py       <- Hybrid backtest engine (1-min + 5s)
+│   ├── optimizer.py                    <- Multi-config backtester
+│   ├── metrics.py                      <- Performance analysis + archiving
+│   ├── grid_search_runner.py           <- Parallel grid search (24 workers)
+│   ├── walk_forward_runner.py          <- Walk-forward validation
+│   ├── report_generator.py             <- Post-grid-search analysis
+│   └── run_helpers.py                  <- Shared utilities for runners
+├── scripts/                            <- Execution scripts
+│   ├── run_grid_search.py              <- Generic YAML-driven grid search
+│   ├── run_walk_forward.py             <- Generic YAML-driven walk-forward
+│   └── run_*.py                        <- Special scripts (custom logic)
+├── configs/experiments/                <- YAML experiment configs
+│   ├── grid_3y.yaml                    <- 32,400 configs (1-min dollar mode)
+│   ├── grid_5min.yaml                  <- 155,520 configs (5-min Z-Score mode)
+│   ├── grid_5min_test.yaml             <- 12 configs (smoke test)
+│   └── wf_*.yaml                       <- Walk-forward configs
+├── tests/                              <- 131 unit tests (pytest)
+├── docs/
+│   ├── STRATEGY.md                     <- Strategy theory and indicator formulas
+│   └── ARCHITECTURE.md                 <- System architecture and module guide
+├── output/
+│   └── archive/                        <- Archived backtest results (classified)
+├── CLAUDE.md                           <- Instructions for Claude Code
+├── CHANGELOG.md                        <- Full optimization history
+└── README.md                           <- This file
+```
 
-### Indicateurs
-| Parametre | Valeur | Description |
-|-----------|--------|-------------|
-| beta_lookback | 1320 | ~5 jours de trading (5-min bars) |
-| zscore_period | 24 | ~2 heures |
-| correlation_period | 24 | ~2 heures |
-| adf_hurst_period | 96 | ~8 heures |
+## Documentation
 
-### Conditions d'entree
-| Parametre | Valeur |
-|-----------|--------|
+- **[Strategy Theory](docs/STRATEGY.md)** -- Cointegration, indicators, entry/exit logic, sizing
+- **[Architecture](docs/ARCHITECTURE.md)** -- Data pipeline, modules, config system, testing
+- **[Changelog](CHANGELOG.md)** -- Detailed optimization history and results
+
+## Configuration
+
+All parameters are in `config/strategy_params.yaml`. Key settings:
+
+### Indicators
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| beta_lookback | 1320 | Rolling OLS window (~5 trading days) |
+| zscore_period | 24 | Z-Score normalization window |
+| correlation_period | 24 | Pearson correlation window |
+| adf_hurst_period | 96 | ADF/Hurst calculation window |
+
+### Entry Conditions
+| Parameter | Value |
+|-----------|-------|
 | Z-Score Entry | +/- 3.0 |
 | Correlation min | > 0.60 |
 | Cointegration Score min | >= 50 |
 
-### Conditions de sortie
-| Parametre | LONG | SHORT |
+### Exit Conditions
+| Exit Type | LONG | SHORT |
 |-----------|------|-------|
-| Z-Score TP | >= +2.0 | <= -2.0 |
-| Z-Score SL | <= -4.5 | >= +4.5 |
+| Z-Score TP | Z >= -2.0 | Z <= +2.0 |
+| Z-Score SL | Z <= -4.5 | Z >= +4.5 |
+| Dollar TP | +$500 | +$500 |
+| Dollar SL | -$1,200 | -$1,200 |
 
-### Couts de transaction
-| Parametre | Valeur |
-|-----------|--------|
-| Commission | $4.00 round-trip par contrat |
-| Slippage | 1-2 ticks par leg |
+### Transaction Costs
+| Component | Value |
+|-----------|-------|
+| Commission | $4.00 round-trip per contract |
+| Slippage | 1 tick per leg (GC: $10, SI: $25) |
 
-## Harmonisation Sierra Chart v1.5
+## Sierra Chart v1.5 Harmonization
 
-Python et Sierra Chart produisent des valeurs **identiques** (< 0.01% de difference):
+Python and Sierra Chart produce **identical** indicator values (< 0.01% difference):
 
-| Indicateur | Difference |
-|------------|------------|
+| Indicator | Difference |
+|-----------|------------|
 | Beta | 0.00% |
 | ADF Statistic | 0.01% |
 | Correlation | 0.00% |
 | Z-Score | 0.03% |
 | Hurst | 0.01% |
 
-### Fichiers Sierra Chart
-- **Indicateur**: `DOC SIERRA/files/GC_SI_SpreadMeanReversion_v1.5.cpp`
-- **Validation**: `compare_sierra_v3.py`
+Sierra Chart settings must match Python config (see [STRATEGY.md](docs/STRATEGY.md) for details).
 
-### Parametres Sierra Chart (doivent matcher Python)
-```
-Beta Lookback: 1320
-Z-Score Period: 24
-Correlation Period: 24
-ADF/Hurst Period: 96
-Z-Score Upper/Lower Threshold: +/-3
-Min Cointegration Score: 50
-Session: 17:00 - 15:30 CT
-```
+## Walk-Forward Results (48 windows, 3 years)
 
-## Resultats Walk-Forward (48 fenetres, 3 ans)
-
-| Config | PnL | Trades | Win Rate | PF | Fenetres + |
-|--------|-----|--------|----------|-----|------------|
+| Config | PnL | Trades | Win Rate | PF | Positive Windows |
+|--------|-----|--------|----------|----|------------------|
 | **NO_HMM** | **$45,500** | 207 | 58.1% | 1.58 | 47% |
 | HMM_DIAG | $40,221 | 160 | 60.2% | 2.39 | 60% |
 
-- **NO_HMM**: Maximum PnL, 98% des fenetres valides
-- **HMM_DIAG**: Maximum consistance (60% fenetres positives)
+## Data
 
-## Donnees
-
-- **Periode**: 26 jan 2023 - 30 jan 2026 (~3 ans)
-- **Barres 1-min**: 801,499 synchronisees
-- **Barres 5s**: 4,604,839 synchronisees
+- **Period**: Jan 2023 -- Jan 2026 (~3 years)
+- **1-min bars**: 801,499 synchronized
+- **5s bars**: 4,604,839 synchronized
 - **Source**: Sierra Chart (GCJ26 Gold, SIH26 Silver)
 
-## Prochaines Etapes
+## Testing
 
-1. **Paper trading** sur Sierra Chart avec config optimale
-2. **Validation** des trades paper vs backtest Python
-3. **Production** apres validation (2-4 semaines minimum)
+131 tests across 7 files, all passing in ~0.4s:
+
+| Module | Tests | Coverage |
+|--------|-------|----------|
+| common.py | 32 | 100% |
+| indicators.py | 33 | 72% |
+| position.py | 26 | 48% |
+| backtest_engine_hybrid.py | 13 | ~30% |
+| optimizer.py | 9 | ~25% |
+| metrics.py | 12 | ~15% |
+| run_helpers.py | 6 | ~60% |
+
+## Next Steps
+
+1. **Paper trading** on Sierra Chart with optimal config
+2. **Validate** paper trades vs Python backtest
+3. **Production** after validation (2-4 weeks minimum)
 
 ---
-*Developpe avec Claude AI - Janvier/Fevrier 2026*
+*Developed with Claude AI -- January/February 2026*
