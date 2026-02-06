@@ -930,6 +930,16 @@ def run_metrics():
     update_index(config, gm, am, archive_path, trades)
     print(f"[OK] Index mis a jour : {INDEX_CSV}")
 
+    # Copier dans output/latest/ pour acces rapide
+    latest_dir = BASE_DIR / "output" / "latest"
+    latest_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(str(BACKTEST_CSV), str(latest_dir / "backtest_hybrid.csv"))
+    with open(latest_dir / "metrics_report.txt", 'w', encoding='utf-8') as f_latest:
+        f_latest.write(report)
+    if chart_path.exists():
+        shutil.copy2(str(chart_path), str(latest_dir / "equity_curve.png"))
+    print(f"[OK] Copie dans : {latest_dir}")
+
     print()
     print(f"[OK] Archive complete dans : {archive_path}")
     print("=" * 60)

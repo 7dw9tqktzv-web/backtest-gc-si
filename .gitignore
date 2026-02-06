@@ -26,8 +26,18 @@ notebooks/
 # Resultats intermediaires
 results/
 
-# Output du backtest (regenerable)
-output/
+# Output du backtest
+output/*
+!output/archive/
+!output/rankings/
+!output/production/
+# Fichiers volumineux dans archive (trades CSV, images)
+output/archive/**/*_trades.csv
+output/archive/**/*_equity.png
+output/archive/**/backtest_hybrid.csv
+output/archive/**/equity_curve.png
+# Dossiers non-curates
+output_old/
 
 # OS
 Thumbs.db

@@ -52,6 +52,13 @@ python scripts/run_top5_archive.py                # Archive top 5 with metrics +
 
 # Post-grid-search analysis
 python src/report_generator.py output/grid_search_xxx.csv --description "..."
+python src/report_generator.py output/grid.csv -d "desc" --archive --timeframe 1min --slippage 1tick
+
+# Archive management
+python src/archive_manager.py --action archive-top --csv output/grid.csv --n 20 --timeframe 1min --slippage 1tick
+python src/archive_manager.py --action generate-rankings
+python src/archive_manager.py --action dashboard
+python src/archive_manager.py --action list --timeframe 1min --exit-mode dollar
 
 # Validate data at specific datetime
 python validate_data.py --date "2026-01-23 10:30:00"
@@ -73,19 +80,20 @@ report_generator.py: grid search CSV -> latest_summary.txt + CHANGELOG.md sectio
 
 ### Source Files (src/)
 ```
-Total: 5,818 lines
-├── metrics.py               (941 lines)  - Performance analysis, equity curve, archiving
+Total: ~6,400 lines
+├── metrics.py               (950 lines)  - Performance analysis, equity curve, archiving
 ├── indicators.py            (811 lines)  - Beta, Z-Score, Correlation, ADF, Hurst
 ├── backtest_engine_hybrid.py(597 lines)  - Main backtest engine (1min + 5s)
+├── archive_manager.py       (577 lines)  - Structured archive management (5 public functions)
 ├── optimizer.py             (564 lines)  - Multi-config optimization
 ├── grid_search_runner.py    (552 lines)  - Parallel grid search
+├── report_generator.py      (545 lines)  - Post-grid-search analysis + archive integration
 ├── data_loader.py           (533 lines)  - CSV loading, sync, Parquet cache
-├── report_generator.py      (529 lines)  - Post-grid-search analysis
 ├── walk_forward_runner.py   (406 lines)  - Walk-forward validation
 ├── position.py              (398 lines)  - Dollar-neutral sizing
 ├── common.py                (260 lines)  - Shared constants and functions
 ├── run_helpers.py           (174 lines)  - Shared utilities for run scripts
-└── __init__.py               (53 lines)
+└── __init__.py               (60 lines)
 ```
 
 ### Key Entry Points
@@ -99,42 +107,44 @@ Total: 5,818 lines
 - `run_metrics()` in `metrics.py` - analyzes backtest results, generates report + equity curve, archives everything
 - `run_optimization(configs_list)` in `optimizer.py` - loads data once, runs N backtests, returns comparison table
 - `apply_overrides(config, overrides)` in `optimizer.py` - applies dotted-key overrides to config dict
+- `archive_config()` in `archive_manager.py` - archives a single config with metrics JSON + config YAML
+- `archive_top_n_from_grid()` in `archive_manager.py` - archives top N from grid search CSV
+- `generate_rankings()` in `archive_manager.py` - generates ranking CSVs + DASHBOARD.md
+- `generate_dashboard()` in `archive_manager.py` - generates DASHBOARD.md with summary tables
+- `list_configs()` in `archive_manager.py` - lists archived configs as DataFrame
 
 ### Configuration
 All parameters are in `config/strategy_params.yaml`. Never hardcode values.
 Key field: `indicators.period` defines the calculation timeframe (1min, 5min, 15min, 1h, 1d).
 
-### Archiving Structure
+### Archiving Structure (archive_manager.py)
 ```
-output/archive/
-├── _PRODUCTION/                    <- Config active en paper trading
-│   └── [config_name]/
-├── 1min_1tick/                     <- Timeframe 1min, slippage 1 tick ($70/trade)
-│   ├── no_hmm/                     <- Sans filtre HMM (deployable Sierra Chart)
-│   │   ├── top_pnl/                <- Top 10 par PnL
-│   │   ├── top_sharpe/             <- Top 10 par Sharpe
-│   │   ├── top_calmar/             <- Top 10 par Calmar (PnL/|DD|)
-│   │   └── top_equilibre/          <- Top 5 equilibrees
-│   ├── hmm/                        <- Avec filtre HMM (Python only)
-│   └── walk_forward/               <- Resultats walk-forward
-├── 5min_2tick/                     <- Timeframe 5min, slippage 2 ticks ($140/trade)
-│   ├── no_hmm/
-│   │   ├── top_pnl/
-│   │   ├── top_sharpe/
-│   │   ├── top_calmar/
-│   │   └── top_equilibre/
-│   ├── hmm/
-│   └── walk_forward/
-├── CLASSEMENT.txt                  <- Resume global
-├── index.csv                       <- Index de toutes les configs
-└── README.md                       <- Documentation structure
+output/
+├── archive/                         <- Structured archive (git-tracked: config.yaml + metrics.json)
+│   └── {timeframe}/                 <- 1min, 5min
+│       └── {exit_mode}/             <- dollar, zscore, hybrid
+│           └── {config_name}/       <- e.g. b1320_zp24_cp30_adf96_zE3.5_co50_TP300_SL800
+│               ├── config.yaml      <- Config snapshot (saved once per config)
+│               └── {result_type}/   <- grid_search, walk_forward, top_pnl, top_sharpe
+│                   ├── {slip}_metrics.json   <- Metrics (JSON, parsable)
+│                   └── {slip}_trades.csv     <- Trades (gitignored, large)
+├── rankings/                        <- Generated ranking CSVs + DASHBOARD.md
+│   ├── {tf}_{em}_top{n}.csv        <- Per-category ranking
+│   ├── global_top50.csv            <- Cross-category ranking
+│   ├── walk_forward_best.csv       <- Walk-forward ranking (if any)
+│   └── DASHBOARD.md                <- Human-readable summary
+├── raw/                             <- Moved raw grid search CSVs (date-prefixed)
+│   └── grid_search/
+├── latest/                          <- Last single-run output (quick access)
+│   ├── backtest_hybrid.csv
+│   ├── metrics_report.txt
+│   └── equity_curve.png
+└── production/                      <- Active paper trading config
 
-IMPORTANT - Slippage:
-- 1min_1tick: 1 tick = $70/trade (seul scenario rentable sur 3 ans)
-- 5min_2tick: 2 ticks = $140/trade (plus conservateur)
-
-Each config folder contains: backtest_hybrid.csv, metrics_report.txt, equity_curve.png, params_snapshot.yaml
+CLI: python src/archive_manager.py --action {archive-top|generate-rankings|dashboard|list}
 ```
+
+Git tracking: config.yaml and metrics.json are tracked; large files (*_trades.csv, *_equity.png) are gitignored.
 
 ## Trading Logic
 
@@ -436,7 +446,8 @@ backtest_gc_si/
 ├── docs/                       # Documentation
 │   ├── STRATEGY.md             # Strategy theory and indicator formulas
 │   └── ARCHITECTURE.md         # Project architecture post-refactoring
-├── src/                        # Main source code (5,818 lines)
+├── src/                        # Main source code (~6,400 lines)
+│   ├── archive_manager.py
 │   ├── backtest_engine_hybrid.py
 │   ├── common.py
 │   ├── data_loader.py
@@ -448,8 +459,9 @@ backtest_gc_si/
 │   ├── report_generator.py
 │   ├── run_helpers.py
 │   └── walk_forward_runner.py
-├── tests/                      # pytest tests (131 tests)
+├── tests/                      # pytest tests (149 tests)
 │   ├── conftest.py
+│   ├── test_archive_manager.py
 │   ├── test_backtest_engine_hybrid.py
 │   ├── test_common.py
 │   ├── test_indicators.py
@@ -477,7 +489,10 @@ backtest_gc_si/
 │       ├── wf_5min_ztp.yaml    # Walk-forward 5-min zTP
 │       └── wf_beta_long.yaml   # Walk-forward beta long
 ├── output/
-│   ├── archive/                # Archived backtest results
+│   ├── archive/                # Structured archive (managed by archive_manager.py)
+│   ├── rankings/               # Generated ranking CSVs + DASHBOARD.md
+│   ├── raw/                    # Moved raw grid search CSVs
+│   ├── latest/                 # Last single-run output (quick access)
 │   └── *.csv                   # Grid search results
 ├── DOC SIERRA/                 # Sierra Chart files (gitignored)
 ├── CLAUDE.md                   # This file
@@ -487,7 +502,9 @@ backtest_gc_si/
 
 ## Git Tracking
 
-`.gitignore` exclut : `.venv/`, `__pycache__/`, `data/raw/`, `DOC SIERRA/`, `.idea/`, `.claude/`, `output/`, `results/`
+`.gitignore` exclut : `.venv/`, `__pycache__/`, `data/raw/`, `DOC SIERRA/`, `.idea/`, `.claude/`, `results/`, `output_old/`
+
+`output/` uses selective tracking: `archive/` and `rankings/` are tracked (config.yaml + metrics.json), but large files (*_trades.csv, *_equity.png) are gitignored.
 
 ## Testing
 
@@ -495,6 +512,7 @@ backtest_gc_si/
 ```
 tests/
 ├── conftest.py                      # Shared fixtures (sample_config, sample_prices_df, etc.)
+├── test_archive_manager.py          # 18 tests - Archive management system
 ├── test_common.py                   # 32 tests, 100% coverage
 ├── test_indicators.py               # 33 tests, 72% coverage
 ├── test_position.py                 # 26 tests, 48% coverage
@@ -506,7 +524,7 @@ tests/
 
 ### Running Tests
 ```bash
-pytest tests/ -v                    # All tests (131 tests)
+pytest tests/ -v                    # All tests (149 tests)
 pytest tests/ --cov=src             # With coverage report
 pytest tests/test_common.py -v      # Single file
 pytest -k "test_long"               # Tests matching pattern
@@ -514,6 +532,7 @@ pytest -k "test_long"               # Tests matching pattern
 
 ### Test Coverage (as of 2026-02)
 - **common.py**: 100% - Entry/exit conditions, PnL calculation
+- **archive_manager.py**: covered (18 tests) - Archive, rankings, dashboard, list
 - **indicators.py**: 72% - Z-Score, Beta, Correlation, Hurst, ADF
 - **position.py**: 48% - Position sizing, transaction costs
 - **backtest_engine_hybrid.py**: covered (13 tests)

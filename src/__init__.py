@@ -40,5 +40,13 @@ from .position import (
     calculate_trade_pnl
 )
 
+from .archive_manager import (
+    archive_config,
+    archive_top_n_from_grid,
+    generate_rankings,
+    generate_dashboard,
+    list_configs,
+)
+
 __version__ = "1.0.0"
 __author__ = "Assistant IA"

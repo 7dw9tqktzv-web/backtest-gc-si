@@ -450,7 +450,9 @@ def write_summary(
 # PIPELINE PRINCIPAL
 # ============================================================================
 
-def run_report(csv_path: str, description: str, no_changelog: bool = False) -> str:
+def run_report(csv_path: str, description: str, no_changelog: bool = False,
+               archive: bool = False, timeframe: str = "1min",
+               exit_mode: str = "dollar", slippage: str = "1tick") -> str:
     """
     Pipeline complet : charge CSV -> analyse -> CHANGELOG -> resume.
     Retourne le contenu du resume.
@@ -503,6 +505,16 @@ def run_report(csv_path: str, description: str, no_changelog: bool = False) -> s
         changelog_updated=changelog_updated,
     )
 
+    # 8. Archiver les top 20 si demande
+    if archive:
+        from .archive_manager import archive_top_n_from_grid, generate_rankings
+        print('[report] Archivage des top 20...')
+        paths = archive_top_n_from_grid(csv_path, n=20, timeframe=timeframe,
+                                         exit_mode=exit_mode, slippage=slippage)
+        print(f'[report] {len(paths)} configs archivees')
+        generate_rankings()
+        print('[report] Rankings mis a jour')
+
     print('[report] === Termine ===')
     return content
 
@@ -520,9 +532,19 @@ def main():
                         help='Description pour le CHANGELOG (ex: "Phase 2+3: no TP zscore")')
     parser.add_argument('--no-changelog', action='store_true',
                         help='Ne pas mettre a jour CHANGELOG.md')
+    parser.add_argument('--archive', action='store_true',
+                        help='Archiver les top 20 configs')
+    parser.add_argument('--timeframe', default='1min',
+                        help='Timeframe pour archivage (default: 1min)')
+    parser.add_argument('--exit-mode', default='dollar',
+                        help='Exit mode pour archivage (default: dollar)')
+    parser.add_argument('--slippage', default='1tick',
+                        help='Slippage pour archivage (default: 1tick)')
 
     args = parser.parse_args()
-    run_report(args.csv_path, args.description, args.no_changelog)
+    run_report(args.csv_path, args.description, args.no_changelog,
+               archive=args.archive, timeframe=args.timeframe,
+               exit_mode=args.exit_mode, slippage=args.slippage)
 
 
 if __name__ == '__main__':
