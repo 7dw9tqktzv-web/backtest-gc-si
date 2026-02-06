@@ -344,3 +344,25 @@ class TestRunHybridBacktest:
         ]
         for col in expected_cols:
             assert col in trades.columns, f"Colonne manquante : {col}"
+
+    def test_pure_zscore_mode_skips_5s_scan(self, sample_config):
+        """En mode pure Z-Score (TP/SL extremes), le scan 5s est saute
+        mais les sorties Z-Score fonctionnent toujours."""
+        import copy
+        cfg = copy.deepcopy(sample_config)
+        cfg['exit']['pnl_take_profit'] = 99999
+        cfg['exit']['pnl_stop_loss'] = -99999
+
+        # Bar 0: NaN, bar 1: Z=0, bar 2: Z=-3.1 (entree LONG)
+        # Bar 3: Z=-2.5, bar 4: Z=-1.5 (>= -2.0 -> TP_ZSCORE)
+        n = 6
+        zscores = [np.nan, 0.0, -3.1, -2.5, -1.5, 0.0]
+        df_1min = _make_1min(n, zscores)
+        df_5s = _make_5s(n * 12)
+
+        trades = run_hybrid_backtest(df_1min, df_5s, cfg, verbose=False)
+
+        assert len(trades) == 1
+        t = trades.iloc[0]
+        assert t['Exit_Reason'] == 'TP_ZSCORE'
+        assert t['Direction'] == 'LONG'

@@ -116,6 +116,9 @@ def run_hybrid_backtest(
     pnl_tp = config['exit']['pnl_take_profit']    # +400
     pnl_sl = config['exit']['pnl_stop_loss']       # -800
 
+    # Detecter le mode pure Z-Score (pas de dollar exits possibles)
+    pure_zscore_mode = (pnl_tp >= 50000 and pnl_sl <= -50000)
+
     # Filtre horaire optionnel (bloque les entrees, pas les sorties)
     entry_start_hour = config['session'].get('entry_start_hour', 0)
     entry_end_hour = config['session'].get('entry_end_hour', 24)
@@ -155,133 +158,134 @@ def run_hybrid_backtest(
 
         # ---- ETAPE 1 : Si en position, verifier les sorties ----
         if state in (STATE_LONG, STATE_SHORT):
-
-            # --- 1a. Verifier les sorties DOLLAR sur barres 5s ---
-            # Trouver les barres 5s entre la barre 1-min precedente et la courante
-            if i > 0:
-                t_prev = datetimes_1min[i - 1]
-            else:
-                t_prev = datetimes_1min[i]
-            t_curr = datetimes_1min[i]
-
-            # Avancer idx_5s_start pour ne pas re-scanner les anciennes barres
-            while idx_5s_start < len(dt_5s) and dt_5s[idx_5s_start] < t_prev:
-                idx_5s_start += 1
-
-            # Scanner les barres 5s dans l'intervalle (t_prev, t_curr]
             dollar_exit = False
-            dollar_reason = ''
-            dollar_exit_dt = None
-            dollar_exit_gc = 0.0
-            dollar_exit_si = 0.0
 
-            j = idx_5s_start
-            while j < len(dt_5s) and dt_5s[j] <= t_curr:
-                pnl_5s = calculate_current_pnl(
-                    direction, entry_gc, entry_si,
-                    gc_5s[j], si_5s[j],
-                    gc_contracts, si_contracts, config
-                )
-
-                # Tracker max/min PnL intra-trade
-                if pnl_5s > max_pnl_intra:
-                    max_pnl_intra = pnl_5s
-                if pnl_5s < min_pnl_intra:
-                    min_pnl_intra = pnl_5s
-
-                # Verifier SL Dollar (priorite max)
-                if pnl_5s <= pnl_sl:
-                    dollar_exit = True
-                    dollar_reason = 'SL_DOLLAR'
-                    dollar_exit_dt = dt_5s[j]
-                    dollar_exit_gc = gc_5s[j]
-                    dollar_exit_si = si_5s[j]
-                    break
-
-                # Verifier TP Dollar
-                if pnl_5s >= pnl_tp:
-                    dollar_exit = True
-                    dollar_reason = 'TP_DOLLAR'
-                    dollar_exit_dt = dt_5s[j]
-                    dollar_exit_gc = gc_5s[j]
-                    dollar_exit_si = si_5s[j]
-                    break
-
-                j += 1
-
-            if dollar_exit:
-                # Enregistrer le trade avec sortie dollar
-                trade_no += 1
-                costs = calculate_transaction_costs(gc_contracts, si_contracts, config)
-
-                # PnL fixe au seuil exact
-                if dollar_reason == 'SL_DOLLAR':
-                    pnl_gross = pnl_sl
+            if not pure_zscore_mode:
+                # --- 1a. Verifier les sorties DOLLAR sur barres 5s ---
+                # Trouver les barres 5s entre la barre 1-min precedente et la courante
+                if i > 0:
+                    t_prev = datetimes_1min[i - 1]
                 else:
-                    pnl_gross = pnl_tp
-                pnl_net = pnl_gross - costs['total_cost']
+                    t_prev = datetimes_1min[i]
+                t_curr = datetimes_1min[i]
 
-                entry_dt = pd.Timestamp(datetimes_1min[entry_1min_idx])
-                exit_dt = pd.Timestamp(dollar_exit_dt)
-                duration = (exit_dt - entry_dt).total_seconds() / 60
+                # Avancer idx_5s_start pour ne pas re-scanner les anciennes barres
+                while idx_5s_start < len(dt_5s) and dt_5s[idx_5s_start] < t_prev:
+                    idx_5s_start += 1
 
-                trades.append({
-                    'Trade_No': trade_no,
-                    'Direction': 'LONG' if direction == 1 else 'SHORT',
-                    'Entry_DateTime': entry_dt,
-                    'Exit_DateTime': exit_dt,
-                    'Duration_Min': round(duration, 1),
-                    'Entry_GC': entry_gc,
-                    'Entry_SI': entry_si,
-                    'Exit_GC': round(dollar_exit_gc, 2),
-                    'Exit_SI': round(dollar_exit_si, 4),
-                    'Entry_ZScore': round(zscores[entry_1min_idx], 2),
-                    'Exit_ZScore': round(z, 2),
-                    'Exit_Reason': dollar_reason,
-                    'Beta': round(betas[entry_1min_idx], 4),
-                    'GC_Contracts': gc_contracts,
-                    'SI_Contracts': si_contracts,
-                    'PnL_GC': np.nan,
-                    'PnL_SI': np.nan,
-                    'PnL_Gross': round(pnl_gross, 2),
-                    'Costs': costs['total_cost'],
-                    'PnL_Net': round(pnl_net, 2),
-                    'Max_PnL_Intra': round(max_pnl_intra, 2),
-                    'Min_PnL_Intra': round(min_pnl_intra, 2),
-                })
+                # Scanner les barres 5s dans l'intervalle (t_prev, t_curr]
+                dollar_reason = ''
+                dollar_exit_dt = None
+                dollar_exit_gc = 0.0
+                dollar_exit_si = 0.0
 
-                # Transition d'etat
-                if dollar_reason == 'SL_DOLLAR':
-                    state = STATE_COOLDOWN_LONG if direction == 1 else STATE_COOLDOWN_SHORT
-                else:
-                    state = STATE_FLAT
+                j = idx_5s_start
+                while j < len(dt_5s) and dt_5s[j] <= t_curr:
+                    pnl_5s = calculate_current_pnl(
+                        direction, entry_gc, entry_si,
+                        gc_5s[j], si_5s[j],
+                        gc_contracts, si_contracts, config
+                    )
 
-                entry_1min_idx = None
-                direction = None
+                    # Tracker max/min PnL intra-trade
+                    if pnl_5s > max_pnl_intra:
+                        max_pnl_intra = pnl_5s
+                    if pnl_5s < min_pnl_intra:
+                        min_pnl_intra = pnl_5s
 
-                # Verifier cooldown reset + reentree sur la meme barre 1-min
-                if state in (STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT):
-                    if check_cooldown_reset(z, state, config):
+                    # Verifier SL Dollar (priorite max)
+                    if pnl_5s <= pnl_sl:
+                        dollar_exit = True
+                        dollar_reason = 'SL_DOLLAR'
+                        dollar_exit_dt = dt_5s[j]
+                        dollar_exit_gc = gc_5s[j]
+                        dollar_exit_si = si_5s[j]
+                        break
+
+                    # Verifier TP Dollar
+                    if pnl_5s >= pnl_tp:
+                        dollar_exit = True
+                        dollar_reason = 'TP_DOLLAR'
+                        dollar_exit_dt = dt_5s[j]
+                        dollar_exit_gc = gc_5s[j]
+                        dollar_exit_si = si_5s[j]
+                        break
+
+                    j += 1
+
+                if dollar_exit:
+                    # Enregistrer le trade avec sortie dollar
+                    trade_no += 1
+                    costs = calculate_transaction_costs(gc_contracts, si_contracts, config)
+
+                    # PnL fixe au seuil exact
+                    if dollar_reason == 'SL_DOLLAR':
+                        pnl_gross = pnl_sl
+                    else:
+                        pnl_gross = pnl_tp
+                    pnl_net = pnl_gross - costs['total_cost']
+
+                    entry_dt = pd.Timestamp(datetimes_1min[entry_1min_idx])
+                    exit_dt = pd.Timestamp(dollar_exit_dt)
+                    duration = (exit_dt - entry_dt).total_seconds() / 60
+
+                    trades.append({
+                        'Trade_No': trade_no,
+                        'Direction': 'LONG' if direction == 1 else 'SHORT',
+                        'Entry_DateTime': entry_dt,
+                        'Exit_DateTime': exit_dt,
+                        'Duration_Min': round(duration, 1),
+                        'Entry_GC': entry_gc,
+                        'Entry_SI': entry_si,
+                        'Exit_GC': round(dollar_exit_gc, 2),
+                        'Exit_SI': round(dollar_exit_si, 4),
+                        'Entry_ZScore': round(zscores[entry_1min_idx], 2),
+                        'Exit_ZScore': round(z, 2),
+                        'Exit_Reason': dollar_reason,
+                        'Beta': round(betas[entry_1min_idx], 4),
+                        'GC_Contracts': gc_contracts,
+                        'SI_Contracts': si_contracts,
+                        'PnL_GC': np.nan,
+                        'PnL_SI': np.nan,
+                        'PnL_Gross': round(pnl_gross, 2),
+                        'Costs': costs['total_cost'],
+                        'PnL_Net': round(pnl_net, 2),
+                        'Max_PnL_Intra': round(max_pnl_intra, 2),
+                        'Min_PnL_Intra': round(min_pnl_intra, 2),
+                    })
+
+                    # Transition d'etat
+                    if dollar_reason == 'SL_DOLLAR':
+                        state = STATE_COOLDOWN_LONG if direction == 1 else STATE_COOLDOWN_SHORT
+                    else:
                         state = STATE_FLAT
 
-                # Reentree sur meme barre (filtre horaire applique aussi)
-                bar_hour_re = pd.Timestamp(datetimes_1min[i]).hour
-                hour_ok_re = entry_start_hour <= bar_hour_re < entry_end_hour
+                    entry_1min_idx = None
+                    direction = None
 
-                if hour_ok_re and state in (STATE_FLAT, STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT):
-                    entry = check_entry_conditions(z, corr, score, state, config, hurst=hursts[i])
-                    if entry != 0 and not np.isnan(beta):
-                        size = calculate_position_size(gc, si, beta, config)
-                        direction = entry
-                        entry_1min_idx = i
-                        entry_gc = gc
-                        entry_si = si
-                        gc_contracts = size['gc_contracts']
-                        si_contracts = size['si_contracts']
-                        max_pnl_intra = 0.0
-                        min_pnl_intra = 0.0
-                        state = STATE_LONG if entry == 1 else STATE_SHORT
-                continue
+                    # Verifier cooldown reset + reentree sur la meme barre 1-min
+                    if state in (STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT):
+                        if check_cooldown_reset(z, state, config):
+                            state = STATE_FLAT
+
+                    # Reentree sur meme barre (filtre horaire applique aussi)
+                    bar_hour_re = pd.Timestamp(datetimes_1min[i]).hour
+                    hour_ok_re = entry_start_hour <= bar_hour_re < entry_end_hour
+
+                    if hour_ok_re and state in (STATE_FLAT, STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT):
+                        entry = check_entry_conditions(z, corr, score, state, config, hurst=hursts[i])
+                        if entry != 0 and not np.isnan(beta):
+                            size = calculate_position_size(gc, si, beta, config)
+                            direction = entry
+                            entry_1min_idx = i
+                            entry_gc = gc
+                            entry_si = si
+                            gc_contracts = size['gc_contracts']
+                            si_contracts = size['si_contracts']
+                            max_pnl_intra = 0.0
+                            min_pnl_intra = 0.0
+                            state = STATE_LONG if entry == 1 else STATE_SHORT
+                    continue
 
             # --- 1b. Pas de trigger 5s -> verifier sorties Z-Score sur barre 1-min ---
             # Aussi tracker le PnL sur le prix de cloture 1-min
