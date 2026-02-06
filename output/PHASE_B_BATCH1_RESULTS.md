@@ -16,25 +16,32 @@ Date: 2026-02-06
 - **B4** (1min dollar 1tick): 27.1% configs rentables (seuil: 15%) --> **GO**
 - **B5** (1min zscore 1tick): 494 configs rentables trades >= 50 (informatif)
 
-## Top 5 absolues (tous runs confondus, trades>=50)
+## Top 5 -- 5min (slippage 2 ticks)
 
-| Config | TF | Trades | WR | PnL | PnL/trade | PF | MaxDD | Sharpe |
-|--------|----|---------|----|------|-----------|-----|-------|--------|
-| b2640_zp20_cp48_adf96_zE2.5_co40_TP1000_SL1200 | 1min | 1655 | 59.4% | $111,583 | $67 | 1.15 | $-47,212 | 0.07 |
-| b2640_zp20_cp48_adf96_zE2.5_co40_TP1000_SL1000 | 1min | 1756 | 56.2% | $109,259 | $62 | 1.14 | $-51,059 | 0.06 |
-| b2640_zp20_cp30_adf96_zE2.5_co40_TP1000_SL1200 | 1min | 1714 | 58.9% | $108,141 | $63 | 1.14 | $-28,262 | 0.06 |
-| b2640_zp20_cp30_adf96_zE2.5_co40_TP1000_SL1000 | 1min | 1825 | 55.0% | $91,019 | $50 | 1.11 | $-33,529 | 0.05 |
-| b2640_zp20_cp48_adf96_zE2.5_co40_TP1000_SL800 | 1min | 1918 | 51.0% | $81,909 | $43 | 1.10 | $-46,602 | 0.05 |
+Source: B1 (grid_search_B1_5min_zscore_2tick.csv), filtre trades >= 80
 
-## Top 5 par qualite (PnL/MaxDD ratio, trades>=50)
+| # | Config | Trades | WR% | PnL | $/trade | PF | MaxDD | Sharpe | Calmar | Sortino |
+|---|--------|--------|-----|-----|---------|-----|-------|--------|--------|---------|
+| 1 | b2640_zp20_cp24_adf26_zE3.5_co40_zTP-1.0_zSL4.5_pure | 109 | 54.1% | $49,572 | $455 | 2.55 | $-16,339 | +0.20 | +3.03 | +0.74 |
+| 2 | b2640_zp20_cp24_adf26_zE3.5_co40_zTP-1.0_zSL5.0_pure | 109 | 54.1% | $49,572 | $455 | 2.55 | $-16,339 | +0.20 | +3.03 | +0.74 |
+| 3 | b2640_zp20_cp24_adf26_zE3.5_co40_zTP-1.0_zSL3.5_pure | 109 | 54.1% | $49,152 | $451 | 2.52 | $-16,700 | +0.20 | +2.94 | +0.74 |
+| 4 | b2640_zp20_cp24_adf26_zE3.5_co40_zTP-0.5_zSL4.5_pure | 109 | 54.1% | $47,727 | $438 | 2.82 | $-13,796 | +0.20 | +3.46 | +0.76 |
+| 5 | b2640_zp20_cp24_adf26_zE3.5_co40_zTP-0.5_zSL5.0_pure | 109 | 54.1% | $47,727 | $438 | 2.82 | $-13,796 | +0.20 | +3.46 | +0.76 |
 
-| Config | TF | Trades | WR | PnL | PnL/trade | PF | MaxDD | Sharpe |
-|--------|----|---------|----|------|-----------|-----|-------|--------|
-| b1980_zp20_cp48_adf96_zE3.5_co50_TP500_SL800 | 1min | 74 | 85.1% | $16,739 | $226 | 2.77 | $-1,358 | 0.49 |
-| b1980_zp20_cp30_adf128_zE3.5_co50_TP500_SL800 | 1min | 67 | 83.6% | $13,658 | $204 | 2.49 | $-1,358 | 0.43 |
-| b1980_zp20_cp48_adf96_zE3.5_co50_TP500_SL500 | 1min | 74 | 75.7% | $12,739 | $172 | 2.21 | $-1,345 | 0.40 |
-| b1980_zp20_cp48_adf128_zE3.5_co50_TP500_SL800 | 1min | 73 | 83.6% | $16,175 | $222 | 2.85 | $-1,780 | 0.50 |
-| b1980_zp20_cp48_adf96_zE3.5_co50_TP500_SL1000 | 1min | 74 | 85.1% | $14,739 | $199 | 2.29 | $-1,758 | 0.38 |
+## Top 5 -- 1min (slippage 1 tick)
+
+Source: B4 + B5 merged, filtre trades >= 80
+
+| # | Camp. | Config | Trades | WR% | PnL | $/trade | PF | MaxDD | Sharpe | Calmar | Sortino |
+|---|-------|--------|--------|-----|-----|---------|-----|-------|--------|--------|---------|
+| 1 | B4 | b2640_zp20_cp48_adf96_zE2.5_co40_TP1000_SL1200 | 1655 | 59.4% | $111,583 | $67 | 1.15 | $-47,212 | +0.07 | +2.36 | +0.19 |
+| 2 | B4 | b2640_zp20_cp48_adf96_zE2.5_co40_TP1000_SL1000 | 1756 | 56.2% | $109,259 | $62 | 1.14 | $-51,059 | +0.06 | +2.14 | +0.22 |
+| 3 | B4 | b2640_zp20_cp30_adf96_zE2.5_co40_TP1000_SL1200 | 1714 | 58.9% | $108,141 | $63 | 1.14 | $-28,262 | +0.06 | +3.83 | +0.18 |
+| 4 | B4 | b2640_zp20_cp30_adf96_zE2.5_co40_TP1000_SL1000 | 1825 | 55.0% | $91,019 | $50 | 1.11 | $-33,529 | +0.05 | +2.71 | +0.18 |
+| 5 | B4 | b2640_zp20_cp48_adf96_zE2.5_co40_TP1000_SL800 | 1918 | 51.0% | $81,909 | $43 | 1.10 | $-46,602 | +0.05 | +1.76 | +0.20 |
+
+> ATTENTION: Ces configs sont a 1 tick de slippage. L'audit B0 montre que 0/32,400 configs 1min dollar survivent a 2 ticks.
+> B4 top $111K avec PF 1.15 et $67/trade -- volume sans qualite, a valider en Phase C4 (stress test slippage).
 
 ## Distribution des parametres gagnants (top 50 par campagne)
 
