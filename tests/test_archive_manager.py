@@ -482,3 +482,57 @@ class TestListConfigs:
         """Aucune archive -> DataFrame vide."""
         df = archive_manager.list_configs()
         assert df.empty
+
+
+class TestMetricsFromCsvRowNaN:
+    """Tests pour _metrics_from_csv_row avec des NaN."""
+
+    def test_nan_values_dont_crash(self):
+        """_metrics_from_csv_row ne crashe pas avec des NaN."""
+        row = pd.Series({
+            "trades": float("nan"),
+            "long": float("nan"),
+            "short": float("nan"),
+            "win_rate": float("nan"),
+            "pnl_net": float("nan"),
+            "pnl_avg": 0,
+            "profit_factor": 1.0,
+            "max_dd": -1000,
+            "sharpe": float("nan"),
+            "tp_zscore": float("nan"),
+            "tp_dollar": 20,
+            "sl_zscore": float("nan"),
+            "sl_dollar": 15,
+        })
+        result = archive_manager._metrics_from_csv_row(row)
+        assert result["trades"] == 0
+        assert result["pnl_net"] == 0.0
+        assert result["long"] == 0
+        assert result["sharpe"] == 0.0
+        assert result["tp_zscore"] == 0
+        assert result["tp_dollar"] == 20
+
+
+class TestConfigFromCsvRowNaN:
+    """Tests pour _config_from_csv_row avec des NaN."""
+
+    def test_nan_values_dont_crash(self):
+        """_config_from_csv_row ne crashe pas avec des NaN."""
+        row = pd.Series({
+            "beta": float("nan"),
+            "zp": 20,
+            "cp": 24,
+            "adf": float("nan"),
+            "zE": 3.5,
+            "co": float("nan"),
+            "zTP": -1.0,
+            "zSL": float("nan"),
+        })
+        result = archive_manager._config_from_csv_row(row, "zscore")
+        assert isinstance(result, dict)
+        assert result["indicators"]["beta_lookback"] == 0  # default
+        assert result["indicators"]["zscore_period"] == 20
+        assert result["indicators"]["adf_hurst_period"] == 0  # default
+        assert result["entry"]["cointegration_score_min"] == 0  # default
+        assert result["exit"]["zscore_tp"] == -1.0
+        assert result["exit"]["zscore_sl"] == 0.0  # default

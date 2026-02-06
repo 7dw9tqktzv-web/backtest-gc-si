@@ -41,6 +41,26 @@ LATEST_DIR = BASE_DIR / "output" / "latest"
 # ---------------------------------------------------------------------------
 
 
+def _safe_int(value, default: int = 0) -> int:
+    """Convertit en int avec gestion NaN/None."""
+    try:
+        if pd.isna(value):
+            return default
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+
+def _safe_float(value, default: float = 0.0) -> float:
+    """Convertit en float avec gestion NaN/None."""
+    try:
+        if pd.isna(value):
+            return default
+        return float(value)
+    except (ValueError, TypeError):
+        return default
+
+
 def _detect_exit_mode(df: pd.DataFrame) -> str:
     """Detecte le mode de sortie a partir des colonnes du DataFrame."""
     if "zTP" in df.columns:
@@ -53,21 +73,21 @@ def _detect_exit_mode(df: pd.DataFrame) -> str:
 def _metrics_from_csv_row(row: pd.Series) -> dict:
     """Extrait les metriques d'une ligne de CSV grid search."""
     metrics = {
-        "trades": int(row.get("trades", 0)),
-        "long": int(row.get("long", 0)),
-        "short": int(row.get("short", 0)),
-        "win_rate": float(row.get("win_rate", 0.0)),
-        "pnl_net": float(row.get("pnl_net", 0.0)),
-        "pnl_avg": float(row.get("pnl_avg", 0.0)),
-        "profit_factor": float(row.get("profit_factor", 0.0)),
-        "max_dd": float(row.get("max_dd", 0.0)),
-        "sharpe": float(row.get("sharpe", 0.0)),
+        "trades": _safe_int(row.get("trades", 0)),
+        "long": _safe_int(row.get("long", 0)),
+        "short": _safe_int(row.get("short", 0)),
+        "win_rate": _safe_float(row.get("win_rate", 0.0)),
+        "pnl_net": _safe_float(row.get("pnl_net", 0.0)),
+        "pnl_avg": _safe_float(row.get("pnl_avg", 0.0)),
+        "profit_factor": _safe_float(row.get("profit_factor", 0.0)),
+        "max_dd": _safe_float(row.get("max_dd", 0.0)),
+        "sharpe": _safe_float(row.get("sharpe", 0.0)),
     }
 
     # Compteurs de sorties (optionnels)
     for col in ("tp_zscore", "tp_dollar", "sl_zscore", "sl_dollar"):
         if col in row.index:
-            metrics[col] = int(row[col])
+            metrics[col] = _safe_int(row[col])
 
     # Calmar = PnL / |MaxDD|
     if metrics["max_dd"] != 0:
@@ -88,31 +108,31 @@ def _config_from_csv_row(row: pd.Series, exit_mode: str) -> dict:
 
     # -- Indicateurs --
     if "beta" in row.index:
-        config["indicators"]["beta_lookback"] = int(row["beta"])
+        config["indicators"]["beta_lookback"] = _safe_int(row["beta"])
     if "zp" in row.index:
-        config["indicators"]["zscore_period"] = int(row["zp"])
+        config["indicators"]["zscore_period"] = _safe_int(row["zp"])
     if "cp" in row.index:
-        config["indicators"]["correlation_period"] = int(row["cp"])
+        config["indicators"]["correlation_period"] = _safe_int(row["cp"])
     if "adf" in row.index:
-        config["indicators"]["adf_hurst_period"] = int(row["adf"])
+        config["indicators"]["adf_hurst_period"] = _safe_int(row["adf"])
 
     # -- Entree --
     if "zE" in row.index:
-        config["entry"]["zscore_entry"] = float(row["zE"])
+        config["entry"]["zscore_entry"] = _safe_float(row["zE"])
     if "co" in row.index:
-        config["entry"]["cointegration_score_min"] = int(row["co"])
+        config["entry"]["cointegration_score_min"] = _safe_int(row["co"])
 
     # -- Sortie (depend du mode) --
     if exit_mode == "dollar":
         if "TP" in row.index:
-            config["exit"]["pnl_take_profit"] = float(row["TP"])
+            config["exit"]["pnl_take_profit"] = _safe_float(row["TP"])
         if "SL" in row.index:
-            config["exit"]["pnl_stop_loss"] = -abs(float(row["SL"]))
+            config["exit"]["pnl_stop_loss"] = -abs(_safe_float(row["SL"]))
     elif exit_mode == "zscore":
         if "zTP" in row.index:
-            config["exit"]["zscore_tp"] = float(row["zTP"])
+            config["exit"]["zscore_tp"] = _safe_float(row["zTP"])
         if "zSL" in row.index:
-            config["exit"]["zscore_sl"] = float(row["zSL"])
+            config["exit"]["zscore_sl"] = _safe_float(row["zSL"])
         if "mode" in row.index:
             config["exit"]["mode"] = str(row["mode"])
     else:
@@ -123,7 +143,9 @@ def _config_from_csv_row(row: pd.Series, exit_mode: str) -> dict:
             if col in row.index:
                 val = row[col]
                 if col == "SL":
-                    val = -abs(float(val))
+                    val = -abs(_safe_float(val))
+                elif col != "mode":
+                    val = _safe_float(val)
                 config["exit"][key] = val
 
     return config
