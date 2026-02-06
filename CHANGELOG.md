@@ -4,6 +4,31 @@ Historique des optimisations, resultats detailles et ameliorations du backtest G
 
 ---
 
+## [2026-02-06] Phase B Batch 1 -- Grid Search (50,112 configs)
+
+### B1 -- 5min Z-Score pur, 2 ticks (34,560 configs) -- 18 min
+- Rentables (trades>=50): 2,799/34,560 (8.1%), trades>=80: 1,794
+- Top config: b2640_zp20_cp24_adf26_zE3.5_co40_zTP-1.0, $49,572 PnL, 109 trades, PF 2.55, $455/trade
+- **GO** pour B2/B3 (1,794 >> seuil 100)
+- Decouvertes: adf=26 domine (36/50 top), beta=2640 optimal, zTP negatif confirme, cp=24 domine
+
+### B5 -- 1min Z-Score pur, 1 tick (5,832 configs) -- 15 min
+- Rentables (trades>=50): 494/5,832 (8.5%), trades>=80: 347
+- Top config: b1980_zp15_cp30_adf96_zE3.0_co50_zTP-1.0, $20,896 PnL, 218 trades, PF 1.65, $96/trade
+- Conclusion: zscore pur en 1min = viable mais nettement inferieur au 5min
+- Decouvertes: co=50 domine (47/50 top), b1980 optimal, zTP=-1.0 domine
+
+### B4 -- 1min Dollar, 1 tick (9,720 configs) -- 102 min
+- Rentables (trades>=50): 2,222/9,720 (22.9%), trades>=80: 1,945
+- Top config: b2640_zp20_cp48_adf96_zE2.5_co40_TP1000_SL1200, $111,583 PnL, 1655 trades, PF 1.15, $67/trade
+- **GO** pour B6 (22.9% > seuil 15%)
+- Decouvertes: zE=2.5 exclusif (50/50 top), TP=1000/SL=1200 dominent, PnL/trade faible malgre PnL total eleve
+- Configs qualite (PnL/MaxDD): b1980_zp20_cp48_adf96_zE3.5_co50_TP500_SL800, PnL/MaxDD=12.33
+
+### Rapport detaille: output/PHASE_B_BATCH1_RESULTS.md
+
+---
+
 ## [2026-02-05] Fix Sharpe Ratio : harmonisation optimizer.py / metrics.py
 
 **Bug**: `optimizer.py` et `metrics.py` utilisaient deux formules de Sharpe differentes.
