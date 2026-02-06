@@ -34,6 +34,8 @@ ARCHIVE_DIR = BASE_DIR / "output" / "archive"
 RAW_DIR = BASE_DIR / "output" / "raw"
 RANKINGS_DIR = BASE_DIR / "output" / "rankings"
 LATEST_DIR = BASE_DIR / "output" / "latest"
+CAMPAIGNS_DIR = ARCHIVE_DIR / "campaigns"
+REPORTS_DIR = BASE_DIR / "output" / "reports"
 
 
 # ---------------------------------------------------------------------------
@@ -497,6 +499,437 @@ def list_configs(
 
 
 # ---------------------------------------------------------------------------
+# Fonctions publiques — Campagnes
+# ---------------------------------------------------------------------------
+
+
+def _sanitize_label(label: str) -> str:
+    """Sanitize un label pour nom de dossier (. -> p, garder - et _)."""
+    return label.replace(".", "p").replace(" ", "_")
+
+
+def _guess_timeframe_slippage(campaign_name: str) -> tuple:
+    """Devine timeframe et slippage depuis le nom de campagne."""
+    tf = "5min" if "5min" in campaign_name else "1min"
+    slip = "2tick" if "2tick" in campaign_name else "1tick"
+    return tf, slip
+
+
+def _compute_parameter_distribution(
+    df: pd.DataFrame, exit_mode: str, top_n: int = 50,
+) -> dict:
+    """Calcule la distribution des parametres dans les top N rentables (trades>=80)."""
+    rentables = df[(df["pnl_net"] > 0) & (df["trades"] >= 80)]
+    top = rentables.nlargest(min(top_n, len(rentables)), "pnl_net")
+
+    if len(top) == 0:
+        return {}
+
+    # Colonnes indicateurs + entree
+    param_cols = ["beta", "zp", "cp", "adf", "zE", "co"]
+    # Colonnes sortie selon le mode
+    if exit_mode == "zscore":
+        param_cols += ["zTP", "zSL"]
+    elif exit_mode == "dollar":
+        param_cols += ["TP", "SL"]
+
+    dist = {}
+    for col in param_cols:
+        if col in top.columns:
+            counts = top[col].value_counts().sort_index()
+            dist[col] = {str(k): int(v) for k, v in counts.items()}
+
+    return dist
+
+
+def archive_campaign(
+    csv_path: str | Path,
+    campaign_name: str,
+    top_n: int = 20,
+    sort_by: str = "pnl_net",
+    min_trades: int = 50,
+    description: str = "",
+) -> dict:
+    """
+    Archive une campagne complete de grid search.
+
+    Cree la structure :
+        output/archive/campaigns/{campaign_name}/
+            campaign_meta.json
+            full_results.csv
+            top{n}/
+                01_{config_label}/metrics.json + config.yaml
+
+    Returns:
+        dict avec les stats de la campagne (campaign_meta).
+    """
+    csv_path = Path(csv_path)
+    df = pd.read_csv(csv_path, sep=";")
+    df = df.dropna(subset=["pnl_net", "trades"])
+
+    # -- Repertoire campagne --
+    campaign_dir = CAMPAIGNS_DIR / campaign_name
+    campaign_dir.mkdir(parents=True, exist_ok=True)
+
+    # Copier le CSV complet
+    shutil.copy2(str(csv_path), str(campaign_dir / "full_results.csv"))
+
+    # -- Stats agregees --
+    total_configs = len(df)
+    exit_mode = _detect_exit_mode(df)
+    tf, slip = _guess_timeframe_slippage(campaign_name)
+
+    filt_50 = df[(df["pnl_net"] > 0) & (df["trades"] >= min_trades)]
+    filt_80 = df[(df["pnl_net"] > 0) & (df["trades"] >= 80)]
+    filt_ppt = filt_80[filt_80["pnl_avg"] >= 150] if "pnl_avg" in df.columns else pd.DataFrame()
+
+    profitable_configs = len(filt_50)
+    profitable_configs_80 = len(filt_80)
+    profitable_pct = round(profitable_configs / max(total_configs, 1) * 100, 1)
+    pnl_per_trade_ge_150 = len(filt_ppt)
+
+    # Top metrics parmi trades >= min_trades
+    df_valid = df[df["trades"] >= min_trades]
+    if len(df_valid) > 0:
+        best_row = df_valid.loc[df_valid["pnl_net"].idxmax()]
+        top_pnl = float(best_row["pnl_net"])
+        top_pnl_per_trade = float(best_row.get("pnl_avg", 0))
+        top_config_label = str(best_row.get("label", "unknown"))
+        top_sharpe = float(df_valid["sharpe"].max()) if "sharpe" in df_valid.columns else 0.0
+        top_pf = float(df_valid["profit_factor"].max()) if "profit_factor" in df_valid.columns else 0.0
+    else:
+        top_pnl = top_pnl_per_trade = top_sharpe = top_pf = 0.0
+        top_config_label = "none"
+
+    median_ppt = float(filt_80["pnl_avg"].median()) if len(filt_80) > 0 and "pnl_avg" in filt_80.columns else 0.0
+
+    # -- Distribution des parametres --
+    param_dist = _compute_parameter_distribution(df, exit_mode)
+
+    # -- Archiver les top N --
+    top_dir_name = f"top{top_n}"
+    top_dir = campaign_dir / top_dir_name
+
+    df_top = df_valid.sort_values(by=sort_by, ascending=False).head(top_n) if len(df_valid) > 0 else pd.DataFrame()
+
+    for i, (_, row) in enumerate(df_top.iterrows()):
+        label = str(row.get("label", f"config_{i}"))
+        label_safe = _sanitize_label(label)
+        config_dir = top_dir / f"{i + 1:02d}_{label_safe}"
+        config_dir.mkdir(parents=True, exist_ok=True)
+
+        # metrics.json
+        metrics = _metrics_from_csv_row(row)
+        metrics["rank"] = i + 1
+        metrics["archived_at"] = datetime.now().isoformat()
+        with open(config_dir / "metrics.json", "w", encoding="utf-8") as f:
+            json.dump(metrics, f, indent=2, ensure_ascii=False)
+
+        # config.yaml
+        config_snapshot = _config_from_csv_row(row, exit_mode)
+        with open(config_dir / "config.yaml", "w", encoding="utf-8") as f:
+            yaml.dump(config_snapshot, f, default_flow_style=False, allow_unicode=True)
+
+    # -- campaign_meta.json --
+    campaign_meta = {
+        "campaign_name": campaign_name,
+        "description": description,
+        "archived_at": datetime.now().isoformat(),
+        "timeframe": tf,
+        "exit_mode": exit_mode,
+        "slippage": slip,
+        "total_configs": total_configs,
+        "profitable_configs": profitable_configs,
+        "profitable_configs_80": profitable_configs_80,
+        "profitable_pct": profitable_pct,
+        "pnl_per_trade_ge_150": pnl_per_trade_ge_150,
+        "median_pnl_per_trade": round(median_ppt, 2),
+        "top_pnl": round(top_pnl, 2),
+        "top_pnl_per_trade": round(top_pnl_per_trade, 2),
+        "top_sharpe": round(top_sharpe, 2),
+        "top_pf": round(top_pf, 2),
+        "top_config_label": top_config_label,
+        "parameter_distribution": param_dist,
+    }
+
+    with open(campaign_dir / "campaign_meta.json", "w", encoding="utf-8") as f:
+        json.dump(campaign_meta, f, indent=2, ensure_ascii=False)
+
+    # -- Resume --
+    print(f"[OK] Campagne {campaign_name} archivee")
+    print(f"     Total: {total_configs:,} configs")
+    print(f"     Rentables (trades>={min_trades}): {profitable_configs:,} ({profitable_pct}%)")
+    print(f"     Rentables (trades>=80): {profitable_configs_80:,}")
+    print(f"     PnL/trade >= $150: {pnl_per_trade_ge_150}")
+    print(f"     Top PnL: ${top_pnl:,.0f} (${top_pnl_per_trade:,.0f}/trade)")
+    print(f"     Top {top_n} archivees dans {top_dir}")
+
+    return campaign_meta
+
+
+def compare_campaigns(
+    campaign_names: Optional[List[str]] = None,
+    sort_by: str = "top_pnl",
+) -> pd.DataFrame:
+    """
+    Compare plusieurs campagnes archivees cote a cote.
+
+    Lit les campaign_meta.json. Si campaign_names est None,
+    compare toutes les campagnes trouvees.
+
+    Affiche un tableau formate et retourne un DataFrame.
+    """
+    records = []
+
+    if not CAMPAIGNS_DIR.exists():
+        print("[INFO] Aucune campagne archivee.")
+        return pd.DataFrame()
+
+    for meta_path in sorted(CAMPAIGNS_DIR.glob("*/campaign_meta.json")):
+        try:
+            with open(meta_path, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        if campaign_names and meta.get("campaign_name") not in campaign_names:
+            continue
+
+        records.append({
+            "campaign": meta.get("campaign_name", "unknown"),
+            "timeframe": meta.get("timeframe", "?"),
+            "exit_mode": meta.get("exit_mode", "?"),
+            "slippage": meta.get("slippage", "?"),
+            "total_configs": meta.get("total_configs", 0),
+            "profitable_80": meta.get("profitable_configs_80", 0),
+            "profitable_pct": meta.get("profitable_pct", 0.0),
+            "ppt_ge_150": meta.get("pnl_per_trade_ge_150", 0),
+            "median_ppt": meta.get("median_pnl_per_trade", 0.0),
+            "top_pnl": meta.get("top_pnl", 0.0),
+            "top_ppt": meta.get("top_pnl_per_trade", 0.0),
+            "top_pf": meta.get("top_pf", 0.0),
+        })
+
+    if not records:
+        print("[INFO] Aucune campagne trouvee.")
+        return pd.DataFrame()
+
+    df = pd.DataFrame(records)
+    if sort_by in df.columns:
+        df = df.sort_values(by=sort_by, ascending=False)
+    df = df.reset_index(drop=True)
+
+    # Affichage formate
+    print("=" * 120)
+    print("COMPARAISON DES CAMPAGNES")
+    print("=" * 120)
+    print(df.to_string(index=False))
+    print()
+
+    return df
+
+
+def generate_campaign_report(
+    campaign_names: List[str],
+    output_path: Optional[str | Path] = None,
+    title: str = "Phase B Batch 1 -- Resultats",
+) -> str:
+    """
+    Genere un rapport Markdown complet pour un batch de campagnes.
+
+    Returns:
+        Chemin du fichier genere.
+    """
+    if output_path is None:
+        output_path = REPORTS_DIR / "campaign_report.md"
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Charger les metas
+    metas = []
+    for name in campaign_names:
+        meta_path = CAMPAIGNS_DIR / name / "campaign_meta.json"
+        if meta_path.exists():
+            with open(meta_path, "r", encoding="utf-8") as f:
+                metas.append(json.load(f))
+
+    if not metas:
+        print("[ERREUR] Aucune campagne trouvee.")
+        return str(output_path)
+
+    lines = []
+    lines.append(f"# {title}")
+    lines.append("")
+    lines.append(f"Date: {datetime.now().strftime('%Y-%m-%d')}")
+    lines.append("")
+
+    # -- Section Resume --
+    lines.append("## Resume")
+    lines.append("")
+    lines.append("| Campagne | Configs | Rentables (t>=80) | % | $/t>=$150 | Median $/t | Top PnL | Top $/t | Top PF |")
+    lines.append("|----------|---------|-------------------|---|-----------|------------|---------|---------|--------|")
+    for m in metas:
+        lines.append(
+            f"| {m['campaign_name']} | {m['total_configs']:,} "
+            f"| {m['profitable_configs_80']:,} | {m['profitable_pct']}% "
+            f"| {m['pnl_per_trade_ge_150']} | ${m['median_pnl_per_trade']:,.0f} "
+            f"| ${m['top_pnl']:,.0f} | ${m['top_pnl_per_trade']:,.0f} "
+            f"| {m['top_pf']:.2f} |"
+        )
+    lines.append("")
+
+    # -- Section GO / NO-GO --
+    lines.append("## GO / NO-GO")
+    lines.append("")
+    for m in metas:
+        name = m["campaign_name"]
+        lines.append(f"### {name}")
+        lines.append("")
+
+        if "5min" in name:
+            go = m["profitable_configs_80"] >= 100
+            lines.append(f"- Rentables (trades>=80) : {m['profitable_configs_80']:,} "
+                         f"-> **{'GO' if go else 'NO-GO'}** (seuil: >=100)")
+        elif "dollar" in name:
+            go = m["profitable_pct"] > 15
+            lines.append(f"- Taux rentable : {m['profitable_pct']}% "
+                         f"-> **{'GO' if go else 'NO-GO'}** (seuil: >15%)")
+        else:
+            lines.append(f"- Rentables (trades>=50) : {m['profitable_configs']:,} ({m['profitable_pct']}%)")
+            lines.append(f"- Informatif (pas de seuil strict)")
+
+        if m["median_pnl_per_trade"] < 150:
+            lines.append(f"- Median PnL/trade : ${m['median_pnl_per_trade']:,.0f} -> **WARN** (<$150)")
+        if m["top_pnl_per_trade"] < 100:
+            lines.append(f"- Top PnL/trade : ${m['top_pnl_per_trade']:,.0f} -> **WARN** (fragile au slippage)")
+
+        lines.append("")
+
+    # -- Section Top 5 par timeframe --
+    lines.append("## Top 5 par timeframe")
+    lines.append("")
+
+    # Grouper les campagnes par timeframe
+    by_tf = {}
+    for m in metas:
+        tf = m["timeframe"]
+        if tf not in by_tf:
+            by_tf[tf] = []
+        by_tf[tf].append(m)
+
+    for tf, tf_metas in sorted(by_tf.items()):
+        slip_vals = set(m["slippage"] for m in tf_metas)
+        slip_str = "/".join(sorted(slip_vals))
+        lines.append(f"### Top 5 -- {tf} (slippage {slip_str})")
+        lines.append("")
+
+        # Charger les full_results.csv de chaque campagne dans ce timeframe
+        all_rows = []
+        for m in tf_metas:
+            csv_p = CAMPAIGNS_DIR / m["campaign_name"] / "full_results.csv"
+            if csv_p.exists():
+                df_c = pd.read_csv(csv_p, sep=";")
+                df_c["campaign"] = m["campaign_name"]
+                all_rows.append(df_c)
+
+        if all_rows:
+            df_merged = pd.concat(all_rows, ignore_index=True)
+            df_merged = df_merged[df_merged["trades"] >= 80]
+            top5 = df_merged.nlargest(5, "pnl_net")
+
+            lines.append("| # | Config | Campagne | Trades | WR% | PnL | $/trade | PF | MaxDD | Sharpe |")
+            lines.append("|---|--------|----------|--------|-----|-----|---------|-----|-------|--------|")
+            for i, (_, r) in enumerate(top5.iterrows(), 1):
+                lines.append(
+                    f"| {i} | {r['label']} | {r['campaign']} "
+                    f"| {int(r['trades'])} | {r['win_rate']:.1f}% "
+                    f"| ${r['pnl_net']:,.0f} | ${r.get('pnl_avg', 0):,.0f} "
+                    f"| {r['profit_factor']:.2f} | ${r['max_dd']:,.0f} "
+                    f"| {r.get('sharpe', 0):+.2f} |"
+                )
+            lines.append("")
+
+        if tf == "1min":
+            lines.append("> ATTENTION: Ces configs sont a 1 tick de slippage. "
+                         "L'audit B0 montre que 0/32,400 configs 1min dollar survivent a 2 ticks.")
+            lines.append("> B4 top $111K avec PF 1.15 et $67/trade -- volume sans qualite, "
+                         "a valider en Phase C4 (stress test slippage).")
+            lines.append("")
+
+    # -- Section Decouvertes --
+    lines.append("## Decouvertes cles")
+    lines.append("")
+    for m in metas:
+        name = m["campaign_name"]
+        lines.append(f"### {name}")
+        lines.append("")
+        lines.append(f"- Top config : {m['top_config_label']}")
+        lines.append(f"- Top PnL : ${m['top_pnl']:,.0f} (${m['top_pnl_per_trade']:,.0f}/trade, PF {m['top_pf']:.2f})")
+
+        dist = m.get("parameter_distribution", {})
+        if dist:
+            # Identifier les parametres dominants
+            for param, counts in dist.items():
+                if not counts:
+                    continue
+                total = sum(counts.values())
+                best_val = max(counts, key=counts.get)
+                best_count = counts[best_val]
+                pct = best_count / max(total, 1) * 100
+                if pct > 70:
+                    lines.append(f"- **{param}={best_val} quasi-exclusif** ({best_count}/{total}, {pct:.0f}%)")
+                elif pct > 40:
+                    lines.append(f"- {param}={best_val} domine ({best_count}/{total}, {pct:.0f}%)")
+        lines.append("")
+
+    # -- Section Distribution --
+    lines.append("## Distribution des parametres gagnants")
+    lines.append("")
+    for m in metas:
+        name = m["campaign_name"]
+        dist = m.get("parameter_distribution", {})
+        if not dist:
+            continue
+        lines.append(f"### {name} (top 50 rentables, trades>=80)")
+        lines.append("")
+        for param, counts in dist.items():
+            if not counts:
+                continue
+            parts = [f"{v}: {c}x" for v, c in sorted(counts.items(), key=lambda x: -x[1])]
+            lines.append(f"- **{param}** : {', '.join(parts)}")
+        lines.append("")
+
+    # -- Section Recommandations --
+    lines.append("## Recommandations Batch 2")
+    lines.append("")
+    for m in metas:
+        name = m["campaign_name"]
+        if "5min" in name and m["profitable_configs_80"] >= 100:
+            lines.append(f"- **{name}** GO -> Lancer B2 (5min zscore 1 tick) + B3 (5min hybride)")
+        elif "dollar" in name and m["profitable_pct"] > 15:
+            lines.append(f"- **{name}** GO -> Lancer B6 (1min dollar zp long)")
+            if m["top_pnl_per_trade"] < 100:
+                lines.append(f"  - WARN : PnL/trade = ${m['top_pnl_per_trade']:,.0f}, fragile au slippage")
+        else:
+            lines.append(f"- **{name}** informatif -> Pas de suite directe, utile pour Phase C+")
+    lines.append("")
+    lines.append("### Points d'attention")
+    lines.append("")
+    lines.append("- B4 top PnL ($111K) est trompeur -- PF de 1.15 et $67/trade signifient que")
+    lines.append("  cette config ne survivra probablement pas au stress test slippage en Phase C4")
+    lines.append("- B1 reste le mode le plus prometteur en qualite (PF 2.55, $455/trade)")
+    lines.append("- adf=26 doit etre inclus dans les grilles B2/B3 (decouverte majeure B1)")
+    lines.append("")
+
+    content = "\n".join(lines)
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+    print(f"[OK] Rapport genere : {output_path}")
+    return str(output_path)
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -509,7 +942,8 @@ def main() -> None:
     parser.add_argument(
         "--action",
         required=True,
-        choices=["archive-top", "generate-rankings", "dashboard", "list"],
+        choices=["archive-top", "generate-rankings", "dashboard", "list",
+                 "archive-campaign", "compare", "report"],
         help="Action a executer",
     )
     parser.add_argument(
@@ -547,6 +981,36 @@ def main() -> None:
         type=str,
         default="1tick",
         help="Slippage (default: 1tick)",
+    )
+    parser.add_argument(
+        "--campaign",
+        type=str,
+        default=None,
+        help="Nom de la campagne (pour archive-campaign)",
+    )
+    parser.add_argument(
+        "--campaigns",
+        type=str,
+        default=None,
+        help="Liste de campagnes separees par virgules (pour compare/report)",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default=None,
+        help="Chemin du fichier de sortie (pour report)",
+    )
+    parser.add_argument(
+        "--description",
+        type=str,
+        default="",
+        help="Description de la campagne",
+    )
+    parser.add_argument(
+        "--min-trades",
+        type=int,
+        default=50,
+        help="Minimum de trades (default: 50)",
     )
 
     args = parser.parse_args()
@@ -592,6 +1056,32 @@ def main() -> None:
 
             print(df[display_cols].to_string(index=False))
             print(f"\nTotal : {len(df)} config(s)")
+
+    elif args.action == "archive-campaign":
+        if args.csv is None or args.campaign is None:
+            parser.error("--csv et --campaign requis pour archive-campaign")
+        csv_path = Path(args.csv)
+        if not csv_path.exists():
+            print(f"[ERREUR] Fichier introuvable : {csv_path}")
+            return
+        archive_campaign(
+            csv_path=csv_path,
+            campaign_name=args.campaign,
+            top_n=args.n,
+            sort_by=args.sort_by,
+            min_trades=args.min_trades,
+            description=args.description,
+        )
+
+    elif args.action == "compare":
+        names = args.campaigns.split(",") if args.campaigns else None
+        compare_campaigns(campaign_names=names, sort_by=args.sort_by)
+
+    elif args.action == "report":
+        if args.campaigns is None:
+            parser.error("--campaigns requis pour report")
+        names = args.campaigns.split(",")
+        generate_campaign_report(campaign_names=names, output_path=args.output)
 
 
 if __name__ == "__main__":

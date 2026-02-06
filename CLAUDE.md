@@ -424,9 +424,16 @@ Teste differents parametres via langage naturel en francais. Supporte le grid se
 - Utilise `optimizer.py` : charge les donnees 1 fois, boucle sur N configs en memoire
 - Ne modifie PAS le YAML pendant les tests (travaille en memoire)
 
-### /compare
-Compare tous les backtests archives dans `output/archive/index.csv`.
-- Affiche un tableau trie par PnL net (ou autre critere)
+### /results
+Archive et analyse les resultats de grid search. Supporte l'archivage de campagnes,
+la comparaison inter-campagnes, et la generation de rapports.
+```bash
+python src/archive_manager.py --action archive-campaign --csv output/grid.csv --campaign NOM --top-n 20
+python src/archive_manager.py --action compare
+python src/archive_manager.py --action report --campaigns C1,C2,C3
+python src/archive_manager.py --action dashboard
+python src/archive_manager.py --action list
+```
 
 ### /grid-search
 Lance un grid search massif en background (milliers de configs), genere un rapport et met a jour le CHANGELOG.

@@ -1,0 +1,57 @@
+{
+  "campaign_name": "B4_1min_dollar_1tick",
+  "description": "Phase B4 - 1min dollar, 1 tick, 9720 configs",
+  "archived_at": "2026-02-06T16:06:08.998634",
+  "timeframe": "1min",
+  "exit_mode": "dollar",
+  "slippage": "1tick",
+  "total_configs": 9720,
+  "profitable_configs": 2222,
+  "profitable_configs_80": 1945,
+  "profitable_pct": 22.9,
+  "pnl_per_trade_ge_150": 9,
+  "median_pnl_per_trade": 18.2,
+  "top_pnl": 111583.0,
+  "top_pnl_per_trade": 67.42,
+  "top_sharpe": 0.5,
+  "top_pf": 2.85,
+  "top_config_label": "b2640_zp20_cp48_adf96_zE2.5_co40_TP1000_SL1200",
+  "parameter_distribution": {
+    "beta": {
+      "1980": 13,
+      "2640": 37
+    },
+    "zp": {
+      "15": 19,
+      "20": 25,
+      "24": 6
+    },
+    "cp": {
+      "24": 11,
+      "30": 11,
+      "48": 28
+    },
+    "adf": {
+      "64": 12,
+      "96": 29,
+      "128": 9
+    },
+    "zE": {
+      "2.5": 50
+    },
+    "co": {
+      "40": 43,
+      "50": 7
+    },
+    "TP": {
+      "500": 2,
+      "700": 10,
+      "1000": 38
+    },
+    "SL": {
+      "800": 5,
+      "1000": 14,
+      "1200": 31
+    }
+  }
+}

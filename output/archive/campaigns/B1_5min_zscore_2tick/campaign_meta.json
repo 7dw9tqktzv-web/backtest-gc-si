@@ -1,0 +1,64 @@
+{
+  "campaign_name": "B1_5min_zscore_2tick",
+  "description": "Phase B1 - 5min pure zscore, 2 ticks, 34560 configs",
+  "archived_at": "2026-02-06T16:05:59.858810",
+  "timeframe": "5min",
+  "exit_mode": "zscore",
+  "slippage": "2tick",
+  "total_configs": 34560,
+  "profitable_configs": 2799,
+  "profitable_configs_80": 1794,
+  "profitable_pct": 8.1,
+  "pnl_per_trade_ge_150": 224,
+  "median_pnl_per_trade": 59.16,
+  "top_pnl": 49572.0,
+  "top_pnl_per_trade": 454.79,
+  "top_sharpe": 0.22,
+  "top_pf": 2.83,
+  "top_config_label": "b2640_zp20_cp24_adf26_zE3.5_co40_zTP-1.0_zSL4.5_pure",
+  "parameter_distribution": {
+    "beta": {
+      "1320": 8,
+      "2640": 28,
+      "3960": 10,
+      "5280": 4
+    },
+    "zp": {
+      "20": 19,
+      "24": 15,
+      "30": 6,
+      "48": 9,
+      "60": 1
+    },
+    "cp": {
+      "12": 5,
+      "24": 38,
+      "36": 7
+    },
+    "adf": {
+      "26": 40,
+      "96": 10
+    },
+    "zE": {
+      "2.5": 1,
+      "3.0": 8,
+      "3.5": 41
+    },
+    "co": {
+      "40": 34,
+      "50": 2,
+      "60": 14
+    },
+    "zTP": {
+      "-1.0": 19,
+      "-0.5": 15,
+      "0.0": 12,
+      "0.5": 4
+    },
+    "zSL": {
+      "3.5": 9,
+      "4.5": 19,
+      "5.0": 22
+    }
+  }
+}

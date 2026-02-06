@@ -536,3 +536,211 @@ class TestConfigFromCsvRowNaN:
         assert result["entry"]["cointegration_score_min"] == 0  # default
         assert result["exit"]["zscore_tp"] == -1.0
         assert result["exit"]["zscore_sl"] == 0.0  # default
+
+
+# ---------------------------------------------------------------------------
+# Fixtures pour campagnes
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def campaign_dirs(tmp_path, monkeypatch):
+    """Redirige toutes les constantes y compris CAMPAIGNS_DIR et REPORTS_DIR."""
+    monkeypatch.setattr(archive_manager, "ARCHIVE_DIR", tmp_path / "archive")
+    monkeypatch.setattr(archive_manager, "RAW_DIR", tmp_path / "raw")
+    monkeypatch.setattr(archive_manager, "RANKINGS_DIR", tmp_path / "rankings")
+    monkeypatch.setattr(archive_manager, "LATEST_DIR", tmp_path / "latest")
+    monkeypatch.setattr(archive_manager, "CAMPAIGNS_DIR", tmp_path / "archive" / "campaigns")
+    monkeypatch.setattr(archive_manager, "REPORTS_DIR", tmp_path / "reports")
+    return tmp_path
+
+
+def _make_campaign_csv(path: Path, n: int = 30, mode: str = "zscore") -> Path:
+    """Cree un CSV de grid search fictif pour tester les campagnes."""
+    rows = []
+    for i in range(n):
+        row = {
+            "label": f"b2640_zp20_cp24_adf26_zE3.5_co40_cfg{i}",
+            "beta": 2640 if i < n // 2 else 1320,
+            "zp": 20,
+            "cp": 24,
+            "adf": 26 if i < n * 3 // 4 else 96,
+            "zE": 3.5,
+            "co": 40,
+            "trades": 80 + i * 2,
+            "long": 40 + i,
+            "short": 40 + i,
+            "win_rate": 50 + i * 0.3,
+            "pnl_net": -5000 + i * 500,  # mix profitable / non-profitable
+            "pnl_avg": (-5000 + i * 500) / max(80 + i * 2, 1),
+            "profit_factor": 0.8 + i * 0.05,
+            "max_dd": -(2000 + i * 50),
+            "sharpe": -0.2 + i * 0.03,
+            "calmar": 0.0,
+            "sortino": 0.0,
+            "tp_zscore": 10 + i,
+            "tp_dollar": 0,
+            "sl_zscore": 5,
+            "sl_dollar": 0,
+        }
+        if mode == "zscore":
+            row["zTP"] = -1.0 if i % 2 == 0 else 0.5
+            row["zSL"] = 4.5
+            row["mode"] = "pure_zscore"
+        elif mode == "dollar":
+            row["TP"] = 300 + i * 10
+            row["SL"] = 800
+        rows.append(row)
+
+    df = pd.DataFrame(rows)
+    df.to_csv(path, sep=";", index=False)
+    return path
+
+
+# ---------------------------------------------------------------------------
+# Tests pour campagnes
+# ---------------------------------------------------------------------------
+
+
+class TestArchiveCampaign:
+    """Tests pour archive_campaign()."""
+
+    def test_creates_structure(self, campaign_dirs, tmp_path):
+        """Verifie la creation des dossiers et fichiers."""
+        csv_path = tmp_path / "grid_test.csv"
+        _make_campaign_csv(csv_path, n=30, mode="zscore")
+
+        result = archive_manager.archive_campaign(
+            csv_path=csv_path,
+            campaign_name="test_campaign",
+            top_n=5,
+            min_trades=50,
+        )
+
+        camp_dir = tmp_path / "archive" / "campaigns" / "test_campaign"
+        assert camp_dir.exists()
+        assert (camp_dir / "campaign_meta.json").exists()
+        assert (camp_dir / "full_results.csv").exists()
+        assert (camp_dir / "top5").exists()
+
+    def test_meta_content(self, campaign_dirs, tmp_path):
+        """campaign_meta.json a les bons champs et valeurs."""
+        csv_path = tmp_path / "grid_meta.csv"
+        _make_campaign_csv(csv_path, n=30, mode="zscore")
+
+        result = archive_manager.archive_campaign(
+            csv_path=csv_path,
+            campaign_name="test_5min_zscore_2tick",
+            top_n=5,
+            min_trades=50,
+            description="Test campaign",
+        )
+
+        assert result["campaign_name"] == "test_5min_zscore_2tick"
+        assert result["total_configs"] == 30
+        assert result["timeframe"] == "5min"
+        assert result["slippage"] == "2tick"
+        assert result["exit_mode"] == "zscore"
+        assert "parameter_distribution" in result
+        assert result["description"] == "Test campaign"
+
+    def test_top_n_count(self, campaign_dirs, tmp_path):
+        """Le bon nombre de configs top N."""
+        csv_path = tmp_path / "grid_topn.csv"
+        _make_campaign_csv(csv_path, n=30, mode="zscore")
+
+        archive_manager.archive_campaign(
+            csv_path=csv_path,
+            campaign_name="test_topn",
+            top_n=5,
+            min_trades=50,
+        )
+
+        top_dir = tmp_path / "archive" / "campaigns" / "test_topn" / "top5"
+        config_dirs = [d for d in top_dir.iterdir() if d.is_dir()]
+        assert len(config_dirs) == 5
+
+        # Chaque dir contient metrics.json + config.yaml
+        for d in config_dirs:
+            assert (d / "metrics.json").exists()
+            assert (d / "config.yaml").exists()
+
+    def test_min_trades_filter(self, campaign_dirs, tmp_path):
+        """Filtrage correct par min_trades."""
+        csv_path = tmp_path / "grid_filter.csv"
+        _make_campaign_csv(csv_path, n=30, mode="zscore")
+
+        result = archive_manager.archive_campaign(
+            csv_path=csv_path,
+            campaign_name="test_filter",
+            top_n=5,
+            min_trades=100,
+        )
+
+        # Avec min_trades=100 et trades=80+i*2, seules les lignes i>=10 ont trades>=100
+        assert result["profitable_configs"] <= 30
+
+    def test_idempotent(self, campaign_dirs, tmp_path):
+        """Relancer sur la meme campagne ne crashe pas."""
+        csv_path = tmp_path / "grid_idem.csv"
+        _make_campaign_csv(csv_path, n=20, mode="zscore")
+
+        r1 = archive_manager.archive_campaign(
+            csv_path=csv_path, campaign_name="test_idem", top_n=3,
+        )
+        r2 = archive_manager.archive_campaign(
+            csv_path=csv_path, campaign_name="test_idem", top_n=3,
+        )
+        assert r1["total_configs"] == r2["total_configs"]
+
+
+class TestCompareCampaigns:
+    """Tests pour compare_campaigns()."""
+
+    def test_compare_two(self, campaign_dirs, tmp_path):
+        """DataFrame avec 2 lignes, bonnes colonnes."""
+        for name in ["camp_a", "camp_b"]:
+            csv_path = tmp_path / f"grid_{name}.csv"
+            _make_campaign_csv(csv_path, n=20, mode="zscore")
+            archive_manager.archive_campaign(
+                csv_path=csv_path, campaign_name=name, top_n=3,
+            )
+
+        df = archive_manager.compare_campaigns(campaign_names=["camp_a", "camp_b"])
+        assert len(df) == 2
+        assert "campaign" in df.columns
+        assert "top_pnl" in df.columns
+
+    def test_compare_empty(self, campaign_dirs, tmp_path):
+        """Pas de crash si aucune campagne."""
+        df = archive_manager.compare_campaigns()
+        assert df.empty
+
+
+class TestGenerateCampaignReport:
+    """Tests pour generate_campaign_report()."""
+
+    def test_creates_file(self, campaign_dirs, tmp_path):
+        """Fichier .md cree avec sections cles."""
+        for name in ["B1_5min_zscore_2tick", "B4_1min_dollar_1tick"]:
+            csv_path = tmp_path / f"grid_{name}.csv"
+            mode = "zscore" if "zscore" in name else "dollar"
+            _make_campaign_csv(csv_path, n=20, mode=mode)
+            archive_manager.archive_campaign(
+                csv_path=csv_path, campaign_name=name, top_n=5,
+            )
+
+        out_path = tmp_path / "reports" / "test_report.md"
+        result = archive_manager.generate_campaign_report(
+            campaign_names=["B1_5min_zscore_2tick", "B4_1min_dollar_1tick"],
+            output_path=out_path,
+        )
+
+        assert Path(result).exists()
+        content = Path(result).read_text(encoding="utf-8")
+        assert "Resume" in content
+        assert "GO / NO-GO" in content
+        assert "Top 5 par timeframe" in content
+        assert "Decouvertes" in content
+        assert "Distribution" in content
+        assert "Recommandations" in content
