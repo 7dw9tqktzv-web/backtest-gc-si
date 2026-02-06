@@ -105,6 +105,8 @@ def run_hybrid_backtest(
     betas = df_1min['Beta'].values
     hursts = df_1min['Hurst'].values if 'Hurst' in df_1min.columns else np.full(n, np.nan)
     datetimes_1min = df_1min['DateTime'].values
+    timestamps_1min = pd.to_datetime(df_1min['DateTime'])
+    hours_1min = timestamps_1min.dt.hour.values
 
     # Preparer les donnees 5s pour acces rapide
     # On cree un index pour retrouver les barres 5s entre deux barres 1-min
@@ -225,7 +227,7 @@ def run_hybrid_backtest(
                         pnl_gross = pnl_tp
                     pnl_net = pnl_gross - costs['total_cost']
 
-                    entry_dt = pd.Timestamp(datetimes_1min[entry_1min_idx])
+                    entry_dt = timestamps_1min.iloc[entry_1min_idx]
                     exit_dt = pd.Timestamp(dollar_exit_dt)
                     duration = (exit_dt - entry_dt).total_seconds() / 60
 
@@ -269,7 +271,7 @@ def run_hybrid_backtest(
                             state = STATE_FLAT
 
                     # Reentree sur meme barre (filtre horaire applique aussi)
-                    bar_hour_re = pd.Timestamp(datetimes_1min[i]).hour
+                    bar_hour_re = hours_1min[i]
                     hour_ok_re = entry_start_hour <= bar_hour_re < entry_end_hour
 
                     if hour_ok_re and state in (STATE_FLAT, STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT):
@@ -327,8 +329,8 @@ def run_hybrid_backtest(
                 pnl_gross = pnl_gc + pnl_si
                 pnl_net = pnl_gross - costs['total_cost']
 
-                entry_dt = pd.Timestamp(datetimes_1min[entry_1min_idx])
-                exit_dt = pd.Timestamp(datetimes_1min[i])
+                entry_dt = timestamps_1min.iloc[entry_1min_idx]
+                exit_dt = timestamps_1min.iloc[i]
                 duration = (exit_dt - entry_dt).total_seconds() / 60
 
                 trades.append({
@@ -371,7 +373,7 @@ def run_hybrid_backtest(
 
         # ---- ETAPE 3 : Verifier les entrees ----
         # Filtre horaire : bloquer les nouvelles entrees hors plage autorisee
-        bar_hour = pd.Timestamp(datetimes_1min[i]).hour
+        bar_hour = hours_1min[i]
         hour_ok = entry_start_hour <= bar_hour < entry_end_hour
 
         if hour_ok and state in (STATE_FLAT, STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT):
@@ -410,8 +412,8 @@ def run_hybrid_backtest(
         pnl_gross = pnl_gc + pnl_si
         pnl_net = pnl_gross - costs['total_cost']
 
-        entry_dt = pd.Timestamp(datetimes_1min[entry_1min_idx])
-        exit_dt = pd.Timestamp(datetimes_1min[last_i])
+        entry_dt = timestamps_1min.iloc[entry_1min_idx]
+        exit_dt = timestamps_1min.iloc[last_i]
         duration = (exit_dt - entry_dt).total_seconds() / 60
 
         trades.append({
