@@ -37,21 +37,32 @@ from optimizer import apply_overrides, compute_metrics
 # WORKER FUNCTION (niveau module pour multiprocessing)
 # ============================================================================
 
+_WORKER_DATA = {}
+
+def _init_worker(df_main_arg, df_5s_arg):
+    """Initialise les donnees partagees dans chaque worker (1 fois par worker)."""
+    _WORKER_DATA['df_main'] = df_main_arg
+    _WORKER_DATA['df_5s'] = df_5s_arg
+
+
 def _process_indicator_group(args):
     """
     Worker function : calcule les indicateurs pour un groupe (1 fois),
     puis execute tous les backtests entry/exit pour ce groupe.
 
     Args:
-        args: tuple (g_idx, ind_overrides, base_config, df_main, df_5s,
+        args: tuple (g_idx, ind_overrides, base_config,
                      ee_variants, completed_labels, fixed_overrides,
                      label_builder, result_builder, timeframe)
 
     Returns:
         tuple (g_idx, batch_results, dt_ind)
     """
-    (g_idx, ind_ov, base_config, df_main, df_5s, ee_variants,
+    (g_idx, ind_ov, base_config, ee_variants,
      completed_labels, fixed_overrides, label_builder, result_builder, timeframe) = args
+
+    df_main = _WORKER_DATA['df_main']
+    df_5s = _WORKER_DATA['df_5s']
 
     # Import dans le worker (necessaire pour multiprocessing sur Windows)
     from indicators import calculate_all_indicators
@@ -235,7 +246,7 @@ class GridSearchRunner:
 
         # --- Preparer les arguments pour les workers ---
         worker_args = [
-            (g_idx, ind_ov, base_config, df_main, df_5s, self.entry_exit_variants,
+            (g_idx, ind_ov, base_config, self.entry_exit_variants,
              completed_labels, self.fixed_overrides, self.label_builder,
              self.result_builder, self.timeframe)
             for g_idx, ind_ov in enumerate(self.indicator_groups)
@@ -250,7 +261,9 @@ class GridSearchRunner:
         best_pnl_global = -999999
         best_label_global = ""
 
-        with mp.Pool(processes=num_workers) as pool:
+        with mp.Pool(processes=num_workers,
+                     initializer=_init_worker,
+                     initargs=(df_main, df_5s)) as pool:
             for g_idx, batch_results, dt_ind in pool.imap_unordered(_process_indicator_group, worker_args):
                 groups_done += 1
 
