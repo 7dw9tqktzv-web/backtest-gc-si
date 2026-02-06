@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from data_loader import load_and_prepare_data, load_5s_data, resample_to_5min
 from indicators import calculate_all_indicators
 from backtest_engine_hybrid import run_hybrid_backtest
-from optimizer import apply_overrides, compute_metrics
+from optimizer import apply_overrides, apply_overrides_fast, compute_metrics
 
 
 # ============================================================================
@@ -67,7 +67,7 @@ def _process_indicator_group(args):
     # Import dans le worker (necessaire pour multiprocessing sur Windows)
     from indicators import calculate_all_indicators
     from backtest_engine_hybrid import run_hybrid_backtest
-    from optimizer import apply_overrides, compute_metrics
+    from optimizer import apply_overrides, apply_overrides_fast, compute_metrics
 
     # Construire le prefixe du groupe d'indicateurs
     beta = ind_ov.get("indicators.beta_lookback", 0)
@@ -85,7 +85,7 @@ def _process_indicator_group(args):
         return g_idx, [], 0.0
 
     # Calculer les indicateurs (1 fois par groupe)
-    config_ind = apply_overrides(base_config, {**ind_ov, **fixed_overrides})
+    config_ind = apply_overrides_fast(base_config, {**ind_ov, **fixed_overrides})
     t_ind = time.time()
     df_ind = calculate_all_indicators(df_main, config_ind, verbose=False)
     dt_ind = time.time() - t_ind
@@ -104,7 +104,7 @@ def _process_indicator_group(args):
         else:
             merged = {**ind_ov, **ee, **fixed_overrides}
 
-        config_test = apply_overrides(base_config, merged)
+        config_test = apply_overrides_fast(base_config, merged)
         trades = run_hybrid_backtest(df_ind, df_5s, config_test, verbose=False)
         m = compute_metrics(trades)
 

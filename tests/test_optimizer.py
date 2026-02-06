@@ -16,7 +16,7 @@ import pytest
 
 # Ajouter src/ au path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
-from optimizer import apply_overrides, build_label, compute_metrics
+from optimizer import apply_overrides, apply_overrides_fast, build_label, compute_metrics
 
 
 # ============================================================================
@@ -54,6 +54,42 @@ class TestApplyOverrides:
         assert result['exit']['pnl_take_profit'] == 500
         assert result['exit']['pnl_stop_loss'] == -800
         assert result['indicators']['beta_lookback'] == 2640
+
+
+class TestApplyOverridesFast:
+    """Tests de apply_overrides_fast() -- doit produire le meme resultat que apply_overrides."""
+
+    def test_matches_apply_overrides(self, sample_config):
+        """Verifie que fast et normal produisent le meme resultat pour 10 override sets."""
+        override_sets = [
+            {"exit.pnl_take_profit": 500},
+            {"exit.pnl_stop_loss": -800},
+            {"indicators.beta_lookback": 2640},
+            {"exit.pnl_take_profit": 400, "exit.pnl_stop_loss": -600},
+            {"indicators.beta_lookback": 1320, "indicators.zscore_period": 24},
+            {"exit.pnl_take_profit": 1000, "indicators.beta_lookback": 3960},
+            {"indicators.correlation_period": 30, "indicators.adf_hurst_period": 128},
+            {"entry.zscore_entry_long": -3.0, "entry.zscore_entry_short": 3.0},
+            {"exit.zscore_tp_long": -1.5, "exit.zscore_sl_long": -4.0},
+            {"exit.pnl_take_profit": 300, "exit.pnl_stop_loss": -500,
+             "indicators.beta_lookback": 2640, "indicators.zscore_period": 20},
+        ]
+        for ov in override_sets:
+            expected = apply_overrides(sample_config, ov)
+            result = apply_overrides_fast(sample_config, ov)
+            # Comparer tous les sous-dicts
+            for section in expected:
+                if isinstance(expected[section], dict):
+                    assert result[section] == expected[section], f"Mismatch on {section} with {ov}"
+                else:
+                    assert result[section] == expected[section], f"Mismatch on {section} with {ov}"
+
+    def test_original_config_not_mutated(self, sample_config):
+        """La config originale n'est pas modifiee par apply_overrides_fast."""
+        import copy
+        original = copy.deepcopy(sample_config)
+        apply_overrides_fast(sample_config, {"exit.pnl_take_profit": 99999})
+        assert sample_config['exit']['pnl_take_profit'] == original['exit']['pnl_take_profit']
 
 
 # ============================================================================

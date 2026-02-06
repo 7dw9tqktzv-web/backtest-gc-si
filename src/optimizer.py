@@ -64,6 +64,33 @@ def apply_overrides(config, overrides):
     return cfg
 
 
+def apply_overrides_fast(config, overrides):
+    """
+    Version rapide sans deepcopy pour les hot paths (grid search).
+
+    Fait une copie superficielle du dict racine et des sous-dicts touches.
+    Ne PAS muter le resultat apres retour (usage unique par backtest).
+    """
+    cfg = {k: (dict(v) if isinstance(v, dict) else v) for k, v in config.items()}
+    for dotted_key, value in overrides.items():
+        keys = dotted_key.split('.')
+        if len(keys) == 2:
+            section, param = keys
+            if section not in cfg or not isinstance(cfg[section], dict):
+                cfg[section] = dict(config.get(section, {}))
+            cfg[section][param] = value
+        else:
+            target = cfg
+            for k in keys[:-1]:
+                if k not in target or not isinstance(target[k], dict):
+                    target[k] = {}
+                else:
+                    target[k] = dict(target[k])
+                target = target[k]
+            target[keys[-1]] = value
+    return cfg
+
+
 def build_label(overrides):
     """
     Build a short label from overrides using parameter shortcuts.
