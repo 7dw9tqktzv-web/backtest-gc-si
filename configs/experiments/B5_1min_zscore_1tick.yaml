@@ -1,0 +1,36 @@
+# Phase B5 -- 1min Z-Score pur, 1 tick slippage
+# Objectif : test inedit -- le Z-Score pur fonctionne-t-il en 1min ?
+# 81 groupes indicateurs x 72 entry/exit = 5,832 configs
+# Temps estime : 30-45min (skip 5s actif)
+#
+# Usage: python scripts/run_grid_search.py --config configs/experiments/B5_1min_zscore_1tick.yaml
+
+type: grid_search
+title: "PHASE B5 - 1MIN ZSCORE PUR 1 TICK"
+exit_mode: zscore
+
+execution:
+  timeframe: 1min
+  num_workers: 24
+  output_path: output/grid_search_B5_1min_zscore_1tick.csv
+  min_trades_for_sharpe: 10
+
+indicators:
+  beta_lookback: [1320, 1980, 2640]
+  zscore_period: [15, 20, 24]
+  correlation_period: [24, 30, 48]
+  adf_hurst_period: [64, 96, 128]
+
+entry_exit:
+  zscore_entry: [2.5, 3.0, 3.5]
+  cointegration_min: [40, 50]
+  zscore_tp: [-1.0, -0.5, 0.0, 0.5]
+  zscore_sl: [3.5, 4.0, 5.0]
+  dollar_modes: [pure_zscore]
+
+fixed_overrides:
+  exit.zscore_tp_enabled: true
+  exit.pnl_take_profit: 99999
+  exit.pnl_stop_loss: -99999
+  costs.slippage_gc_ticks: 1
+  costs.slippage_si_ticks: 1
