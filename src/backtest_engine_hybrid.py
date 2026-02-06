@@ -121,6 +121,10 @@ def run_hybrid_backtest(
     # Detecter le mode pure Z-Score (pas de dollar exits possibles)
     pure_zscore_mode = (pnl_tp >= 50000 and pnl_sl <= -50000)
 
+    # Point values pour calcul PnL inline dans le scan 5s
+    gc_pv = config['contracts']['gc_point_value']    # 100
+    si_pv = config['contracts']['si_point_value']    # 5000
+
     # Filtre horaire optionnel (bloque les entrees, pas les sorties)
     entry_start_hour = config['session'].get('entry_start_hour', 0)
     entry_end_hour = config['session'].get('entry_end_hour', 24)
@@ -183,11 +187,11 @@ def run_hybrid_backtest(
 
                 j = idx_5s_start
                 while j < len(dt_5s) and dt_5s[j] <= t_curr:
-                    pnl_5s = calculate_current_pnl(
-                        direction, entry_gc, entry_si,
-                        gc_5s[j], si_5s[j],
-                        gc_contracts, si_contracts, config
-                    )
+                    # PnL inline (evite l'appel de fonction dans la boucle interne)
+                    if direction == 1:
+                        pnl_5s = (entry_gc - gc_5s[j]) * gc_pv * gc_contracts + (si_5s[j] - entry_si) * si_pv * si_contracts
+                    else:
+                        pnl_5s = (gc_5s[j] - entry_gc) * gc_pv * gc_contracts + (entry_si - si_5s[j]) * si_pv * si_contracts
 
                     # Tracker max/min PnL intra-trade
                     if pnl_5s > max_pnl_intra:
