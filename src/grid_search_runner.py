@@ -453,6 +453,8 @@ def _standard_result_builder(label, ind_ov, ee, m, tp_zscore, tp_dollar, sl_zsco
         "profit_factor": round(m["profit_factor"], 2),
         "max_dd": round(m["max_dd"], 0),
         "sharpe": round(m["sharpe"], 2),
+        "calmar": round(m["pnl_net"] / abs(m["max_dd"]), 2) if m["max_dd"] != 0 else 0,
+        "sortino": round(m.get("sortino", 0), 3),
         "tp_zscore": tp_zscore, "tp_dollar": tp_dollar,
         "sl_zscore": sl_zscore, "sl_dollar": sl_dollar,
     }
@@ -552,6 +554,8 @@ def _zscore_result_builder(label, ind_ov, ee, m, tp_zscore, tp_dollar, sl_zscore
         "profit_factor": round(m["profit_factor"], 2),
         "max_dd": round(m["max_dd"], 0),
         "sharpe": round(m["sharpe"], 2),
+        "calmar": round(m["pnl_net"] / abs(m["max_dd"]), 2) if m["max_dd"] != 0 else 0,
+        "sortino": round(m.get("sortino", 0), 3),
         "tp_zscore": tp_zscore, "tp_dollar": tp_dollar,
         "sl_zscore": sl_zscore, "sl_dollar": sl_dollar,
     }

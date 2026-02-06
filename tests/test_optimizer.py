@@ -141,3 +141,27 @@ class TestComputeMetrics:
         pnl = sample_trades_df['PnL_Net']
         expected = pnl.mean() / pnl.std()
         assert np.isclose(m['sharpe'], round(expected, 3))
+
+    def test_calmar_and_sortino(self, sample_trades_df):
+        """Calmar = PnL / |MaxDD|, Sortino = mean / downside_std."""
+        m = compute_metrics(sample_trades_df)
+        assert 'calmar' in m
+        assert 'sortino' in m
+        # Calmar: PnL_net / |max_dd|
+        pnl = sample_trades_df['PnL_Net']
+        cumul = pnl.cumsum()
+        max_dd = (cumul - cumul.cummax()).min()
+        expected_calmar = round(pnl.sum() / abs(max_dd), 2) if max_dd != 0 else 0.0
+        assert m['calmar'] == expected_calmar
+        # Sortino: mean / stdev(negatives)
+        neg = pnl[pnl < 0]
+        if len(neg) > 1 and neg.std() > 0:
+            expected_sortino = round(pnl.mean() / neg.std(), 3)
+            assert m['sortino'] == expected_sortino
+
+    def test_calmar_sortino_zero_when_empty(self):
+        """Calmar et Sortino = 0 pour un DataFrame vide."""
+        empty_df = pd.DataFrame(columns=['Direction', 'PnL_Net'])
+        m = compute_metrics(empty_df)
+        assert m['calmar'] == 0.0
+        assert m['sortino'] == 0.0

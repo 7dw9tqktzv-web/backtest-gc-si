@@ -161,7 +161,8 @@ def compute_metrics(trades_df):
             "winners": 0, "win_rate": 0.0,
             "pnl_net": 0.0, "pnl_avg": 0.0,
             "best": 0.0, "worst": 0.0,
-            "max_dd": 0.0, "profit_factor": 0.0, "sharpe": 0.0
+            "max_dd": 0.0, "profit_factor": 0.0, "sharpe": 0.0,
+            "calmar": 0.0, "sortino": 0.0
         }
 
     pnl = trades_df['PnL_Net']
@@ -190,6 +191,17 @@ def compute_metrics(trades_df):
     else:
         sharpe = 0.0
 
+    # Calmar = PnL net / |max drawdown|
+    calmar = round(pnl_net / abs(max_dd), 2) if max_dd != 0 else 0.0
+
+    # Sortino = mean(PnL) / stdev(PnL negatifs)
+    neg_pnl = pnl[pnl < 0]
+    if len(neg_pnl) > 1:
+        downside_std = neg_pnl.std()
+        sortino = round(pnl.mean() / downside_std, 3) if downside_std > 0 else 0.0
+    else:
+        sortino = 0.0
+
     return {
         "trades": n,
         "long": n_long,
@@ -202,7 +214,9 @@ def compute_metrics(trades_df):
         "worst": round(worst, 2),
         "max_dd": round(max_dd, 2),
         "profit_factor": round(profit_factor, 2),
-        "sharpe": round(sharpe, 3)
+        "sharpe": round(sharpe, 3),
+        "calmar": calmar,
+        "sortino": sortino
     }
 
 
