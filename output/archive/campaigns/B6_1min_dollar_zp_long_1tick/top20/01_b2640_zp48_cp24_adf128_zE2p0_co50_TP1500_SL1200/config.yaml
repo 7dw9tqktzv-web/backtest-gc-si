@@ -1,0 +1,11 @@
+entry:
+  cointegration_score_min: 50
+  zscore_entry: 2.0
+exit:
+  pnl_stop_loss: -1200.0
+  pnl_take_profit: 1500.0
+indicators:
+  adf_hurst_period: 128
+  beta_lookback: 2640
+  correlation_period: 24
+  zscore_period: 48
