@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v1.5).
 
-**Current status**: **Sierra Chart v1.5 harmonized with Python** (< 0.01% difference on all indicators). Best config: **b1320_zp24_cp24_adf96_zE3.0_zTP2.0_zSL4.5_co50** (NO_HMM) - $45,500 walk-forward PnL. **Ready for paper trading on Sierra Chart**. See `CHANGELOG.md` for detailed backtest history.
+**Current status**: **Phase B Grid Search COMPLETE** — 212,544 configs tested across 6 campaigns. Best config: **b2640_zp24_cp24_adf26_zE3.5_co40_zTP0.0_zSL4.5** (5min zscore, 1 tick) — $59,172 PnL, PF 2.74, 177 trades. Sierra Chart v1.5 harmonized (< 0.01% indicator difference). **164 tests passing**. Next: Phase C validation (walk-forward + Monte Carlo). See `CHANGELOG.md` for detailed history.
 
 ## Commands
 
@@ -54,11 +54,16 @@ python scripts/run_top5_archive.py                # Archive top 5 with metrics +
 python src/report_generator.py output/grid_search_xxx.csv --description "..."
 python src/report_generator.py output/grid.csv -d "desc" --archive --timeframe 1min --slippage 1tick
 
-# Archive management
+# Archive management (campaigns)
+python src/archive_manager.py --action archive-campaign --csv output/grid.csv --campaign NOM --n 20 --min-trades 50
+python src/archive_manager.py --action compare                                     # Compare all campaigns
+python src/archive_manager.py --action report --campaigns C1,C2 --output out.md    # Generate report
+python src/archive_manager.py --action dashboard
+python src/archive_manager.py --action list
+
+# Archive management (legacy — single configs)
 python src/archive_manager.py --action archive-top --csv output/grid.csv --n 20 --timeframe 1min --slippage 1tick
 python src/archive_manager.py --action generate-rankings
-python src/archive_manager.py --action dashboard
-python src/archive_manager.py --action list --timeframe 1min --exit-mode dollar
 
 # Validate data at specific datetime
 python validate_data.py --date "2026-01-23 10:30:00"
@@ -112,6 +117,9 @@ Total: ~6,400 lines
 - `generate_rankings()` in `archive_manager.py` - generates ranking CSVs + DASHBOARD.md
 - `generate_dashboard()` in `archive_manager.py` - generates DASHBOARD.md with summary tables
 - `list_configs()` in `archive_manager.py` - lists archived configs as DataFrame
+- `archive_campaign()` in `archive_manager.py` - archives a full campaign (meta + CSV + top N)
+- `compare_campaigns()` in `archive_manager.py` - compares campaigns side by side
+- `generate_campaign_report()` in `archive_manager.py` - generates Markdown report with GO/NO-GO
 
 ### Configuration
 All parameters are in `config/strategy_params.yaml`. Never hardcode values.
@@ -141,7 +149,15 @@ output/
 │   └── equity_curve.png
 └── production/                      <- Active paper trading config
 
-CLI: python src/archive_manager.py --action {archive-top|generate-rankings|dashboard|list}
+CLI: python src/archive_manager.py --action {archive-campaign|compare|report|archive-top|generate-rankings|dashboard|list}
+
+output/archive/campaigns/               <- Phase B campaign archives
+    {campaign_name}/
+        campaign_meta.json               <- Campaign stats
+        full_results.csv                 <- Full CSV (gitignored)
+        top20/
+            01_{config_label}/
+                config.yaml + metrics.json
 ```
 
 Git tracking: config.yaml and metrics.json are tracked; large files (*_trades.csv, *_equity.png) are gitignored.
@@ -257,9 +273,15 @@ Signal generation happens inside `backtest_engine_hybrid.py` and is not stored a
 - **No emojis/accents in print()**: Windows cp1252 encoding crashes on special characters
 
 ### Strategy Parameters
-- **Slippage is the strategy killer**: 1 tick -> profitable; 2 ticks -> destroyed
-- **zscore_period >= 30**: Produces 0 profitable configs on 3-year data
-- **zscore_entry=-3.5**: Only viable threshold (112/115 profitable configs)
+- **5min zscore pur = mode dominant**: 0% attrition slippage 2->1 tick, PF 2.74 top
+- **1min dollar 2 ticks = MORT**: 0/32,400 configs. Definitif.
+- **zp longs en 1min = impasse**: 1.6% rentables (B6, 86,400 configs). Definitif.
+- **adf=26 domine en non-HMM**: 36/50 top B1 — toujours inclure dans les grilles
+- **zTP negatif (overshoot) = game changer**: -1.0 et -0.5 dominent (36/50 top B1)
+- **co=40 > co=60 en non-HMM**: contraire a l'audit HMM (31/50 vs 17/50)
+- **zE=3.5 quasi-exclusif a 2 ticks**: 42/50 — trades rares mais qualite
+- **zSL sans effet reel**: strategie "nue" cote protection
+- **1min dollar = volume sans qualite**: $67/trade B4, $10/trade B6 — ne PAS investir plus
 - **correlation_min is redundant**: Always > 0.80 when Z-Score + Coint conditions met
 - **hurst_max is redundant**: Hurst < 0.45 on all traded bars (use Cointegration Score instead)
 
@@ -283,6 +305,19 @@ Signal generation happens inside `backtest_engine_hybrid.py` and is not stored a
 - **5s bars**: 4,604,839 synchronized
 - **Parquet cache**: `data/processed/` (auto-invalidated by MD5 hash). Indicators are NOT cached (depend on config).
 
+## Phase B Grid Search Results (212,544 configs)
+
+| Campaign | TF | Exit | Slip | Configs | Rent.(t>=80) | Top PnL | Verdict |
+|----------|-----|------|------|---------|-------------|---------|---------|
+| B1_5min_zscore_2tick | 5min | zscore | 2tick | 34,560 | 1,794 (5.2%) | $49,572 | GO |
+| B2_5min_zscore_1tick | 5min | zscore | 1tick | 34,560 | 4,036 (15.8%) | $59,172 | **GO — best** |
+| B3_5min_hybride_2tick | 5min | hybrid | 2tick | 41,472 | — | — | deferred (runner) |
+| B4_1min_dollar_1tick | 1min | dollar | 1tick | 9,720 | 1,945 (20.0%) | $111,583 | GO (fragile) |
+| B5_1min_zscore_1tick | 1min | zscore | 1tick | 5,832 | 347 | $20,896 | informative |
+| B6_1min_dollar_zp_long_1tick | 1min | dollar | 1tick | 86,400 | 1,342 (1.6%) | $53,642 | dead end |
+
+Archives: `output/archive/campaigns/`, reports: `output/reports/`
+
 ## Key Research Conclusions
 
 ### HMM Regime Filter (PYTHON-ONLY - Feb 2026)
@@ -296,13 +331,12 @@ HMM filter tested and validated. Limits losses in unfavorable market conditions.
 - **Config**: `advanced.regime_filter` in YAML (disabled for Sierra Chart deployment)
 - **Future work**: Refine HMM or find Sierra Chart-compatible alternative
 
-### 1-min timeframe (completed)
-- **Slippage is the strategy killer**: 1 tick -> profitable; 2 ticks -> destroyed
-- **zscore_entry=-3.5** is the only viable threshold on 3-year data (112/115 profitable configs)
-- **zscore_period >= 30** produces zero profitable configs on 3-year data
+### 1-min timeframe (completed — Phase B confirms)
+- **1min dollar 2 ticks = DEAD**: 0/32,400 configs profitable. Definitive.
+- **zp longs (48-264) in 1min = dead end**: 1.6% profitable (B6, 86,400 configs). Definitive.
+- **1min dollar = volume without quality**: $67/trade B4, $10/trade B6 — do NOT invest more
+- **zE=2.5 dominates 1min dollar** (50/50 top B4) — opens more trades but low quality
 - **TP_ZSCORE disabled** is optimal: exits fire when dollar move is too small to cover costs
-- **`correlation_min` is redundant**: always > 0.80 when Z-Score + Coint conditions met
-- **`hurst_max` is redundant**: Hurst < 0.45 on all traded bars (captured by Cointegration Score)
 - **TP/SL dollar thresholds** are the most impactful parameters overall
 - **Strategy is regime-dependent**: 2023 weak, 2024-2025 profitable (walk-forward confirms)
 
@@ -312,11 +346,14 @@ HMM filter tested and validated. Limits losses in unfavorable market conditions.
 - **Bug 5**: `zscore_tp_min_pnl` filter now uses net PnL (was using gross)
 - **Sharpe ratio fix**: Harmonized Sharpe calculation (mean/std per trade, not annualized) between optimizer.py and metrics.py
 
-### Best Configs Summary
+### Best Configs Summary (Phase B)
 See `CHANGELOG.md` for detailed tables. Key findings:
-- **5-min pure Z-Score** surpasses 1-min dollar exits (+52% PnL with 2 ticks slippage)
-- **zTP=-1.0 (overshoot)** doubles PnL vs zTP=1.0 ($45,224 vs $22,604)
-- **b3960 (15 days)** more robust in walk-forward than b2640 (10 days)
+- **5-min pure Z-Score = dominant mode**: $59,172 top (B2), PF 2.74, 0% slippage attrition
+- **zTP=-1.0 (overshoot) = game changer**: doubles PnL vs zTP=1.0
+- **adf=26 dominates non-HMM** (36/50 top B1) — always include in grids
+- **b2640 optimal** (27/50 top B1), cp=24 (37/50), zE=3.5 (42/50)
+- **co=40 > co=60 in non-HMM**: 31/50 vs 17/50 (opposite of HMM audit)
+- **1min dollar = volume without quality**: $67/trade B4, $10/trade B6
 - **Strategy is regime-dependent**: profitable 2025-2026, losing 2023-2024
 
 ## Sierra Chart Integration (v1.5 - HARMONIZED)
@@ -355,48 +392,32 @@ Session Start: 17:00:00 CT
 Session End: 15:30:00 CT
 ```
 
-## Next Steps (TODO)
+## Roadmap (TODO)
 
-### Priority 1 -- Paper Trading on Sierra Chart (IN PROGRESS)
-Indicator harmonization complete. Remaining tasks for paper trading:
+### Immediate: Pause Refactor + B3
+- [ ] Add "hybrid" mode to grid search runner (~50 lines) — enables grid on zTP + dollar SL simultaneously
+- [ ] Launch B3 (5min hybrid, 41,472 configs, ~7h) — tests if dollar SL + zE=2.5 doubles trades
+- [ ] Clean metrics.py (remove legacy archiving, keep standalone analysis)
+- [ ] Clean optimizer.py (remove redundant log/display)
 
-1. **Signal generation in Sierra Chart**: Implement entry/exit logic in v1.5
-   - Entry: Z-Score crosses +/-3.0 with Coint Score >= 50
-   - Exit: Z-Score TP at +/-2.0, SL at +/-4.5
-   - Cooldown logic after stop loss
+### Phase C -- Statistical Validation
+- [ ] C1: Select top 15 per campaign (trades>=80, PnL>0, PF>1.3)
+- [ ] C2: Walk-Forward 30 windows x ~60 configs (>=50% positive windows)
+- [ ] C3: Monte Carlo Bootstrap 1000 sims (P(loss 100 trades) < 30%)
+- [ ] C4: Slippage stress test 2.5 and 3 ticks (PnL > 0 at 2.5 ticks)
+- [ ] C5: Final report + archive surviving configs
 
-2. **Position sizing**: Implement dollar-neutral Beta sizing
-   - SI: 1 contract (fixed)
-   - GC: round((SI_notional / GC_notional) * Beta)
+### Phase C+ -- Trade Augmentation
+- [ ] Analyze losing trades (quant-analyst)
+- [ ] Volatility filter (GVZ, realized vol, VIX)
+- [ ] Hourly filter (analysis per session hour)
+- [ ] Retest relaxed zE (2.5/2.0) WITH filters
+- [ ] Re-validate (WF + MC + slippage) enriched configs
 
-3. **Paper trade execution**: Configure Sierra Chart simulated trading
-   - Set up trade simulation on GCJ26 and SIH26
-   - Monitor fills, slippage, and execution quality
-
-4. **Validation**: Compare paper trades vs Python backtest
-   - Same signals at same timestamps?
-   - Same position sizes?
-   - Similar PnL per trade?
-
-**Target config**: `b1320_zp24_cp24_adf96_zE3.0_zTP2.0_zSL4.5_co50` (NO_HMM)
-- Walk-forward PnL: $45,500
-- 207 trades over 3 years
-- 58.1% Win Rate, PF 1.58
-
-### Priority 2 -- Code Quality
-- **Add pytest tests**: unit tests for indicators, position sizing, backtest engine, optimizer, metrics (131 tests done)
-- **Consolidate run_*.py scripts**: DONE (Phase 1: -66% code, Phase 2: unified YAML runners)
-  - 10 scripts replaced by 2 generic runners + 10 YAML configs in `configs/experiments/`
-  - 4 special scripts moved to `scripts/` (custom logic not YAML-izable)
-- **Clean up validation scripts**: archive or remove compare_*.py, check_*.py, investigate_*.py
-- **Increase test coverage**: position.py (48%) needs more tests
-
-### Priority 3 -- Production Deployment
-- Validate paper trading results (minimum 2-4 weeks)
-- Compare paper vs backtest metrics (Win Rate, PF, avg trade)
-- Implement live order execution via Sierra Chart DTC protocol
-- Add risk management (daily loss limit, position size caps)
-- Document go-live checklist
+### Phase D -- Sierra Chart Deployment
+- [ ] Final selection (1 config 5min + optional 1 config 1min)
+- [ ] ACSIL C++ implementation
+- [ ] Paper trading 4-8 weeks (min 30 trades per config)
 
 ## Known Code Issues (non-blocking)
 
@@ -437,8 +458,9 @@ python src/archive_manager.py --action list
 
 ### /grid-search
 Lance un grid search massif en background (milliers de configs), genere un rapport et met a jour le CHANGELOG.
-- Utilise `report_generator.py` pour l'analyse post-grid-search
-- Pattern Bash background + haiku post-analyse
+- YAML configs dans `configs/experiments/B*.yaml` (Phase B) et `grid_*.yaml` (legacy)
+- Utilise `scripts/run_grid_search.py --config <yaml>` (YAML-driven runner)
+- Runner supports 2 modes: "dollar" and "zscore" (no "hybrid" yet — B3 deferred)
 - Produit: CSV de resultats, `output/latest_summary.txt`, section CHANGELOG.md
 
 ## Project Structure
@@ -466,7 +488,7 @@ backtest_gc_si/
 │   ├── report_generator.py
 │   ├── run_helpers.py
 │   └── walk_forward_runner.py
-├── tests/                      # pytest tests (149 tests)
+├── tests/                      # pytest tests (164 tests)
 │   ├── conftest.py
 │   ├── test_archive_manager.py
 │   ├── test_backtest_engine_hybrid.py
@@ -491,6 +513,11 @@ backtest_gc_si/
 │       ├── grid_ztp_extended.yaml # 45,360 configs zscore TP extended
 │       ├── grid_5min_test.yaml # 12 configs smoke test
 │       ├── grid_5min_hybrid.yaml # 4,032 configs hybrid
+│       ├── B1_5min_zscore_2tick.yaml   # Phase B1: 34,560 configs
+│       ├── B2_5min_zscore_1tick.yaml   # Phase B2: 34,560 configs
+│       ├── B4_1min_dollar_1tick.yaml   # Phase B4: 9,720 configs
+│       ├── B5_1min_zscore_1tick.yaml   # Phase B5: 5,832 configs
+│       ├── B6_1min_dollar_zp_long_1tick.yaml # Phase B6: 86,400 configs
 │       ├── wf_base.yaml        # Walk-forward 6 windows
 │       ├── wf_3y.yaml          # Walk-forward 3 years
 │       ├── wf_5min_ztp.yaml    # Walk-forward 5-min zTP
@@ -519,7 +546,7 @@ backtest_gc_si/
 ```
 tests/
 ├── conftest.py                      # Shared fixtures (sample_config, sample_prices_df, etc.)
-├── test_archive_manager.py          # 18 tests - Archive management system
+├── test_archive_manager.py          # 26 tests - Archive management + campaigns
 ├── test_common.py                   # 32 tests, 100% coverage
 ├── test_indicators.py               # 33 tests, 72% coverage
 ├── test_position.py                 # 26 tests, 48% coverage
@@ -531,7 +558,7 @@ tests/
 
 ### Running Tests
 ```bash
-pytest tests/ -v                    # All tests (149 tests)
+pytest tests/ -v                    # All tests (164 tests)
 pytest tests/ --cov=src             # With coverage report
 pytest tests/test_common.py -v      # Single file
 pytest -k "test_long"               # Tests matching pattern
@@ -539,7 +566,7 @@ pytest -k "test_long"               # Tests matching pattern
 
 ### Test Coverage (as of 2026-02)
 - **common.py**: 100% - Entry/exit conditions, PnL calculation
-- **archive_manager.py**: covered (18 tests) - Archive, rankings, dashboard, list
+- **archive_manager.py**: covered (26 tests) - Archive, campaigns, rankings, dashboard, list
 - **indicators.py**: 72% - Z-Score, Beta, Correlation, Hurst, ADF
 - **position.py**: 48% - Position sizing, transaction costs
 - **backtest_engine_hybrid.py**: covered (13 tests)
