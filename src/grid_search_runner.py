@@ -569,3 +569,98 @@ def create_zscore_label_builder() -> Callable[[str, Dict], str]:
 def create_zscore_result_builder() -> Callable:
     """Retourne le result builder pour le mode Z-Score pur."""
     return _zscore_result_builder
+
+
+# ============================================================================
+# HELPERS POUR LE MODE HYBRIDE (Z-Score TP + Dollar SL)
+# ============================================================================
+
+def create_hybrid_entry_exit_generator(
+    zscore_entry: List[float],
+    cointegration_min: List[int],
+    zscore_tp: List[float],
+    pnl_stop_loss: List[int],
+    pnl_take_profit_cap: List[int] = [99999],
+) -> Callable[[], List[Dict]]:
+    """
+    Cree un generateur pour le mode hybride : Z-Score TP + Dollar SL.
+
+    Args:
+        zscore_entry: Liste des seuils Z-Score entry (valeurs positives)
+        cointegration_min: Liste des seuils cointegration minimum
+        zscore_tp: Liste des seuils Z-Score TP
+        pnl_stop_loss: Liste des SL en dollars (valeurs negatives)
+        pnl_take_profit_cap: Cap dollar TP optionnel (99999 = desactive)
+
+    Returns:
+        Fonction qui genere la liste des variantes
+    """
+    def generator():
+        variants = []
+        for zE in zscore_entry:
+            for co in cointegration_min:
+                for zTP in zscore_tp:
+                    for sl in pnl_stop_loss:
+                        for tp_cap in pnl_take_profit_cap:
+                            ov = {
+                                "entry.zscore_long": -abs(zE),
+                                "entry.zscore_short": abs(zE),
+                                "entry.cointegration_score_min": co,
+                                "exit.zscore_tp_long": -zTP,
+                                "exit.zscore_tp_short": zTP,
+                                "exit.zscore_sl_long": -99999,
+                                "exit.zscore_sl_short": 99999,
+                                "exit.pnl_take_profit": tp_cap,
+                                "exit.pnl_stop_loss": sl if sl < 0 else -sl,
+                            }
+                            variants.append({
+                                "overrides": ov,
+                                "zE": zE, "co": co, "zTP": zTP,
+                                "SL": abs(sl), "TP_cap": tp_cap,
+                            })
+        return variants
+    return generator
+
+
+def _hybrid_label_builder(group_prefix: str, ee: Dict) -> str:
+    """Label builder pour le mode hybride (module-level, picklable)."""
+    tp_cap = ee.get("TP_cap", 99999)
+    tp_tag = f"_TPcap{tp_cap}" if tp_cap != 99999 else ""
+    return (f"{group_prefix}_zE{ee['zE']}_co{ee['co']}"
+            f"_zTP{ee['zTP']}_SL{ee['SL']}{tp_tag}")
+
+
+def _hybrid_result_builder(label, ind_ov, ee, m, tp_zscore, tp_dollar, sl_zscore, sl_dollar):
+    """Result builder pour le mode hybride (module-level, picklable)."""
+    beta = ind_ov.get("indicators.beta_lookback", 0)
+    zp = ind_ov.get("indicators.zscore_period", 0)
+    cp = ind_ov.get("indicators.correlation_period", 0)
+    adf = ind_ov.get("indicators.adf_hurst_period", 0)
+
+    return {
+        "label": label,
+        "beta": beta, "zp": zp, "cp": cp, "adf": adf,
+        "zE": ee["zE"], "co": ee["co"],
+        "zTP": ee["zTP"], "SL": ee["SL"], "TP_cap": ee["TP_cap"],
+        "trades": m["trades"], "long": m["long"], "short": m["short"],
+        "win_rate": round(m["win_rate"], 1),
+        "pnl_net": round(m["pnl_net"], 0),
+        "pnl_avg": round(m["pnl_avg"], 2),
+        "profit_factor": round(m["profit_factor"], 2),
+        "max_dd": round(m["max_dd"], 0),
+        "sharpe": round(m["sharpe"], 2),
+        "calmar": round(m["pnl_net"] / abs(m["max_dd"]), 2) if m["max_dd"] != 0 else 0,
+        "sortino": round(m.get("sortino", 0), 3),
+        "tp_zscore": tp_zscore, "tp_dollar": tp_dollar,
+        "sl_zscore": sl_zscore, "sl_dollar": sl_dollar,
+    }
+
+
+def create_hybrid_label_builder() -> Callable[[str, Dict], str]:
+    """Retourne le label builder pour le mode hybride."""
+    return _hybrid_label_builder
+
+
+def create_hybrid_result_builder() -> Callable:
+    """Retourne le result builder pour le mode hybride."""
+    return _hybrid_result_builder

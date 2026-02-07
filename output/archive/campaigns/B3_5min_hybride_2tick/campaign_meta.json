@@ -1,0 +1,56 @@
+{
+  "campaign_name": "B3_5min_hybride_2tick",
+  "description": "Phase B3 - 5min hybride (zscore zTP + dollar SL), 2 ticks, 41472 configs - NO-GO",
+  "archived_at": "2026-02-07T19:20:53.889428",
+  "timeframe": "5min",
+  "exit_mode": "zscore",
+  "slippage": "2tick",
+  "total_configs": 41472,
+  "profitable_configs": 4768,
+  "profitable_configs_80": 3302,
+  "profitable_pct": 11.5,
+  "pnl_per_trade_ge_150": 21,
+  "median_pnl_per_trade": 28.27,
+  "top_pnl": 25164.0,
+  "top_pnl_per_trade": 101.06,
+  "top_sharpe": 0.39,
+  "top_pf": 3.22,
+  "top_config_label": "b2640_zp30_cp24_adf26_zE3.5_co40_zTP-1.0_SL1200_TPcap2500",
+  "parameter_distribution": {
+    "beta": {
+      "1320": 1,
+      "2640": 35,
+      "3960": 12,
+      "5280": 2
+    },
+    "zp": {
+      "20": 7,
+      "24": 21,
+      "30": 22
+    },
+    "cp": {
+      "24": 31,
+      "48": 6,
+      "96": 13
+    },
+    "adf": {
+      "26": 34,
+      "64": 3,
+      "96": 3,
+      "128": 10
+    },
+    "zE": {
+      "3.0": 1,
+      "3.5": 49
+    },
+    "co": {
+      "40": 48,
+      "50": 2
+    },
+    "zTP": {
+      "-1.0": 24,
+      "-0.5": 13,
+      "0.0": 13
+    }
+  }
+}

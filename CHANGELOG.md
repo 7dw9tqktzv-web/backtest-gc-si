@@ -4,6 +4,65 @@ Historique des optimisations, resultats detailles et ameliorations du backtest G
 
 ---
 
+
+## [2026-02-07] Grid Search -- Phase B3 - 5min Hybride (zTP + dollar SL) 2 ticks - 41472 configs
+
+**Configs**: 41,472 | **Profitable**: 5,764 (13.9%)
+Results: `output/grid_search_B3_5min_hybrid_2tick.csv`
+
+### Top 10 by PnL Net
+
+| # | Config | Trades | WR% | PnL | PF | MaxDD | Sharpe |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | b2640_zp30_cp24_adf26_zE3.5_co40_zTP-1.0_SL1200_TPcap2500 | 249 | 58.2% | $25,164 | 1.34 | -$9,567 | 0.10 |
+| 2 | b3960_zp24_cp96_adf128_zE3.5_co40_zTP-0.5_SL2500_TPcap800 | 113 | 67.3% | $22,347 | 2.38 | -$7,378 | 0.31 |
+| 3 | b2640_zp30_cp24_adf26_zE3.5_co40_zTP-0.5_SL1200_TPcap2500 | 251 | 58.6% | $22,098 | 1.32 | -$10,292 | 0.09 |
+| 4 | b3960_zp30_cp96_adf96_zE3.5_co40_zTP0.0_SL2500_TPcap800 | 156 | 67.9% | $21,754 | 1.87 | -$6,339 | 0.22 |
+| 5 | b2640_zp24_cp24_adf26_zE3.5_co40_zTP0.0_SL2500_TPcap2500 | 178 | 57.9% | $21,662 | 1.55 | -$9,291 | 0.13 |
+| 6 | b2640_zp30_cp24_adf26_zE3.5_co40_zTP-1.0_SL2500 | 247 | 57.1% | $21,146 | 1.23 | -$13,636 | 0.06 |
+| 7 | b3960_zp30_cp96_adf128_zE3.5_co40_zTP-0.5_SL2500_TPcap800 | 172 | 66.3% | $20,979 | 1.62 | -$10,434 | 0.18 |
+| 8 | b3960_zp30_cp96_adf128_zE3.5_co40_zTP0.0_SL2500_TPcap800 | 172 | 66.9% | $20,894 | 1.68 | -$8,629 | 0.18 |
+| 9 | b3960_zp24_cp96_adf128_zE3.5_co40_zTP-1.0_SL2500_TPcap800 | 113 | 69.9% | $20,877 | 2.07 | -$9,051 | 0.26 |
+| 10 | b2640_zp30_cp24_adf26_zE3.5_co40_zTP-1.0_SL2500_TPcap2500 | 249 | 59.0% | $20,849 | 1.25 | -$9,372 | 0.08 |
+
+
+### Top 10 by Sharpe (min 10 trades)
+
+| # | Config | Trades | WR% | PnL | PF | MaxDD | Sharpe |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | b2640_zp20_cp96_adf64_zE3.5_co50_zTP0.0_SL1800_TPcap800 | 25 | 80.0% | $6,874 | 5.71 | -$663 | 0.74 |
+| 2 | b2640_zp20_cp96_adf64_zE3.5_co50_zTP0.0_SL1200_TPcap800 | 25 | 80.0% | $6,874 | 5.71 | -$663 | 0.74 |
+| 3 | b2640_zp20_cp96_adf64_zE3.5_co50_zTP0.0_SL800_TPcap800 | 25 | 80.0% | $6,874 | 5.71 | -$663 | 0.74 |
+| 4 | b2640_zp20_cp96_adf64_zE3.5_co50_zTP0.0_SL2500_TPcap800 | 25 | 80.0% | $6,874 | 5.71 | -$663 | 0.74 |
+| 5 | b2640_zp20_cp96_adf64_zE3.5_co50_zTP-0.5_SL2500_TPcap800 | 25 | 80.0% | $6,519 | 4.21 | -$1,399 | 0.62 |
+| 6 | b2640_zp20_cp96_adf64_zE3.5_co50_zTP-0.5_SL1200_TPcap800 | 25 | 80.0% | $6,519 | 4.21 | -$1,399 | 0.62 |
+| 7 | b2640_zp20_cp96_adf64_zE3.5_co50_zTP-0.5_SL1800_TPcap800 | 25 | 80.0% | $6,519 | 4.21 | -$1,399 | 0.62 |
+| 8 | b2640_zp20_cp96_adf64_zE3.5_co50_zTP-0.5_SL800_TPcap800 | 25 | 80.0% | $6,454 | 4.08 | -$1,464 | 0.60 |
+| 9 | b2640_zp20_cp96_adf128_zE3.5_co50_zTP-1.0_SL800_TPcap2500 | 25 | 68.0% | $13,180 | 5.29 | -$2,190 | 0.57 |
+| 10 | b2640_zp20_cp96_adf64_zE3.5_co50_zTP-1.0_SL1800_TPcap800 | 25 | 76.0% | $7,054 | 3.43 | -$1,718 | 0.56 |
+
+
+### Comparison vs previous
+
+| Metric | grid_search_B6_1min_dollar_zp_long_1tick | Current | Delta |
+| --- | --- | --- | --- |
+| Total configs | 86,400 | 41,472 | -44,928 |
+| Profitable | 1342 (1.6%) | 5764 (13.9%) | -- |
+| Best PnL | 53,642 | 25,164 | -28,478 |
+| Best Sharpe | 0 | 1 | +1 |
+| Avg PnL | -68,669 | -44,216 | +24,453 |
+| Median PnL | -58,836 | -24,196 | +34,640 |
+
+
+### Key Findings
+
+- 5764/41472 configs profitable (13.9%)
+- Best PnL: $25,164 -- b2640_zp30_cp24_adf26_zE3.5_co40_zTP-1.0_SL1200_TPcap2500
+- zscore_entry=3.5 domine (86% des configs rentables)
+- zscore_period=24 le plus frequent dans les rentables
+- Trades moyen: 540 | median: 384
+
+
 ## [2026-02-06] Phase B Batch 1 -- Grid Search (50,112 configs)
 
 ### B1 -- 5min Z-Score pur, 2 ticks (34,560 configs) -- 18 min

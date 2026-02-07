@@ -1,0 +1,18 @@
+{
+  "trades": 156,
+  "long": 90,
+  "short": 66,
+  "win_rate": 67.9,
+  "pnl_net": 21754.0,
+  "pnl_avg": 139.45,
+  "profit_factor": 1.87,
+  "max_dd": -6339.0,
+  "sharpe": 0.22,
+  "tp_zscore": 118,
+  "tp_dollar": 38,
+  "sl_zscore": 0,
+  "sl_dollar": 0,
+  "calmar": 3.431771572803281,
+  "rank": 4,
+  "archived_at": "2026-02-07T19:20:53.874430"
+}

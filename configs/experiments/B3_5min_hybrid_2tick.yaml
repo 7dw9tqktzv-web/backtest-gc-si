@@ -1,0 +1,35 @@
+# Phase B3 -- 5min Hybride (Z-Score TP + Dollar SL), 2 ticks slippage
+# Objectif : tester si le dollar SL protege mieux que le zSL (sans effet en B1),
+#            et permet de relacher zE=2.5 pour doubler les trades
+# 144 groupes indicateurs x 6 entry x 3 zTP x 16 dollar = 41,472 configs
+# Temps estime : ~7h (5s scan actif car dollar SL)
+#
+# Usage: python scripts/run_grid_search.py --config configs/experiments/B3_5min_hybrid_2tick.yaml
+
+type: grid_search
+title: "PHASE B3 - 5MIN HYBRIDE 2 TICKS"
+exit_mode: hybrid
+
+execution:
+  timeframe: 5min
+  num_workers: 24
+  output_path: output/grid_search_B3_5min_hybrid_2tick.csv
+  min_trades_for_sharpe: 10
+
+indicators:
+  beta_lookback: [1320, 2640, 3960, 5280]
+  zscore_period: [20, 24, 30]
+  correlation_period: [24, 48, 96]
+  adf_hurst_period: [26, 64, 96, 128]
+
+entry_exit:
+  zscore_entry: [2.5, 3.0, 3.5]
+  cointegration_min: [40, 50]
+  zscore_tp: [-1.0, -0.5, 0.0]
+  pnl_stop_loss: [-800, -1200, -1800, -2500]
+  pnl_take_profit_cap: [800, 1500, 2500, 99999]
+
+fixed_overrides:
+  exit.zscore_tp_enabled: true
+  costs.slippage_gc_ticks: 2
+  costs.slippage_si_ticks: 2

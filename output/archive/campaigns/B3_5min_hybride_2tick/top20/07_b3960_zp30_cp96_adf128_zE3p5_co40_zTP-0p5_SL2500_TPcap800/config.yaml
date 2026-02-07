@@ -1,0 +1,10 @@
+entry:
+  cointegration_score_min: 40
+  zscore_entry: 3.5
+exit:
+  zscore_tp: -0.5
+indicators:
+  adf_hurst_period: 128
+  beta_lookback: 3960
+  correlation_period: 96
+  zscore_period: 30

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v1.5).
 
-**Current status**: **Phase B Grid Search COMPLETE** — 212,544 configs tested across 6 campaigns. Best config: **b2640_zp24_cp24_adf26_zE3.5_co40_zTP0.0_zSL4.5** (5min zscore, 1 tick) — $59,172 PnL, PF 2.74, 177 trades. Sierra Chart v1.5 harmonized (< 0.01% indicator difference). **164 tests passing**. Next: Phase C validation (walk-forward + Monte Carlo). See `CHANGELOG.md` for detailed history.
+**Current status**: **Phase B Grid Search COMPLETE** — 253,916 configs tested across 7 campaigns. Best config: **b2640_zp24_cp24_adf26_zE3.5_co40_zTP0.0_zSL4.5** (5min zscore, 1 tick) — $59,172 PnL, PF 2.74, 177 trades. Sierra Chart v1.5 harmonized (< 0.01% indicator difference). **164 tests passing**. Next: Phase C validation (walk-forward + Monte Carlo). See `CHANGELOG.md` for detailed history.
 
 ## Commands
 
@@ -281,6 +281,7 @@ Signal generation happens inside `backtest_engine_hybrid.py` and is not stored a
 - **co=40 > co=60 en non-HMM**: contraire a l'audit HMM (31/50 vs 17/50)
 - **zE=3.5 quasi-exclusif a 2 ticks**: 42/50 — trades rares mais qualite
 - **zSL sans effet reel**: strategie "nue" cote protection
+- **B3 hybrid (zTP + dollar SL) = NO-GO**: $25,164 top vs $59,172 B2 — dollar SL ne libere pas zE=2.5, 80% sorties via TP_ZSCORE
 - **1min dollar = volume sans qualite**: $67/trade B4, $10/trade B6 — ne PAS investir plus
 - **correlation_min is redundant**: Always > 0.80 when Z-Score + Coint conditions met
 - **hurst_max is redundant**: Hurst < 0.45 on all traded bars (use Cointegration Score instead)
@@ -305,18 +306,18 @@ Signal generation happens inside `backtest_engine_hybrid.py` and is not stored a
 - **5s bars**: 4,604,839 synchronized
 - **Parquet cache**: `data/processed/` (auto-invalidated by MD5 hash). Indicators are NOT cached (depend on config).
 
-## Phase B Grid Search Results (212,544 configs)
+## Phase B Grid Search Results (253,916 configs)
 
 | Campaign | TF | Exit | Slip | Configs | Rent.(t>=80) | Top PnL | Verdict |
 |----------|-----|------|------|---------|-------------|---------|---------|
 | B1_5min_zscore_2tick | 5min | zscore | 2tick | 34,560 | 1,794 (5.2%) | $49,572 | GO |
 | B2_5min_zscore_1tick | 5min | zscore | 1tick | 34,560 | 4,036 (15.8%) | $59,172 | **GO — best** |
-| B3_5min_hybride_2tick | 5min | hybrid | 2tick | 41,472 | — | — | deferred (runner) |
+| B3_5min_hybride_2tick | 5min | hybrid | 2tick | 41,472 | 3,302 (11.5%) | $25,164 | NO-GO |
 | B4_1min_dollar_1tick | 1min | dollar | 1tick | 9,720 | 1,945 (20.0%) | $111,583 | GO (fragile) |
 | B5_1min_zscore_1tick | 1min | zscore | 1tick | 5,832 | 347 | $20,896 | informative |
 | B6_1min_dollar_zp_long_1tick | 1min | dollar | 1tick | 86,400 | 1,342 (1.6%) | $53,642 | dead end |
 
-Archives: `output/archive/campaigns/`, reports: `output/reports/`
+Archives: `output/archive/campaigns/` (7 campaigns), reports: `output/reports/PHASE_B_FINAL_RESULTS.md`
 
 ## Key Research Conclusions
 
@@ -394,18 +395,17 @@ Session End: 15:30:00 CT
 
 ## Roadmap (TODO)
 
-### Immediate: Pause Refactor + B3
-- [ ] Add "hybrid" mode to grid search runner (~50 lines) — enables grid on zTP + dollar SL simultaneously
-- [ ] Launch B3 (5min hybrid, 41,472 configs, ~7h) — tests if dollar SL + zE=2.5 doubles trades
+### Immediate: Pause Refactor
 - [ ] Clean metrics.py (remove legacy archiving, keep standalone analysis)
 - [ ] Clean optimizer.py (remove redundant log/display)
 
 ### Phase C -- Statistical Validation
-- [ ] C1: Select top 15 per campaign (trades>=80, PnL>0, PF>1.3)
-- [ ] C2: Walk-Forward 30 windows x ~60 configs (>=50% positive windows)
-- [ ] C3: Monte Carlo Bootstrap 1000 sims (P(loss 100 trades) < 30%)
-- [ ] C4: Slippage stress test 2.5 and 3 ticks (PnL > 0 at 2.5 ticks)
-- [ ] C5: Final report + archive surviving configs
+- [ ] C0: Prop firm scoring (253K configs -> quality filters -> weighted scoring -> top 50-100)
+- [ ] C1: Walk-Forward diagnostic (30 windows, heatmap losing windows)
+- [ ] C2: Regime filter (GVZ/VXSLV ratio, Rolling Hurst, Realized Vol spread)
+- [ ] C3: Walk-Forward final (eliminatory, with C2 filters integrated)
+- [ ] C4: Monte Carlo Bootstrap 1000 sims (P(loss 100 trades) < 30%)
+- [ ] C5: Slippage stress test 2.5 and 3 ticks (PnL > 0 at 2.5 ticks)
 
 ### Phase C+ -- Trade Augmentation
 - [ ] Analyze losing trades (quant-analyst)
@@ -460,7 +460,7 @@ python src/archive_manager.py --action list
 Lance un grid search massif en background (milliers de configs), genere un rapport et met a jour le CHANGELOG.
 - YAML configs dans `configs/experiments/B*.yaml` (Phase B) et `grid_*.yaml` (legacy)
 - Utilise `scripts/run_grid_search.py --config <yaml>` (YAML-driven runner)
-- Runner supports 2 modes: "dollar" and "zscore" (no "hybrid" yet — B3 deferred)
+- Runner supports 3 modes: "dollar", "zscore", and "hybrid" (zTP + dollar SL)
 - Produit: CSV de resultats, `output/latest_summary.txt`, section CHANGELOG.md
 
 ## Project Structure
@@ -517,6 +517,7 @@ backtest_gc_si/
 │       ├── B2_5min_zscore_1tick.yaml   # Phase B2: 34,560 configs
 │       ├── B4_1min_dollar_1tick.yaml   # Phase B4: 9,720 configs
 │       ├── B5_1min_zscore_1tick.yaml   # Phase B5: 5,832 configs
+│       ├── B3_5min_hybrid_2tick.yaml        # Phase B3: 41,472 configs (hybrid)
 │       ├── B6_1min_dollar_zp_long_1tick.yaml # Phase B6: 86,400 configs
 │       ├── wf_base.yaml        # Walk-forward 6 windows
 │       ├── wf_3y.yaml          # Walk-forward 3 years

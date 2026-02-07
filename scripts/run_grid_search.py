@@ -25,6 +25,9 @@ from grid_search_runner import (
     create_zscore_entry_exit_generator,
     create_zscore_label_builder,
     create_zscore_result_builder,
+    create_hybrid_entry_exit_generator,
+    create_hybrid_label_builder,
+    create_hybrid_result_builder,
 )
 
 
@@ -61,8 +64,19 @@ def run_from_yaml(config_path: str):
         label_builder = create_zscore_label_builder()
         result_builder = create_zscore_result_builder()
 
+    elif exit_mode == "hybrid":
+        ee_gen = create_hybrid_entry_exit_generator(
+            zscore_entry=ee["zscore_entry"],
+            cointegration_min=ee["cointegration_min"],
+            zscore_tp=ee["zscore_tp"],
+            pnl_stop_loss=ee["pnl_stop_loss"],
+            pnl_take_profit_cap=ee.get("pnl_take_profit_cap", [99999]),
+        )
+        label_builder = create_hybrid_label_builder()
+        result_builder = create_hybrid_result_builder()
+
     else:
-        raise ValueError(f"exit_mode inconnu : '{exit_mode}' (dollar ou zscore)")
+        raise ValueError(f"exit_mode inconnu : '{exit_mode}' (dollar, zscore ou hybrid)")
 
     exec_cfg = cfg.get("execution", {})
 
