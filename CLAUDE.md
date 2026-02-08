@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v1.5).
 
-**Current status**: **Phase C COMPLETE — Validation statistique terminee**. Config production : `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0` (5-min pure Z-Score). Monte Carlo P(perte 100tr) = 0.9%. Slippage breakeven = 8.0 ticks. Filtres de regime = NO-GO en walk-forward. **203 tests passing**. Next: Phase D — Sierra Chart deployment + paper trading. See `CHANGELOG.md` for detailed history.
+**Current status**: **Phase C COMPLETE — Validation statistique terminee**. Config production : `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0` (5-min pure Z-Score). Block bootstrap P(perte 100tr) = 19.1% (sizing 0.5x recommande). Specs contrats configurables (standard GC/SI vs micro MGC/SIL). Slippage breakeven = 8.0 ticks. Filtres de regime = NO-GO en walk-forward. Filtre horaire 0-9h CT = MONITOR (PF 4.45 mais echantillon 61 trades). **220 tests passing**. Next: Phase D — Sierra Chart deployment + paper trading. See `CHANGELOG.md` for detailed history.
 
 ## Commands
 
@@ -222,10 +222,17 @@ Default values (1-min best config): TP $1000 / SL -$1200, zTP disabled.
 
 ## Contract Specifications
 
-| Contract | Point Value | Tick Size | Tick Value |
-|----------|-------------|-----------|------------|
-| GC (Gold) | $100 | $0.10 | $10 |
-| SI (Silver) | $5000 | $0.005 | $25 |
+Configurable via `contracts.mode` dans `strategy_params.yaml` :
+
+| Spec | GC (standard) | MGC (micro) | SI (standard) | SIL (micro) |
+|------|---------------|-------------|---------------|-------------|
+| Taille | 100 oz | 10 oz | 5,000 oz | 1,000 oz |
+| Point Value | $100 | $10 | $5,000 | $1,000 |
+| Tick Size | $0.10 | $0.10 | $0.005 | $0.005 |
+| Tick Value | $10 | $1 | $25 | $5 |
+| Ratio vs standard | 1x | 1/10 | 1x | 1/5 |
+
+Mode par defaut : `standard`. Basculer a `micro` pour sizing 0.5x (recommandation C4bis).
 
 Commission: $4.00 round-trip per contract ($2.00 per side). Slippage: 1 tick per leg (default in YAML, 2 ticks used in grid searches).
 
@@ -291,6 +298,7 @@ Signal generation happens inside `backtest_engine_hybrid.py` and is not stored a
 ### Code Quirks
 - **ddof inconsistency**: Beta uses ddof=0, Z-Score uses ddof=1 (low impact but confusing)
 - **hmmlearn covariance bug**: Getter returns (n_components, n_features, n_features), setter expects (n_components, n_features) - use `model._covars_` directly
+- **MGC/SIL ratios asymetriques** : MGC = 1/10 de GC, SIL = 1/5 de SI. Le sizing dollar-neutral est recalcule automatiquement via `get_contract_specs()`
 
 ### Grid Search
 - **24 workers optimal**: AMD Ryzen 9 7900X with 24 threads, each worker ~600 MB RAM
@@ -353,6 +361,8 @@ HMM filter tested and validated. Limits losses in unfavorable market conditions.
 | C2b | Filter integration + sensitivity analysis | Correlation seuil 0.86 = sweet spot |
 | C3 | Walk-forward avec filtre Correlation | **NO-GO** — ne tient pas en OOS |
 | C4 | Monte Carlo Bootstrap (1000 sims) | **GO** — P(perte 100tr) = 0.9% |
+| C4bis | Block Bootstrap (1000 sims, k=3/5/7/10) | **GO** — P(perte 100tr) = 19.1% (k=5), sizing 0.5x |
+| C4bis | Filtre horaire 0-9h CT | **MONITOR** — +$4.2K PnL, PF 4.45, -39 trades |
 | C5 | Slippage stress test (1/2/2.5/3 ticks) | **GO** — breakeven 8.0 ticks |
 
 #### C2/C2b — Regime Filter Exploration
@@ -371,6 +381,37 @@ HMM filter tested and validated. Limits losses in unfavorable market conditions.
 - **C3 walk-forward** : le filtre ne tient pas en OOS. N'a bloque que 5/135 trades. L'effet principal est indirect (change la config selectionnee en train, parfois en bien, parfois en mal). **Conclusion definitive : aucun filtre de regime teste ne tient en walk-forward.**
 - **Code** : `scripts/phase_c2b_comparison.py`, `scripts/phase_c2b_sensitivity.py`, `scripts/phase_c3_walk_forward.py`
 - **Tests** : `tests/test_phase_c2b.py` (15 tests)
+
+#### C4bis — Block Bootstrap + Filtre horaire (Feb 2026)
+
+L'audit quant a revele une autocorrelation PnL forte (r=0.50 lag 1, p<0.0001), invalidant le bootstrap i.i.d. de C4.
+
+**Block Bootstrap (1000 sims, horizon 100 trades):**
+
+| Methode | P(perte) | PnL Median | MaxDD P5 |
+|---------|----------|------------|----------|
+| i.i.d. (C4) | 0.9% | $45,395 | -$13,877 |
+| Block k=3 | 9.4% | $30,022 | -$16,162 |
+| Block k=5 | **19.1%** | $19,946 | -$20,730 |
+| Block k=7 | 25.8% | $16,766 | -$22,873 |
+| Block k=10 | 37.7% | $8,450 | -$23,612 |
+
+- **Ratio sous-estimation i.i.d.: 21x** (0.9% vs 19.1%)
+- Verdict: **GO** (P(perte) < 20%), sizing 0.5x recommande
+- L'autocorrelation vient des regimes (magnitude, pas direction -- runs test p=0.87)
+
+**Filtre horaire:**
+
+| Mode | Trades | PnL | PF | MaxDD |
+|------|--------|-----|----|-------|
+| A: 24h (baseline) | 100 | $45,224 | 2.41 | -$17,341 |
+| B: Block 0-9h CT | 61 | $49,461 | 4.45 | -$4,555 |
+| C: Block 0-8h CT | 64 | $46,237 | 3.64 | -$6,958 |
+
+- Mode B (0-9h) ameliore PF (2.41->4.45), MaxDD (-$17.3K->-$4.6K), PnL (+$4.2K)
+- Amelioration < $5,000 => pas de walk-forward (echantillon trop petit)
+- Verdict: **MONITOR** -- a surveiller en paper trading
+- **Code**: `scripts/phase_c4bis_block_bootstrap.py`
 
 #### C4 — Monte Carlo Bootstrap
 1000 simulations de reechantillonnage sur les trades du backtest 3 ans (config b2640, 100 trades).
@@ -406,9 +447,11 @@ HMM filter tested and validated. Limits losses in unfavorable market conditions.
 
 ### Phase C Validation — Final Conclusions (Feb 2026)
 - **Regime filters = dead end**: 6 filters tested (C2), 2 promising (Half-life, Correlation), integrated in backtest engine (C2b), but neither survives walk-forward OOS (C3). Definitive.
-- **Strategy is robust without filters**: Monte Carlo P(perte 100tr) = 0.9% (C4), breakeven slippage = 8.0 ticks (C5).
+- **Block bootstrap corrige le risque**: P(perte 100tr) = 19.1% (k=5), pas 0.9% (i.i.d.). Autocorrelation PnL r=0.50 lag 1 due aux regimes. Sizing 0.5x recommande.
+- **Filtre horaire 0-9h CT prometteur**: PF 4.45 vs 2.41, MaxDD -$4.6K vs -$17.3K. MONITOR (echantillon 61 trades).
+- **Breakeven slippage = 8.0 ticks** (C5): marge de securite 6x vs nominal.
 - **Config production**: `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0` (5-min pure Z-Score, no regime filter)
-- **Known risk**: strategy is regime-dependent (2023-2024 losing, 2025-2026 profitable). No filter found to mitigate this. Accept as structural risk.
+- **Known risk**: strategy is regime-dependent (2023-2024 losing, 2025-2026 profitable). 80% du PnL concentre sur Jan 2026 (8 trades). No filter found to mitigate this. Accept as structural risk.
 
 ### Bug fixes applied (indicators.py, backtest_engine_hybrid.py, optimizer.py, metrics.py)
 - **Bug 1**: ADF regression now includes intercept (was missing mu term)
@@ -475,6 +518,7 @@ Session End: 15:30:00 CT
 - [x] C2b: Filter integration + sensitivity (Correlation 0.86 sweet spot)
 - [x] C3: Walk-Forward final avec filtre (NO-GO — ne tient pas en OOS)
 - [x] C4: Monte Carlo Bootstrap 1000 sims (GO — P(perte 100tr) = 0.9%)
+- [x] C4bis: Block Bootstrap (GO — P(perte 100tr) = 19.1% k=5, sizing 0.5x) + Filtre horaire (MONITOR)
 - [x] C5: Slippage stress test 2.5 et 3 ticks (GO — breakeven 8.0 ticks)
 
 ### Phase C+ -- Trade Augmentation
@@ -559,7 +603,7 @@ backtest_gc_si/
 │   ├── report_generator.py
 │   ├── run_helpers.py
 │   └── walk_forward_runner.py
-├── tests/                      # pytest tests (203 tests)
+├── tests/                      # pytest tests (220 tests)
 │   ├── conftest.py
 │   ├── test_archive_manager.py
 │   ├── test_backtest_engine_hybrid.py
@@ -631,7 +675,7 @@ tests/
 
 ### Running Tests
 ```bash
-pytest tests/ -v                    # All tests (203 tests)
+pytest tests/ -v                    # All tests (220 tests)
 pytest tests/ --cov=src             # With coverage report
 pytest tests/test_common.py -v      # Single file
 pytest -k "test_long"               # Tests matching pattern

@@ -18,15 +18,23 @@ data:
 # SPÉCIFICATIONS DES CONTRATS (CME/COMEX)
 # ----------------------------------------------------------------------------
 contracts:
-  # Gold (GC) - COMEX 100 oz
-  gc_point_value: 100       # $100 par point de prix
-  gc_tick_size: 0.10        # Tick minimum = $0.10
-  gc_tick_value: 10         # $10 par tick
-  
-  # Silver (SI) - COMEX 5000 oz
-  si_point_value: 5000      # $5000 par point de prix
-  si_tick_size: 0.005       # Tick minimum = $0.005
-  si_tick_value: 25         # $25 par tick
+  mode: "standard"          # "standard" (GC/SI) ou "micro" (MGC/SIL)
+
+  standard:
+    gc_point_value: 100     # $/point GC (100 oz x $1/oz)
+    gc_tick_size: 0.10      # $0.10/oz
+    gc_tick_value: 10       # $10/tick (100 oz x $0.10)
+    si_point_value: 5000    # $/point SI (5000 oz x $1/oz)
+    si_tick_size: 0.005     # $0.005/oz
+    si_tick_value: 25       # $25/tick (5000 oz x $0.005)
+
+  micro:
+    gc_point_value: 10      # $/point MGC (10 oz x $1/oz)
+    gc_tick_size: 0.10      # $0.10/oz (identique au standard)
+    gc_tick_value: 1         # $1/tick (10 oz x $0.10)
+    si_point_value: 1000    # $/point SIL (1000 oz x $1/oz)
+    si_tick_size: 0.005     # $0.005/oz (identique au standard)
+    si_tick_value: 5         # $5/tick (1000 oz x $0.005)
 
 # ----------------------------------------------------------------------------
 # PARAMÈTRES DES INDICATEURS

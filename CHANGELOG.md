@@ -5,6 +5,69 @@ Historique des optimisations, resultats detailles et ameliorations du backtest G
 ---
 
 
+## [2026-02-08] Phase C4bis -- Block Bootstrap + Filtre horaire
+
+### Contexte
+L'audit quant (QUANT_AUDIT_V1.md) a revele une autocorrelation PnL forte (r=0.50 lag 1, p<0.0001), invalidant le bootstrap i.i.d. de C4 (P(perte)=0.9%). Le block bootstrap preserve la structure temporelle des trades.
+
+### Block Bootstrap (1000 sims, seed=42)
+
+#### Comparaison i.i.d. vs block (horizon 100 trades)
+
+| Methode | P(perte) | PnL P5 | PnL Median | PnL P95 | MaxDD P5 |
+|---------|----------|--------|------------|---------|----------|
+| i.i.d. (C4) | 0.9% | $10,911 | $45,395 | $85,997 | -$13,877 |
+| Block k=3 | 9.4% | -$6,672 | $30,022 | $76,697 | -$16,162 |
+| **Block k=5** | **19.1%** | **-$14,610** | **$19,946** | **$78,383** | **-$20,730** |
+| Block k=7 | 25.8% | -$19,442 | $16,766 | $77,271 | -$22,873 |
+| Block k=10 | 37.7% | -$21,996 | $8,450 | $69,459 | -$23,612 |
+
+Ratio de sous-estimation i.i.d. : **21x** (0.9% vs 19.1%)
+
+#### Block k=5, tous horizons
+
+| Horizon | P(perte) | PnL P5 | PnL Median | PnL P95 |
+|---------|----------|--------|------------|---------|
+| 50 trades | 29.7% | -$11,576 | $10,476 | $50,594 |
+| 100 trades | 19.1% | -$14,610 | $19,946 | $78,383 |
+| 150 trades | 11.5% | -$9,047 | $34,436 | $98,580 |
+| 200 trades | 8.2% | -$6,439 | $48,732 | $122,120 |
+
+#### Autocorrelation confirmee
+- Lag 1: r=0.5009, p<0.001 (magnitude des PnL)
+- Test de runs: p=0.87 (sequence win/loss aleatoire)
+- => L'autocorrelation vient des regimes, pas de la direction
+
+### Filtre horaire
+
+| Mode | Trades | PnL | WR | PF | MaxDD | PnL/Trade |
+|------|--------|-----|----|----|-------|-----------|
+| A: 24h (baseline) | 100 | $45,224 | 53% | 2.41 | -$17,341 | $452 |
+| B: Block 0-9h CT | 61 | $49,461 | 56% | 4.45 | -$4,555 | $811 |
+| C: Block 0-8h CT | 64 | $46,237 | 53% | 3.64 | -$6,958 | $722 |
+
+- Mode B ameliore PF (x1.8), MaxDD (x3.8 mieux), PnL (+$4.2K) mais perd 39 trades
+- Amelioration < $5,000 => pas de walk-forward
+- Verdict: **MONITOR** -- a surveiller en paper trading
+
+### Verdict global C4bis
+- Block bootstrap: **GO** (P(perte 100tr) = 19.1% < 20%)
+- Sizing recommande: **0.5x** (P(perte) entre 10-20%)
+- Filtre horaire: **MONITOR** (prometteur mais echantillon insuffisant)
+- **Le risque reel est 21x plus eleve que le Monte Carlo i.i.d.**
+
+### Scripts
+- `scripts/phase_c4bis_block_bootstrap.py`
+- `scripts/quant_audit_v1.py`
+
+### Fichiers generes
+- `output/phase_c4bis_block_bootstrap_results.csv`
+- `output/phase_c4bis_summary.csv`
+- `output/phase_c4bis_hourly_filter.csv`
+- `output/reports/PHASE_C4BIS_RESULTS.md`
+- `output/reports/QUANT_AUDIT_V1.md`
+
+
 ## [2026-02-08] Phase C5 -- Slippage Stress Test (GO)
 
 **Script**: `scripts/phase_c5_slippage_stress.py` | **Configs testees**: 2 (b3960 WF best, b2640 B2 top) x 4 slippages

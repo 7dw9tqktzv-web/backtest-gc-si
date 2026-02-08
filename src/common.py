@@ -17,6 +17,69 @@ from typing import Tuple
 
 
 # ============================================================================
+# SPECIFICATIONS CONTRATS (standard GC/SI vs micro MGC/SIL)
+# ============================================================================
+
+# Valeurs standard par defaut (retrocompatibilite si section contracts absente)
+_DEFAULT_CONTRACT_SPECS = {
+    'gc_point_value': 100,
+    'gc_tick_size': 0.10,
+    'gc_tick_value': 10,
+    'si_point_value': 5000,
+    'si_tick_size': 0.005,
+    'si_tick_value': 25,
+}
+
+
+def get_contract_specs(config):
+    """
+    Resolve active contract specs from config (standard or micro).
+
+    Supports 3 formats:
+    1. New nested: config['contracts']['mode'] + config['contracts']['standard'/'micro']
+    2. Old flat: config['contracts']['gc_point_value'] etc. (retrocompatibilite)
+    3. Missing: returns standard defaults (retrocompatibilite tests)
+
+    Returns a flat dict with: gc_point_value, gc_tick_size, gc_tick_value,
+                              si_point_value, si_tick_size, si_tick_value
+    """
+    contracts = config.get('contracts', {})
+
+    if 'mode' in contracts:
+        # Format nouveau (nested avec mode)
+        mode = contracts['mode']
+        if mode not in ('standard', 'micro'):
+            raise ValueError(f"contracts.mode invalide: '{mode}'. Options: 'standard', 'micro'")
+        specs = contracts.get(mode, {})
+        if not specs:
+            raise ValueError(f"Section contracts.{mode} manquante dans le config")
+        return dict(specs)
+
+    if 'gc_point_value' in contracts:
+        # Format ancien (flat)
+        return dict(contracts)
+
+    # Pas de section contracts du tout (tests, configs legacy)
+    return dict(_DEFAULT_CONTRACT_SPECS)
+
+
+def resolve_contract_specs(config):
+    """
+    Resolve contract specs and flatten into config['contracts'].
+
+    Call this after loading YAML so all downstream code can read
+    config['contracts']['gc_point_value'] etc. without changes.
+    Modifies config in-place and returns it.
+    """
+    specs = get_contract_specs(config)
+    # Preserver le mode pour reference
+    mode = config.get('contracts', {}).get('mode', 'standard')
+    config['contracts'] = specs
+    config['contracts']['mode'] = mode
+    return config
+
+
+# ============================================================================
 # CONSTANTES D'ETATS DE LA MACHINE A ETATS
 # ============================================================================
 # Utilises par signals.py, backtest_engine.py, backtest_engine_hybrid.py.

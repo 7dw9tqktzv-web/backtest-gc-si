@@ -42,6 +42,11 @@ def load_config(config_path: str = "config/strategy_params.yaml") -> dict:
     """
     with open(config_path, 'r', encoding='utf-8') as f:
         config = yaml.safe_load(f)
+
+    # Resoudre les specs contrat (standard/micro) en format plat
+    from common import resolve_contract_specs
+    resolve_contract_specs(config)
+
     return config
 
 
