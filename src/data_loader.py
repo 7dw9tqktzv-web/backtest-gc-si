@@ -348,6 +348,92 @@ def load_and_prepare_data(
     return df, config, stats
 
 
+def resample_to_5min(
+    df_1min: pd.DataFrame,
+    verbose: bool = True,
+    use_cache: bool = True
+) -> pd.DataFrame:
+    """
+    Resample les donnees 1-min en barres 5-min avec cache Parquet.
+
+    Utilise le OHLC classique pour les prix et la somme pour les volumes.
+    Le cache est invalide si les donnees 1-min changent (hash MD5).
+
+    Parametres:
+    -----------
+    df_1min : pd.DataFrame
+        Donnees 1-min synchronisees (depuis load_and_prepare_data)
+    verbose : bool
+        Si True, affiche les statistiques
+    use_cache : bool
+        Si True, utilise le cache Parquet si disponible
+
+    Retourne:
+    ---------
+    pd.DataFrame : Donnees 5-min avec colonnes DateTime, Last_GC, Last_SI, etc.
+    """
+    cache_parquet = CACHE_DIR / "resampled_5min.parquet"
+    cache_meta = CACHE_DIR / "resampled_5min.meta.json"
+
+    # Verifier le cache (invalide par le nombre de lignes 1-min comme proxy)
+    if use_cache and cache_parquet.exists() and cache_meta.exists():
+        try:
+            with open(cache_meta, 'r') as f:
+                meta = json.load(f)
+            if meta.get('n_1min') == len(df_1min):
+                if verbose:
+                    print("[CACHE] Chargement des donnees 5-min depuis le cache Parquet...")
+                df_5min = pd.read_parquet(cache_parquet)
+                if verbose:
+                    print(f"   {len(df_5min):,} barres 5-min chargees depuis le cache")
+                return df_5min
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    if verbose:
+        print("[...] Resampling 1-min -> 5-min...")
+
+    # Mettre DateTime en index pour le resampling
+    df = df_1min.copy()
+    df['DateTime'] = pd.to_datetime(df['DateTime'])
+    df = df.set_index('DateTime')
+
+    # Resampling OHLC pour les prix, somme pour les volumes
+    agg_dict = {}
+    for col in df.columns:
+        if col.startswith('Last_'):
+            agg_dict[col] = 'last'
+        elif col.startswith('High_'):
+            agg_dict[col] = 'max'
+        elif col.startswith('Low_'):
+            agg_dict[col] = 'min'
+        elif col.startswith('Volume_'):
+            agg_dict[col] = 'sum'
+        elif col.startswith('Open_'):
+            agg_dict[col] = 'first'
+        else:
+            agg_dict[col] = 'last'
+
+    df_5min = df.resample('5min').agg(agg_dict).dropna()
+    df_5min = df_5min.reset_index()
+
+    if verbose:
+        print(f"   {len(df_1min):,} barres 1-min -> {len(df_5min):,} barres 5-min")
+
+    # Sauvegarder le cache
+    if use_cache:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        df_5min.to_parquet(cache_parquet)
+        meta = {'n_1min': len(df_1min), 'n_5min': len(df_5min)}
+        with open(cache_meta, 'w') as f:
+            json.dump(meta, f, indent=2)
+        if verbose:
+            size_mb = cache_parquet.stat().st_size / (1024 * 1024)
+            print(f"   [CACHE] Sauvegarde : {cache_parquet} ({size_mb:.1f} MB)")
+
+    return df_5min
+
+
 def get_price_at_datetime(
     df: pd.DataFrame, 
     target_datetime: str,
