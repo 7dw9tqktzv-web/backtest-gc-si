@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v1.5).
 
-**Current status**: **Phase B Grid Search COMPLETE** — 253,916 configs tested across 7 campaigns. Best config: **b2640_zp24_cp24_adf26_zE3.5_co40_zTP0.0_zSL4.5** (5min zscore, 1 tick) — $59,172 PnL, PF 2.74, 177 trades. Sierra Chart v1.5 harmonized (< 0.01% indicator difference). **164 tests passing**. Next: Phase C validation (walk-forward + Monte Carlo). See `CHANGELOG.md` for detailed history.
+**Current status**: **Phase C2 Regime Filter Exploration COMPLETE** — Half-life AR(1) and Correlation GC/SI identified as promising filters (p<0.05). Post-filter Half-life seuil=4.9j: blocks 3/4 toxic windows, +14% PnL. Rolling Hurst R/S = NO-GO (structurally >0.5). **188 tests passing**. Next: Phase C3 walk-forward with filters integrated. See `CHANGELOG.md` for detailed history.
 
 ## Commands
 
@@ -341,6 +341,24 @@ HMM filter tested and validated. Limits losses in unfavorable market conditions.
 - **TP/SL dollar thresholds** are the most impactful parameters overall
 - **Strategy is regime-dependent**: 2023 weak, 2024-2025 profitable (walk-forward confirms)
 
+### Phase C2 Regime Filter Exploration (Feb 2026)
+6 filters tested on daily spread to predict toxic windows from C1:
+
+| Filter | Spearman r | p-value | Verdict |
+|--------|-----------|---------|---------|
+| Realized Vol (20j) | -0.295 | 0.306 | NO-GO |
+| Rolling ADF (40j) | +0.376 | 0.186 | NO-GO |
+| **Half-life AR(1) (60j)** | **-0.547** | **0.043** | **PROMETTEUR** |
+| **Correlation GC/SI (40j)** | **+0.543** | **0.045** | **PROMETTEUR** |
+| Spread Slope (20j) | +0.099 | 0.736 | NO-GO |
+| Rolling Hurst R/S (daily) | -0.332 | 0.250 | NO-GO |
+
+- **Half-life post-filter** (seuil=4.9j): blocks W02/W04/W08 (3/4 toxic), 1 false positive (W12), +13.5% PnL
+- **Correlation post-filter** (seuil=0.916): blocks W04/W05/W08, +10.9% PnL
+- **Rolling Hurst R/S**: structurally >0.5 (mean 0.82), non-discriminant
+- **Code**: `scripts/phase_c2_multifilter_exploration.py`, `scripts/phase_c2_exploration.py`
+- **Tests**: `tests/test_phase_c2.py` (5 tests)
+
 ### Bug fixes applied (indicators.py, backtest_engine_hybrid.py, optimizer.py, metrics.py)
 - **Bug 1**: ADF regression now includes intercept (was missing mu term)
 - **Bug 4**: Removed incorrect `spread == 0` skip in ADF calculation
@@ -400,9 +418,10 @@ Session End: 15:30:00 CT
 - [ ] Clean optimizer.py (remove redundant log/display)
 
 ### Phase C -- Statistical Validation
-- [ ] C0: Prop firm scoring (253K configs -> quality filters -> weighted scoring -> top 50-100)
-- [ ] C1: Walk-Forward diagnostic (30 windows, heatmap losing windows)
-- [ ] C2: Regime filter (GVZ/VXSLV ratio, Rolling Hurst, Realized Vol spread)
+- [x] C0: Prop firm scoring (34,560 -> 330 configs, weighted scoring)
+- [x] C1: Walk-Forward diagnostic (15 windows, 4 toxic: W02/W04/W05/W08)
+- [x] C2: Regime filter exploration (Half-life + Correlation PROMETTEUR, Hurst NO-GO)     <-- DONE
+- [ ] C2b: Implement Half-life filter in backtest engine     <-- NEXT
 - [ ] C3: Walk-Forward final (eliminatory, with C2 filters integrated)
 - [ ] C4: Monte Carlo Bootstrap 1000 sims (P(loss 100 trades) < 30%)
 - [ ] C5: Slippage stress test 2.5 and 3 ticks (PnL > 0 at 2.5 ticks)
