@@ -5,6 +5,134 @@ Historique des optimisations, resultats detailles et ameliorations du backtest G
 ---
 
 
+## [2026-02-08] Phase C5 -- Slippage Stress Test (GO)
+
+**Script**: `scripts/phase_c5_slippage_stress.py` | **Configs testees**: 2 (b3960 WF best, b2640 B2 top) x 4 slippages
+
+### Resultats
+
+| Slippage | b3960 (WF best) | b2640 (B2 top) |
+|----------|-----------------|----------------|
+| 1 tick | $32,948 | $52,804 |
+| 2 ticks | $23,928 | $45,224 |
+| 2.5 ticks | $19,418 | $41,434 |
+| 3 ticks | $14,908 | $37,644 |
+
+### Marges de securite
+
+| Config | Cout/tick/trade | Breakeven | Marge vs 2 ticks |
+|--------|----------------|-----------|------------------|
+| b3960 | $74 | 4.7 ticks | 2.7 ticks |
+| b2640 | $76 | 8.0 ticks | 6.0 ticks |
+
+### Monte Carlo a 2.5 ticks
+
+- b3960 : P(perte 100tr) = 8.0%
+- b2640 : P(perte 100tr) = 3.0%
+
+### Verdict
+
+**GO** -- Les deux configs survivent largement. Config production recommandee : **b2640** (marge de securite 6.0 ticks, breakeven 8.0 ticks).
+
+---
+
+
+## [2026-02-08] Phase C4 -- Monte Carlo Bootstrap 1000 simulations (GO)
+
+**Script**: `scripts/phase_c4_monte_carlo.py` | **Source**: backtest complet 3 ans, config b2640 (100 trades, WR 53%, PnL moyen $452)
+
+### Resultats
+
+| Horizon | P(perte) | PnL P5 | PnL Median | PnL P95 |
+|---------|----------|--------|------------|---------|
+| 50 trades | 5.1% | -$21 | $20,441 | $49,911 |
+| 100 trades | 0.9% | $10,911 | $45,395 | $85,997 |
+| 150 trades | 0.4% | $26,540 | $65,454 | $119,433 |
+| 200 trades | 0.1% | $40,278 | $88,624 | $144,414 |
+
+### Criteres GO/NO-GO (100 trades)
+
+- P(perte) = 0.9% < seuil 30% -- **GO**
+- MaxDD P5 = -$13,877 > seuil -$25,000 -- **GO**
+- MaxDD median = -$7,014
+
+### Analyse par direction
+
+- LONG : P(perte 100tr) = 1.8%
+- SHORT : P(perte 100tr) = 1.0%
+
+### Attention
+
+Le bootstrap melange les epoques et masque le risque de regime (2023-2024 perdants, 2025-2026 tres profitables). C'est une borne optimiste.
+
+### Verdict
+
+**GO** -- Strategie validee statistiquement. P(perte) tres faible a tous les horizons.
+
+---
+
+
+## [2026-02-08] Phase C3 -- Walk-Forward Final avec filtre Correlation (NO-GO)
+
+**Script**: `scripts/phase_c3_walk_forward.py` | **Fenetres**: 34 (63j train / 21j test) | **Seuil Correlation**: 0.86
+
+### Resultats globaux
+
+| Metrique | Sans Filtre | Avec Filtre (0.86) | Delta |
+|----------|-------------|-------------------|-------|
+| PnL total | $21,666 | $19,730 | -$1,936 |
+| Trades | 135 | 130 | -5 |
+| Fenetres positives | 15/34 (44%) | 15/34 (44%) | 0 |
+| PF | 1.71 | 1.80 | +0.09 |
+| MaxDD | -$16,876 | -$15,607 | +$1,269 |
+
+### Diagnostic
+
+Le filtre ne bloque que 5/135 trades directement. L'effet principal est indirect : il change les metriques TRAIN et donc la config selectionnee par fenetre. Parfois en bien (W27 : -$3,041 -> +$2,726), parfois en mal (W32 : +$5,664 -> -$153).
+
+### Verdict
+
+**NO-GO** -- Le filtre Correlation ne tient pas en walk-forward hors-echantillon. L'avantage observe en backtest complet (PF 7.84) etait du sur-ajustement sur les periodes toxiques connues. **Conclusion definitive : aucun filtre de regime teste ne fonctionne en OOS.**
+
+---
+
+
+## [2026-02-08] Phase C2b -- Integration filtre regime + Analyse sensibilite
+
+**Scripts**: `scripts/phase_c2b_comparison.py`, `scripts/phase_c2b_sensitivity.py`
+**Tests**: `tests/test_phase_c2b.py` (15 tests)
+
+### Implementation
+
+- 2 indicateurs ajoutes dans `indicators.py` : `calculate_halflife_ar1()`, `calculate_rolling_correlation_daily()`
+- Blocage des entrees dans `backtest_engine_hybrid.py` (logique OR, ne touche pas les positions ouvertes)
+- Section `regime_filter` dans `strategy_params.yaml` (enabled: false par defaut)
+- 15 tests unitaires, 203 tests total
+
+### Resultats comparaison A/B/C/D
+
+| Mode | PnL | Delta | Trades | WR | PF | MaxDD | Sharpe |
+|------|-----|-------|--------|-----|-----|-------|--------|
+| A: Baseline | $30,184 | - | 100 | 52% | 2.65 | -$8,175 | 0.194 |
+| B: Half-life seul | $29,600 | -$584 | 88 | 52% | 2.79 | -$8,123 | 0.204 |
+| C: Correlation seule | $35,001 | +$4,817 | 33 | 64% | 10.82 | -$1,450 | 0.433 |
+| D: Combines | $35,001 | +$4,817 | 33 | 64% | 10.82 | -$1,450 | 0.433 |
+
+### Analyse sensibilite seuil Correlation
+
+Signal robuste : degradation progressive de 0.80 a 0.98 (pas d'effet de seuil brutal = pas de curve-fitting).
+- Sweet spot : seuil 0.86 (52 trades, $38,037, PF 7.84, MaxDD -$1,563)
+- Chute nette a 0.93+ (filtre trop agressif, bloque les bons trades)
+
+### Conclusions
+
+- **Half-life AR(1)** : inutile en combinaison (D = C), quasi-inutile seul (-$584)
+- **Correlation Daily** : game changer en backtest complet -- mais doit etre valide en walk-forward (-> C3)
+- Seuil retenu pour C3 : **0.86**
+
+---
+
+
 ## [2026-02-07] Grid Search -- Phase B3 - 5min Hybride (zTP + dollar SL) 2 ticks - 41472 configs
 
 **Configs**: 41,472 | **Profitable**: 5,764 (13.9%)
