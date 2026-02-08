@@ -541,6 +541,125 @@ def calculate_half_life(
     return df
 
 
+def calculate_halflife_ar1(
+    df: pd.DataFrame,
+    window_days: int = 60
+) -> pd.DataFrame:
+    """
+    Compute rolling half-life AR(1) on daily spread for regime filtering.
+
+    Regression AR(1) : spread(t) = a + b * spread(t-1) + epsilon
+    Half-life = -ln(2) / ln(b)
+    Si b >= 1 ou b <= 0, retourne NaN (pas de mean-reversion).
+
+    Le calcul se fait sur donnees daily puis forward-fill sur barres intraday.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with 'Spread' and 'DateTime' columns.
+    window_days : int
+        Rolling window in trading days (default: 60).
+
+    Returns
+    -------
+    pd.DataFrame
+        Input DataFrame with 'HalfLife_AR1' column added.
+    """
+    # Resample en daily (dernier spread du jour)
+    df_temp = df[['DateTime', 'Spread']].copy()
+    df_temp = df_temp.set_index('DateTime')
+    spread_daily = df_temp['Spread'].resample('1D').last().dropna()
+
+    # Calcul rolling half-life AR(1) sur daily
+    values = spread_daily.values
+    n = len(values)
+    hl_daily = np.full(n, np.nan)
+
+    for i in range(window_days, n):
+        window = values[i - window_days:i]
+        if np.any(np.isnan(window)):
+            continue
+
+        y = window[1:]   # spread(t)
+        x = window[:-1]  # spread(t-1)
+
+        # Regression avec intercept : y = a + b*x
+        n_pts = len(x)
+        mean_x = np.mean(x)
+        mean_y = np.mean(y)
+        ss_xx = np.sum((x - mean_x) ** 2)
+
+        if ss_xx < 1e-15:
+            continue
+
+        b = np.sum((x - mean_x) * (y - mean_y)) / ss_xx
+
+        if b <= 0 or b >= 1:
+            continue
+
+        hl_daily[i] = -np.log(2) / np.log(b)
+
+    # Creer une Series daily indexee
+    hl_series = pd.Series(hl_daily, index=spread_daily.index, name='HalfLife_AR1')
+
+    # Forward-fill sur les barres intraday
+    # Creer une colonne date dans df pour le merge
+    dates_intraday = pd.to_datetime(df['DateTime']).dt.normalize()
+
+    # Map : pour chaque date intraday, prendre la valeur daily
+    hl_map = hl_series.to_dict()
+    df['HalfLife_AR1'] = dates_intraday.map(hl_map).values
+
+    return df
+
+
+def calculate_rolling_correlation_daily(
+    df: pd.DataFrame,
+    window_days: int = 40
+) -> pd.DataFrame:
+    """
+    Compute rolling Pearson correlation between GC and SI on daily prices.
+
+    Resample les prix en daily puis calcule la correlation roulante.
+    Forward-fill la valeur sur les barres intraday.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with 'Last_GC', 'Last_SI', and 'DateTime' columns.
+    window_days : int
+        Rolling window in trading days (default: 40).
+
+    Returns
+    -------
+    pd.DataFrame
+        Input DataFrame with 'Corr_Daily_GC_SI' column added.
+    """
+    # Resample en daily (dernier prix du jour)
+    df_temp = df[['DateTime', 'Last_GC', 'Last_SI']].copy()
+    df_temp = df_temp.set_index('DateTime')
+    gc_daily = df_temp['Last_GC'].resample('1D').last().dropna()
+    si_daily = df_temp['Last_SI'].resample('1D').last().dropna()
+
+    # Aligner les deux series
+    common_idx = gc_daily.index.intersection(si_daily.index)
+    gc_daily = gc_daily.loc[common_idx]
+    si_daily = si_daily.loc[common_idx]
+
+    # Correlation roulante sur log prices (coherent avec la strategie)
+    log_gc = np.log(gc_daily)
+    log_si = np.log(si_daily)
+    corr_daily = log_gc.rolling(window_days).corr(log_si)
+
+    # Forward-fill sur les barres intraday
+    dates_intraday = pd.to_datetime(df['DateTime']).dt.normalize()
+    corr_map = corr_daily.to_dict()
+    df['Corr_Daily_GC_SI'] = dates_intraday.map(corr_map).values
+
+    return df
+
+
 def calculate_cointegration_score(
     df: pd.DataFrame,
     adf_critical: float = -2.86,
@@ -731,6 +850,21 @@ def calculate_all_indicators(
     adf_critical = config['indicators'].get('adf_critical_value', -2.86)
     corr_threshold = config['indicators'].get('coint_corr_threshold', 0.6)
     df = calculate_cointegration_score(df, adf_critical=adf_critical, corr_threshold=corr_threshold)
+
+    # 9. Regime filter indicators (si active)
+    rf = config.get('regime_filter', {})
+    if rf.get('enabled', False):
+        if rf.get('halflife_ar1', {}).get('enabled', False):
+            hl_window = rf['halflife_ar1'].get('window', 60)
+            if verbose:
+                print(f"   [9a/9] Calcul du Half-Life AR(1) daily (window={hl_window}j)...")
+            df = calculate_halflife_ar1(df, window_days=hl_window)
+
+        if rf.get('correlation_daily', {}).get('enabled', False):
+            corr_window = rf['correlation_daily'].get('window', 40)
+            if verbose:
+                print(f"   [9b/9] Calcul de la Correlation Daily GC/SI (window={corr_window}j)...")
+            df = calculate_rolling_correlation_daily(df, window_days=corr_window)
 
     if verbose:
         print("   [OK] Tous les indicateurs calcules !")

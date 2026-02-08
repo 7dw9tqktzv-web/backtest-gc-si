@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v1.5).
 
-**Current status**: **Phase C2 Regime Filter Exploration COMPLETE** — Half-life AR(1) and Correlation GC/SI identified as promising filters (p<0.05). Post-filter Half-life seuil=4.9j: blocks 3/4 toxic windows, +14% PnL. Rolling Hurst R/S = NO-GO (structurally >0.5). **188 tests passing**. Next: Phase C3 walk-forward with filters integrated. See `CHANGELOG.md` for detailed history.
+**Current status**: **Phase C3 Walk-Forward Final COMPLETE — NO-GO** — Correlation Daily filter does NOT hold in OOS walk-forward ($19,730 vs $21,666 baseline, 15/34 positive windows unchanged). Filter neutralizes 4/6 toxic windows but changes train config selection unpredictably. Strategy proceeds to C4 Monte Carlo **without** regime filter. **203 tests passing**. See `CHANGELOG.md` for detailed history.
 
 ## Commands
 
@@ -246,6 +246,7 @@ After `calculate_all_indicators()`:
 - Regression: `Beta`, `Alpha`
 - Spread: `Spread`, `Spread_Mean`, `Spread_Std`, `ZScore`
 - Quality: `Correlation`, `ADF_Statistic`, `Hurst`, `HalfLife`, `Cointegration_Score`
+- Regime filter (if enabled): `HalfLife_AR1` (daily, forward-filled), `Corr_Daily_GC_SI` (daily, forward-filled)
 
 Signal generation happens inside `backtest_engine_hybrid.py` and is not stored as separate DataFrame columns.
 
@@ -284,6 +285,7 @@ Signal generation happens inside `backtest_engine_hybrid.py` and is not stored a
 - **B3 hybrid (zTP + dollar SL) = NO-GO**: $25,164 top vs $59,172 B2 — dollar SL ne libere pas zE=2.5, 80% sorties via TP_ZSCORE
 - **1min dollar = volume sans qualite**: $67/trade B4, $10/trade B6 — ne PAS investir plus
 - **correlation_min is redundant**: Always > 0.80 when Z-Score + Coint conditions met
+- **Correlation Daily (regime filter) != correlation_min**: Daily log-price corr on 40-day window, distinct from intraday bar-level correlation
 - **hurst_max is redundant**: Hurst < 0.45 on all traded bars (use Cointegration Score instead)
 
 ### Code Quirks
@@ -359,6 +361,61 @@ HMM filter tested and validated. Limits losses in unfavorable market conditions.
 - **Code**: `scripts/phase_c2_multifilter_exploration.py`, `scripts/phase_c2_exploration.py`
 - **Tests**: `tests/test_phase_c2.py` (5 tests)
 
+### Phase C2b Regime Filter Integration (Feb 2026)
+Filters integrated in backtest engine (`backtest_engine_hybrid.py`) + sensitivity analysis.
+
+**Comparison A/B/C/D** (best 5-min config B2, 1 tick slippage):
+
+| Mode | Trades | PnL | PF | MaxDD | Sharpe |
+|------|--------|-----|----|----- -|--------|
+| A: Baseline (OFF/OFF) | 100 | $30,184 | 2.65 | -$8,175 | 0.194 |
+| B: Half-life seul | 88 | $29,600 | 2.79 | -$8,123 | 0.204 |
+| C: Correlation seule (0.916) | 33 | $35,001 | 10.82 | -$1,450 | 0.433 |
+| D: Combines (HL+Corr) | 33 | $35,001 | 10.82 | -$1,450 | 0.433 |
+
+- **Half-life = inutile** en combinaison (D=C, aucun apport incremental)
+- **Correlation Daily = game changer** : PF x4, MaxDD /5.6
+
+**Sensitivity analysis** (14 seuils, 0.80-1.00):
+
+| Seuil | Trades | PnL | PF | MaxDD | Sharpe | PnL/Trade |
+|-------|--------|-----|----|----- -|--------|-----------|
+| 0.80 | 65 | $34,566 | 4.58 | -$5,121 | 0.287 | $532 |
+| 0.84 | 58 | $37,412 | 6.60 | -$2,154 | 0.335 | $645 |
+| **0.86** | **52** | **$38,084** | **7.84** | **-$1,563** | **0.364** | **$732** |
+| 0.88 | 47 | $37,784 | 8.01 | -$1,725 | 0.382 | $804 |
+| 0.90 | 38 | $37,045 | 8.93 | -$1,921 | 0.422 | $975 |
+| 0.92 | 32 | $36,269 | 16.80 | -$810 | 0.462 | $1,133 |
+| 0.93+ | <23 | <$20K | high | low | varies | declining |
+
+- **Seuil retenu: 0.86** = sweet spot (max PnL $38K, 52 trades suffisants pour WF, PF 7.84)
+- **Filtre progressif** (degradation lineaire de 0.80 a 0.92) = signal ROBUSTE, pas de curve-fitting
+- **Chute nette a 0.93+** : trop de bons trades bloques
+- **Config YAML**: `regime_filter.correlation_daily.threshold: 0.86`
+- **Code**: `scripts/phase_c2b_comparison.py`, `scripts/phase_c2b_sensitivity.py`
+- **Tests**: `tests/test_phase_c2b.py` (15 tests)
+
+### Phase C3 Walk-Forward Final (Feb 2026) — NO-GO
+Walk-forward 34 fenetres (63j train / 21j test) avec filtre Correlation Daily, 9 configs candidates.
+
+| Metrique | Sans Filtre | Avec Filtre (0.86) | Delta |
+|----------|------------|-------------------|-------|
+| PnL total TEST | $21,666 | $19,730 | -$1,936 |
+| Trades TEST | 135 | 130 | -5 |
+| Profit Factor | 1.71 | 1.80 | +0.09 |
+| Max Drawdown | -$16,876 | -$15,607 | +$1,269 |
+| Fenetres positives | 15/34 (44%) | 15/34 (44%) | 0 |
+
+Sensitivity (seuils 0.84/0.86/0.88) : resultats stables mais tous inferieurs au baseline.
+
+- **4/6 fenetres toxiques neutralisees** (W09, W27, W28, W29) mais W07 et W32 empirent
+- **Effet indirect dominant** : le filtre change la config selectionnee en train, pas les trades directement
+- **2023 encore pire avec filtre** (-$11K vs -$7.6K)
+- **Conclusion** : le filtre sur-fitte les periodes toxiques connues en backtest complet, pas en OOS
+- **Decision** : strategie continue SANS filtre de regime pour C4/C5
+- **Code**: `scripts/phase_c3_walk_forward.py`
+- **Resultats**: `output/phase_c3_walk_forward_results.csv`, `output/phase_c3_comparison.csv`
+
 ### Bug fixes applied (indicators.py, backtest_engine_hybrid.py, optimizer.py, metrics.py)
 - **Bug 1**: ADF regression now includes intercept (was missing mu term)
 - **Bug 4**: Removed incorrect `spread == 0` skip in ADF calculation
@@ -420,10 +477,10 @@ Session End: 15:30:00 CT
 ### Phase C -- Statistical Validation
 - [x] C0: Prop firm scoring (34,560 -> 330 configs, weighted scoring)
 - [x] C1: Walk-Forward diagnostic (15 windows, 4 toxic: W02/W04/W05/W08)
-- [x] C2: Regime filter exploration (Half-life + Correlation PROMETTEUR, Hurst NO-GO)     <-- DONE
-- [ ] C2b: Implement Half-life filter in backtest engine     <-- NEXT
-- [ ] C3: Walk-Forward final (eliminatory, with C2 filters integrated)
-- [ ] C4: Monte Carlo Bootstrap 1000 sims (P(loss 100 trades) < 30%)
+- [x] C2: Regime filter exploration (Half-life + Correlation PROMETTEUR, Hurst NO-GO)
+- [x] C2b: Regime filter integration + sensitivity (Corr Daily seuil=0.86, HL=inutile)
+- [x] C3: Walk-Forward final — **NO-GO** (filtre ne tient pas en OOS, -$1.9K vs baseline)
+- [ ] C4: Monte Carlo Bootstrap 1000 sims WITHOUT filter (P(loss 100 trades) < 30%)     <-- NEXT
 - [ ] C5: Slippage stress test 2.5 and 3 ticks (PnL > 0 at 2.5 ticks)
 
 ### Phase C+ -- Trade Augmentation

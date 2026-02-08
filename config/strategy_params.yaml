@@ -106,26 +106,32 @@ session:
 # ----------------------------------------------------------------------------
 # PARAMETRES AVANCES (nouvelles strategies - independantes de l'existant)
 # ----------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
+# REGIME FILTER (Phase C2b) - Filtres daily pour bloquer les entrees
+# ----------------------------------------------------------------------------
+# Logique OR : un seul filtre declenche suffit a bloquer.
+# Ne bloque que les nouvelles entrees (positions ouvertes non affectees).
+regime_filter:
+  enabled: false          # Desactive par defaut (retrocompatibilite)
+  halflife_ar1:
+    enabled: true
+    window: 60            # Fenetre en jours de trading
+    threshold: 4.9        # Jours -- au-dessus = blocage des entrees
+  correlation_daily:
+    enabled: true
+    window: 40            # Fenetre en jours de trading
+    threshold: 0.86       # En-dessous = blocage. Sweet spot C2b (52 trades, PF 7.84)
+
+# ----------------------------------------------------------------------------
+# PARAMETRES AVANCES (nouvelles strategies - independantes de l'existant)
+# ----------------------------------------------------------------------------
 advanced:
   # Mode de calcul des indicateurs
-  # "rolling" = methode actuelle (Rolling OLS pour Beta, rolling window pour Z-Score)
-  # "kalman" = methode Kalman Filter (Beta adaptatif, Z-Score auto-adaptatif)
   indicator_mode: "rolling"
 
-  # Filtre de regime HMM (Hidden Markov Model)
-  # true = active le filtre (bloque les trades en regime defavorable)
-  # false = desactive (comportement actuel)
+  # Filtre de regime HMM (Hidden Markov Model) - legacy
   regime_filter: false
-
-  # Nombre d'etats HMM (si regime_filter = true)
-  # 2 = Mean-Reverting vs Trending
-  # 3 = Mean-Reverting vs Trending vs High-Volatility
   regime_states: 3
 
   # Hyperparametre alpha pour Kalman (si indicator_mode = "kalman")
-  # Controle la vitesse d'adaptation du filtre et l'echelle du Z-Score
-  # Valeurs typiques:
-  #   1e-5 : Z-Score compresse (range ~[-1, 1])
-  #   1e-6 : Z-Score comparable au Rolling (range ~[-2, 4]) <- RECOMMANDE
-  #   1e-7 : Z-Score large (range ~[-6, 10])
   kalman_alpha: 1.0e-6

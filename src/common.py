@@ -271,6 +271,21 @@ def calculate_current_pnl(
 # EMPREINTE DE CONFIGURATION
 # ============================================================================
 
+def _regime_filter_fingerprint(config):
+    """Build fingerprint suffix for regime filter params (empty if disabled)."""
+    rf = config.get('regime_filter', {})
+    if not rf.get('enabled', False):
+        return ''
+    parts = ['_RF']
+    hl = rf.get('halflife_ar1', {})
+    if hl.get('enabled', False):
+        parts.append(f"hl{hl.get('window', 60)}t{hl.get('threshold', 4.9)}")
+    cd = rf.get('correlation_daily', {})
+    if cd.get('enabled', False):
+        parts.append(f"cd{cd.get('window', 40)}t{cd.get('threshold', 0.916)}")
+    return '_'.join(parts)
+
+
 def build_config_fingerprint(config):
     """
     Build a fingerprint string from key configuration parameters.
@@ -293,4 +308,5 @@ def build_config_fingerprint(config):
             f"_zTP{ext['zscore_tp_long']}_{ext['zscore_tp_short']}"
             f"_zSL{ext['zscore_sl_long']}_{ext['zscore_sl_short']}"
             f"_TP{ext['pnl_take_profit']}_SL{ext['pnl_stop_loss']}"
-            f"_corr{ent['correlation_min']}_coint{ent['cointegration_score_min']}")
+            f"_corr{ent['correlation_min']}_coint{ent['cointegration_score_min']}"
+            + _regime_filter_fingerprint(config))

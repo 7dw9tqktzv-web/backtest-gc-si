@@ -129,6 +129,17 @@ def run_hybrid_backtest(
     entry_start_hour = config['session'].get('entry_start_hour', 0)
     entry_end_hour = config['session'].get('entry_end_hour', 24)
 
+    # Regime filter (Phase C2b) - indicateurs daily pre-extraits en numpy
+    rf_config = config.get('regime_filter', {})
+    rf_enabled = rf_config.get('enabled', False)
+    rf_hl_enabled = rf_enabled and rf_config.get('halflife_ar1', {}).get('enabled', False)
+    rf_corr_enabled = rf_enabled and rf_config.get('correlation_daily', {}).get('enabled', False)
+    rf_hl_threshold = rf_config.get('halflife_ar1', {}).get('threshold', 4.9) if rf_hl_enabled else None
+    rf_corr_threshold = rf_config.get('correlation_daily', {}).get('threshold', 0.916) if rf_corr_enabled else None
+    hl_ar1_values = df_1min['HalfLife_AR1'].values if rf_hl_enabled and 'HalfLife_AR1' in df_1min.columns else None
+    corr_daily_values = df_1min['Corr_Daily_GC_SI'].values if rf_corr_enabled and 'Corr_Daily_GC_SI' in df_1min.columns else None
+    regime_blocked_count = 0
+
     # Variables d'etat
     state = STATE_FLAT
     trades = []
@@ -279,6 +290,20 @@ def run_hybrid_backtest(
                     hour_ok_re = entry_start_hour <= bar_hour_re < entry_end_hour
 
                     if hour_ok_re and state in (STATE_FLAT, STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT):
+                        # Regime filter check (C2b) - reentree aussi filtree
+                        re_blocked = False
+                        if rf_enabled:
+                            if hl_ar1_values is not None:
+                                hl_val = hl_ar1_values[i]
+                                if not np.isnan(hl_val) and hl_val > rf_hl_threshold:
+                                    re_blocked = True
+                            if corr_daily_values is not None:
+                                corr_val = corr_daily_values[i]
+                                if not np.isnan(corr_val) and corr_val < rf_corr_threshold:
+                                    re_blocked = True
+                        if re_blocked:
+                            regime_blocked_count += 1
+                            continue
                         entry = check_entry_conditions(z, corr, score, state, config, hurst=hursts[i])
                         if entry != 0 and not np.isnan(beta):
                             size = calculate_position_size(gc, si, beta, config)
@@ -381,6 +406,21 @@ def run_hybrid_backtest(
         hour_ok = entry_start_hour <= bar_hour < entry_end_hour
 
         if hour_ok and state in (STATE_FLAT, STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT):
+            # Regime filter check (C2b) - bloquer les entrees en regime defavorable
+            if rf_enabled:
+                blocked = False
+                if hl_ar1_values is not None:
+                    hl_val = hl_ar1_values[i]
+                    if not np.isnan(hl_val) and hl_val > rf_hl_threshold:
+                        blocked = True
+                if corr_daily_values is not None:
+                    corr_val = corr_daily_values[i]
+                    if not np.isnan(corr_val) and corr_val < rf_corr_threshold:
+                        blocked = True
+                if blocked:
+                    regime_blocked_count += 1
+                    continue
+
             entry = check_entry_conditions(z, corr, score, state, config, hurst=hursts[i])
 
             if entry != 0 and not np.isnan(beta):
@@ -464,6 +504,8 @@ def run_hybrid_backtest(
                 if count > 0:
                     print(f"   {reason:12s} : {count}")
 
+        if rf_enabled and regime_blocked_count > 0:
+            print(f"   Regime filter  : {regime_blocked_count} entrees bloquees")
         print("   [OK] Backtest hybride termine !")
 
     return trades_df
