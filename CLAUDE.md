@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v1.5).
 
-**Current status**: **Phase C3 Walk-Forward Final COMPLETE — NO-GO** — Correlation Daily filter does NOT hold in OOS walk-forward ($19,730 vs $21,666 baseline, 15/34 positive windows unchanged). Filter neutralizes 4/6 toxic windows but changes train config selection unpredictably. Strategy proceeds to C4 Monte Carlo **without** regime filter. **203 tests passing**. See `CHANGELOG.md` for detailed history.
+**Current status**: **Phase C COMPLETE — Validation statistique terminee**. Config production : `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0` (5-min pure Z-Score). Monte Carlo P(perte 100tr) = 0.9%. Slippage breakeven = 8.0 ticks. Filtres de regime = NO-GO en walk-forward. **203 tests passing**. Next: Phase D — Sierra Chart deployment + paper trading. See `CHANGELOG.md` for detailed history.
 
 ## Commands
 
@@ -85,7 +85,7 @@ report_generator.py: grid search CSV -> latest_summary.txt + CHANGELOG.md sectio
 
 ### Source Files (src/)
 ```
-Total: ~6,400 lines
+Total: ~7,500 lines
 ├── metrics.py               (950 lines)  - Performance analysis, equity curve, archiving
 ├── indicators.py            (811 lines)  - Beta, Z-Score, Correlation, ADF, Hurst
 ├── backtest_engine_hybrid.py(597 lines)  - Main backtest engine (1min + 5s)
@@ -343,78 +343,72 @@ HMM filter tested and validated. Limits losses in unfavorable market conditions.
 - **TP/SL dollar thresholds** are the most impactful parameters overall
 - **Strategy is regime-dependent**: 2023 weak, 2024-2025 profitable (walk-forward confirms)
 
-### Phase C2 Regime Filter Exploration (Feb 2026)
+### Phase C — Statistical Validation (Complete, Feb 2026)
+
+| Phase | Description | Verdict |
+|-------|-------------|---------|
+| C0 | Prop firm scoring (34,560 -> 330 configs) | GO |
+| C1 | Walk-forward diagnostic (15 fenetres, 4 toxiques: W02/W04/W05/W08) | Informative |
+| C2 | Regime filter exploration (6 filtres sur spread daily) | Half-life + Correlation prometteurs |
+| C2b | Filter integration + sensitivity analysis | Correlation seuil 0.86 = sweet spot |
+| C3 | Walk-forward avec filtre Correlation | **NO-GO** — ne tient pas en OOS |
+| C4 | Monte Carlo Bootstrap (1000 sims) | **GO** — P(perte 100tr) = 0.9% |
+| C5 | Slippage stress test (1/2/2.5/3 ticks) | **GO** — breakeven 8.0 ticks |
+
+#### C2/C2b — Regime Filter Exploration
 6 filters tested on daily spread to predict toxic windows from C1:
 
 | Filter | Spearman r | p-value | Verdict |
 |--------|-----------|---------|---------|
 | Realized Vol (20j) | -0.295 | 0.306 | NO-GO |
 | Rolling ADF (40j) | +0.376 | 0.186 | NO-GO |
-| **Half-life AR(1) (60j)** | **-0.547** | **0.043** | **PROMETTEUR** |
-| **Correlation GC/SI (40j)** | **+0.543** | **0.045** | **PROMETTEUR** |
+| Half-life AR(1) (60j) | -0.547 | 0.043 | Promising (C2) -> NO-GO (C3) |
+| Correlation GC/SI (40j) | +0.543 | 0.045 | Promising (C2) -> NO-GO (C3) |
 | Spread Slope (20j) | +0.099 | 0.736 | NO-GO |
-| Rolling Hurst R/S (daily) | -0.332 | 0.250 | NO-GO |
+| Rolling Hurst R/S (daily) | -0.332 | 0.250 | NO-GO structurel (>0.5) |
 
-- **Half-life post-filter** (seuil=4.9j): blocks W02/W04/W08 (3/4 toxic), 1 false positive (W12), +13.5% PnL
-- **Correlation post-filter** (seuil=0.916): blocks W04/W05/W08, +10.9% PnL
-- **Rolling Hurst R/S**: structurally >0.5 (mean 0.82), non-discriminant
-- **Code**: `scripts/phase_c2_multifilter_exploration.py`, `scripts/phase_c2_exploration.py`
-- **Tests**: `tests/test_phase_c2.py` (5 tests)
+- **C2b sensitivity analysis** : seuil Correlation teste de 0.80 a 0.98. Degradation progressive (pas de curve-fitting). Sweet spot a 0.86 (52 trades, PF 7.84, MaxDD -$1,563).
+- **C3 walk-forward** : le filtre ne tient pas en OOS. N'a bloque que 5/135 trades. L'effet principal est indirect (change la config selectionnee en train, parfois en bien, parfois en mal). **Conclusion definitive : aucun filtre de regime teste ne tient en walk-forward.**
+- **Code** : `scripts/phase_c2b_comparison.py`, `scripts/phase_c2b_sensitivity.py`, `scripts/phase_c3_walk_forward.py`
+- **Tests** : `tests/test_phase_c2b.py` (15 tests)
 
-### Phase C2b Regime Filter Integration (Feb 2026)
-Filters integrated in backtest engine (`backtest_engine_hybrid.py`) + sensitivity analysis.
+#### C4 — Monte Carlo Bootstrap
+1000 simulations de reechantillonnage sur les trades du backtest 3 ans (config b2640, 100 trades).
 
-**Comparison A/B/C/D** (best 5-min config B2, 1 tick slippage):
+| Horizon | P(perte) | PnL P5 | PnL Median | PnL P95 |
+|---------|----------|--------|------------|---------|
+| 50 trades | 5.1% | -$21 | $20,441 | $49,911 |
+| 100 trades | 0.9% | $10,911 | $45,395 | $85,997 |
+| 150 trades | 0.4% | $26,540 | $65,454 | $119,433 |
+| 200 trades | 0.1% | $40,278 | $88,624 | $144,414 |
 
-| Mode | Trades | PnL | PF | MaxDD | Sharpe |
-|------|--------|-----|----|----- -|--------|
-| A: Baseline (OFF/OFF) | 100 | $30,184 | 2.65 | -$8,175 | 0.194 |
-| B: Half-life seul | 88 | $29,600 | 2.79 | -$8,123 | 0.204 |
-| C: Correlation seule (0.916) | 33 | $35,001 | 10.82 | -$1,450 | 0.433 |
-| D: Combines (HL+Corr) | 33 | $35,001 | 10.82 | -$1,450 | 0.433 |
+- LONG et SHORT equilibres (P(perte 100tr) = 1.8% vs 1.0%)
+- **Attention** : bootstrap melange les epoques, masque le risque de regime (2023-2024 perdants)
+- **Code** : `scripts/phase_c4_monte_carlo.py`
 
-- **Half-life = inutile** en combinaison (D=C, aucun apport incremental)
-- **Correlation Daily = game changer** : PF x4, MaxDD /5.6
+#### C5 — Slippage Stress Test
 
-**Sensitivity analysis** (14 seuils, 0.80-1.00):
+| Slippage | b3960 (WF best) | b2640 (B2 top) |
+|----------|-----------------|----------------|
+| 1 tick | $32,948 | $52,804 |
+| 2 ticks | $23,928 | $45,224 |
+| 2.5 ticks | $19,418 | $41,434 |
+| 3 ticks | $14,908 | $37,644 |
 
-| Seuil | Trades | PnL | PF | MaxDD | Sharpe | PnL/Trade |
-|-------|--------|-----|----|----- -|--------|-----------|
-| 0.80 | 65 | $34,566 | 4.58 | -$5,121 | 0.287 | $532 |
-| 0.84 | 58 | $37,412 | 6.60 | -$2,154 | 0.335 | $645 |
-| **0.86** | **52** | **$38,084** | **7.84** | **-$1,563** | **0.364** | **$732** |
-| 0.88 | 47 | $37,784 | 8.01 | -$1,725 | 0.382 | $804 |
-| 0.90 | 38 | $37,045 | 8.93 | -$1,921 | 0.422 | $975 |
-| 0.92 | 32 | $36,269 | 16.80 | -$810 | 0.462 | $1,133 |
-| 0.93+ | <23 | <$20K | high | low | varies | declining |
+| Config | Cout/tick/trade | Breakeven | Marge vs 2 ticks |
+|--------|----------------|-----------|------------------|
+| b3960 | $74 | 4.7 ticks | 2.7 ticks |
+| b2640 | $76 | 8.0 ticks | 6.0 ticks |
 
-- **Seuil retenu: 0.86** = sweet spot (max PnL $38K, 52 trades suffisants pour WF, PF 7.84)
-- **Filtre progressif** (degradation lineaire de 0.80 a 0.92) = signal ROBUSTE, pas de curve-fitting
-- **Chute nette a 0.93+** : trop de bons trades bloques
-- **Config YAML**: `regime_filter.correlation_daily.threshold: 0.86`
-- **Code**: `scripts/phase_c2b_comparison.py`, `scripts/phase_c2b_sensitivity.py`
-- **Tests**: `tests/test_phase_c2b.py` (15 tests)
+- Monte Carlo a 2.5 ticks : b3960 P(perte)=8.0%, b2640 P(perte)=3.0%
+- **Config production recommandee** : b2640 (marge de securite 6.0 ticks)
+- **Code** : `scripts/phase_c5_slippage_stress.py`
 
-### Phase C3 Walk-Forward Final (Feb 2026) — NO-GO
-Walk-forward 34 fenetres (63j train / 21j test) avec filtre Correlation Daily, 9 configs candidates.
-
-| Metrique | Sans Filtre | Avec Filtre (0.86) | Delta |
-|----------|------------|-------------------|-------|
-| PnL total TEST | $21,666 | $19,730 | -$1,936 |
-| Trades TEST | 135 | 130 | -5 |
-| Profit Factor | 1.71 | 1.80 | +0.09 |
-| Max Drawdown | -$16,876 | -$15,607 | +$1,269 |
-| Fenetres positives | 15/34 (44%) | 15/34 (44%) | 0 |
-
-Sensitivity (seuils 0.84/0.86/0.88) : resultats stables mais tous inferieurs au baseline.
-
-- **4/6 fenetres toxiques neutralisees** (W09, W27, W28, W29) mais W07 et W32 empirent
-- **Effet indirect dominant** : le filtre change la config selectionnee en train, pas les trades directement
-- **2023 encore pire avec filtre** (-$11K vs -$7.6K)
-- **Conclusion** : le filtre sur-fitte les periodes toxiques connues en backtest complet, pas en OOS
-- **Decision** : strategie continue SANS filtre de regime pour C4/C5
-- **Code**: `scripts/phase_c3_walk_forward.py`
-- **Resultats**: `output/phase_c3_walk_forward_results.csv`, `output/phase_c3_comparison.csv`
+### Phase C Validation — Final Conclusions (Feb 2026)
+- **Regime filters = dead end**: 6 filters tested (C2), 2 promising (Half-life, Correlation), integrated in backtest engine (C2b), but neither survives walk-forward OOS (C3). Definitive.
+- **Strategy is robust without filters**: Monte Carlo P(perte 100tr) = 0.9% (C4), breakeven slippage = 8.0 ticks (C5).
+- **Config production**: `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0` (5-min pure Z-Score, no regime filter)
+- **Known risk**: strategy is regime-dependent (2023-2024 losing, 2025-2026 profitable). No filter found to mitigate this. Accept as structural risk.
 
 ### Bug fixes applied (indicators.py, backtest_engine_hybrid.py, optimizer.py, metrics.py)
 - **Bug 1**: ADF regression now includes intercept (was missing mu term)
@@ -477,11 +471,11 @@ Session End: 15:30:00 CT
 ### Phase C -- Statistical Validation
 - [x] C0: Prop firm scoring (34,560 -> 330 configs, weighted scoring)
 - [x] C1: Walk-Forward diagnostic (15 windows, 4 toxic: W02/W04/W05/W08)
-- [x] C2: Regime filter exploration (Half-life + Correlation PROMETTEUR, Hurst NO-GO)
-- [x] C2b: Regime filter integration + sensitivity (Corr Daily seuil=0.86, HL=inutile)
-- [x] C3: Walk-Forward final — **NO-GO** (filtre ne tient pas en OOS, -$1.9K vs baseline)
-- [ ] C4: Monte Carlo Bootstrap 1000 sims WITHOUT filter (P(loss 100 trades) < 30%)     <-- NEXT
-- [ ] C5: Slippage stress test 2.5 and 3 ticks (PnL > 0 at 2.5 ticks)
+- [x] C2: Regime filter exploration (Half-life + Correlation prometteurs)
+- [x] C2b: Filter integration + sensitivity (Correlation 0.86 sweet spot)
+- [x] C3: Walk-Forward final avec filtre (NO-GO — ne tient pas en OOS)
+- [x] C4: Monte Carlo Bootstrap 1000 sims (GO — P(perte 100tr) = 0.9%)
+- [x] C5: Slippage stress test 2.5 et 3 ticks (GO — breakeven 8.0 ticks)
 
 ### Phase C+ -- Trade Augmentation
 - [ ] Analyze losing trades (quant-analyst)
@@ -490,10 +484,11 @@ Session End: 15:30:00 CT
 - [ ] Retest relaxed zE (2.5/2.0) WITH filters
 - [ ] Re-validate (WF + MC + slippage) enriched configs
 
-### Phase D -- Sierra Chart Deployment
-- [ ] Final selection (1 config 5min + optional 1 config 1min)
-- [ ] ACSIL C++ implementation
-- [ ] Paper trading 4-8 weeks (min 30 trades per config)
+### Phase D -- Sierra Chart Deployment     <-- NEXT
+- [ ] Final selection: b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0 (5-min pure Z-Score)
+- [ ] ACSIL C++ implementation (entry/exit automation, v1.5 indicators already harmonized)
+- [ ] Paper trading 4-8 weeks (min 30 trades, compare vs Python backtest)
+- [ ] Production go-live (if paper trading validates)
 
 ## Known Code Issues (non-blocking)
 
@@ -551,7 +546,7 @@ backtest_gc_si/
 ├── docs/                       # Documentation
 │   ├── STRATEGY.md             # Strategy theory and indicator formulas
 │   └── ARCHITECTURE.md         # Project architecture post-refactoring
-├── src/                        # Main source code (~6,400 lines)
+├── src/                        # Main source code (~7,500 lines)
 │   ├── archive_manager.py
 │   ├── backtest_engine_hybrid.py
 │   ├── common.py
@@ -564,7 +559,7 @@ backtest_gc_si/
 │   ├── report_generator.py
 │   ├── run_helpers.py
 │   └── walk_forward_runner.py
-├── tests/                      # pytest tests (164 tests)
+├── tests/                      # pytest tests (203 tests)
 │   ├── conftest.py
 │   ├── test_archive_manager.py
 │   ├── test_backtest_engine_hybrid.py
@@ -630,12 +625,13 @@ tests/
 ├── test_backtest_engine_hybrid.py   # 13 tests
 ├── test_optimizer.py                # 9 tests
 ├── test_metrics.py                  # 12 tests
-└── test_run_helpers.py              # 6 tests
+├── test_run_helpers.py              # 6 tests
+└── test_phase_c2b.py                # 15 tests - Regime filter indicators + blocking
 ```
 
 ### Running Tests
 ```bash
-pytest tests/ -v                    # All tests (164 tests)
+pytest tests/ -v                    # All tests (203 tests)
 pytest tests/ --cov=src             # With coverage report
 pytest tests/test_common.py -v      # Single file
 pytest -k "test_long"               # Tests matching pattern
