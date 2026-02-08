@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v1.5).
 
-**Current status**: **Phase C COMPLETE — Validation statistique terminee**. Config production : `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0` (5-min pure Z-Score). Block bootstrap P(perte 100tr) = 19.1% (sizing 0.5x recommande). Specs contrats configurables (standard GC/SI vs micro MGC/SIL). Slippage breakeven = 8.0 ticks. Filtres de regime = NO-GO en walk-forward. Filtre horaire 0-9h CT = MONITOR (PF 4.45 mais echantillon 61 trades). **220 tests passing**. Next: Phase D — Sierra Chart deployment + paper trading. See `CHANGELOG.md` for detailed history.
+**Current status**: **Phase C COMPLETE — Validation statistique terminee**. Config production : `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0_zSL4.0` (5-min pure Z-Score). Block bootstrap P(perte 100tr) = 19.1% (sizing 0.5x recommande). Specs contrats configurables (standard GC/SI vs micro MGC/SIL). Backtest reference micro genere pour paper trading. Slippage breakeven = 8.0 ticks. Filtres de regime = NO-GO en walk-forward. Filtre horaire 0-9h CT = MONITOR (PF 4.45 mais echantillon 61 trades). **223 tests passing**. Next: Phase D — Sierra Chart deployment + paper trading. See `CHANGELOG.md` for detailed history.
 
 ## Commands
 
@@ -529,7 +529,8 @@ Session End: 15:30:00 CT
 - [ ] Re-validate (WF + MC + slippage) enriched configs
 
 ### Phase D -- Sierra Chart Deployment     <-- NEXT
-- [ ] Final selection: b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0 (5-min pure Z-Score)
+- [x] Final selection: b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0_zSL4.0 (5-min pure Z-Score)
+- [x] Backtest reference micro (MGC/SIL) pour paper trading (output/production/)
 - [ ] ACSIL C++ implementation (entry/exit automation, v1.5 indicators already harmonized)
 - [ ] Paper trading 4-8 weeks (min 30 trades, compare vs Python backtest)
 - [ ] Production go-live (if paper trading validates)
