@@ -29,6 +29,7 @@ def config_standard():
                 'si_point_value': 5000,
                 'si_tick_size': 0.005,
                 'si_tick_value': 25,
+                'commission_per_contract_rt': 4.00,
             },
             'micro': {
                 'gc_point_value': 10,
@@ -37,6 +38,7 @@ def config_standard():
                 'si_point_value': 1000,
                 'si_tick_size': 0.005,
                 'si_tick_value': 5,
+                'commission_per_contract_rt': 1.50,
             },
         },
         'sizing': {'mode': 'dollar_neutral_beta', 'si_contracts': 1, 'gc_contracts_max': 0},
@@ -57,6 +59,7 @@ def config_micro():
                 'si_point_value': 5000,
                 'si_tick_size': 0.005,
                 'si_tick_value': 25,
+                'commission_per_contract_rt': 4.00,
             },
             'micro': {
                 'gc_point_value': 10,
@@ -65,6 +68,7 @@ def config_micro():
                 'si_point_value': 1000,
                 'si_tick_size': 0.005,
                 'si_tick_value': 5,
+                'commission_per_contract_rt': 1.50,
             },
         },
         'sizing': {'mode': 'dollar_neutral_beta', 'si_contracts': 1, 'gc_contracts_max': 0},
@@ -245,3 +249,29 @@ class TestSlippageMicro:
         cost_micro = calculate_transaction_costs(1, 1, config_micro)
         assert cost_micro['slippage_gc'] == cost_std['slippage_gc'] / 10
         assert cost_micro['slippage_si'] == cost_std['slippage_si'] / 5
+
+
+# ============================================================================
+# TESTS commission avec micro
+# ============================================================================
+
+class TestCommissionMicro:
+    def test_commission_standard(self, config_standard):
+        resolve_contract_specs(config_standard)
+        costs = calculate_transaction_costs(1, 1, config_standard)
+        # $4.00 RT par contrat, 1 GC + 1 SI = $8.00
+        assert costs['commission_total'] == 8.0
+
+    def test_commission_micro(self, config_micro):
+        resolve_contract_specs(config_micro)
+        costs = calculate_transaction_costs(1, 1, config_micro)
+        # $1.50 RT par contrat micro, 1 MGC + 1 SIL = $3.00
+        assert costs['commission_total'] == 3.0
+
+    def test_commission_from_contract_specs_not_costs(self, config_micro):
+        """La commission vient de contracts, pas de costs.commission_per_contract."""
+        resolve_contract_specs(config_micro)
+        # costs.commission_per_contract = 4.00 (ancien), mais micro = 1.50
+        costs = calculate_transaction_costs(1, 1, config_micro)
+        assert costs['commission_gc'] == 1.50
+        assert costs['commission_si'] == 1.50

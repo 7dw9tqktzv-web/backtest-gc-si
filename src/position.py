@@ -183,7 +183,9 @@ def calculate_transaction_costs(
         - slippage_gc, slippage_si, slippage_total (float): Slippage in USD.
         - total_cost (float): Total cost (commission + slippage).
     """
-    commission = config['costs']['commission_per_contract']    # $5.00
+    # Commission : priorite aux specs contrat, fallback sur costs.commission_per_contract
+    commission = config['contracts'].get('commission_per_contract_rt',
+                     config['costs']['commission_per_contract'])
     slip_gc_ticks = config['costs']['slippage_gc_ticks']       # 1
     slip_si_ticks = config['costs']['slippage_si_ticks']       # 1
 

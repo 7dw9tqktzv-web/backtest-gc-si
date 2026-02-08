@@ -28,6 +28,7 @@ _DEFAULT_CONTRACT_SPECS = {
     'si_point_value': 5000,
     'si_tick_size': 0.005,
     'si_tick_value': 25,
+    'commission_per_contract_rt': 4.00,
 }
 
 

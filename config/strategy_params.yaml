@@ -27,6 +27,7 @@ contracts:
     si_point_value: 5000    # $/point SI (5000 oz x $1/oz)
     si_tick_size: 0.005     # $0.005/oz
     si_tick_value: 25       # $25/tick (5000 oz x $0.005)
+    commission_per_contract_rt: 4.00  # $4.00 round-trip par contrat standard
 
   micro:
     gc_point_value: 10      # $/point MGC (10 oz x $1/oz)
@@ -35,6 +36,7 @@ contracts:
     si_point_value: 1000    # $/point SIL (1000 oz x $1/oz)
     si_tick_size: 0.005     # $0.005/oz (identique au standard)
     si_tick_value: 5         # $5/tick (1000 oz x $0.005)
+    commission_per_contract_rt: 1.50  # $1.50 round-trip par contrat micro (exchange + routing + NFA)
 
 # ----------------------------------------------------------------------------
 # PARAMÈTRES DES INDICATEURS
