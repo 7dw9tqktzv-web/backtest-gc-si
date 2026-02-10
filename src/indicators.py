@@ -399,7 +399,7 @@ def calculate_hurst_exponent(
     Vectorized implementation (~42x speedup vs loop-based).
     Single-segment R/S (no sub-window splitting), which gives lower precision
     but is consistent with Sierra Chart and sufficient for relative ranking.
-    Requires at least 3 valid sub-periods for regression.
+    Requires at least 2 valid sub-periods for regression (matches Sierra Chart).
     """
     spread = df['Spread'].values.astype(np.float64)
     n = len(df)
@@ -408,8 +408,8 @@ def calculate_hurst_exponent(
     sub_periods = np.array([p for p in [8, 16, 32, 64, 128] if p <= period])
     n_sub = len(sub_periods)
 
-    if n_sub < 3:
-        # Pas assez de sous-periodes pour la regression
+    if n_sub < 2:
+        # Pas assez de sous-periodes pour la regression (minimum 2 pour une droite)
         df['Hurst'] = np.nan
         return df
 
@@ -457,7 +457,7 @@ def calculate_hurst_exponent(
     # Calcul de H (pente)
     with np.errstate(divide='ignore', invalid='ignore'):
         H = np.where(
-            (n_valid >= 3) & (np.abs(denom) > 1e-10),
+            (n_valid >= 2) & (np.abs(denom) > 1e-10),
             (n_valid * sum_xy - sum_x * sum_y) / denom,
             np.nan
         )
@@ -466,7 +466,7 @@ def calculate_hurst_exponent(
     H = np.clip(H, 0.01, 0.99)
 
     # Marquer comme NaN les positions sans assez de donnees
-    H = np.where(n_valid >= 3, H, np.nan)
+    H = np.where(n_valid >= 2, H, np.nan)
 
     # Les `period` premieres valeurs sont NaN (warmup)
     H[:period] = np.nan

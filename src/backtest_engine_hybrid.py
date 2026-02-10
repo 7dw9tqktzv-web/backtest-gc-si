@@ -22,7 +22,7 @@ import pandas as pd
 from datetime import datetime
 from pathlib import Path
 
-from data_loader import load_and_prepare_data, load_5s_data
+from data_loader import load_and_prepare_data, resample_to_5min, load_5s_data
 from indicators import calculate_all_indicators
 from position import calculate_position_size, calculate_transaction_costs
 try:
@@ -636,15 +636,23 @@ if __name__ == "__main__":
         df_1min, config, stats = load_and_prepare_data(verbose=False)
         print(f"[OK] Donnees 1-min chargees : {len(df_1min)} barres")
 
-        # 2. Calculer les indicateurs sur 1-minute
-        df_1min = calculate_all_indicators(df_1min, config)
-        print(f"[OK] Indicateurs 1-min calcules")
+        # 2. Preparer les donnees selon indicators.period (1min ou 5min)
+        indicator_period = config.get('indicators', {}).get('period', '1min')
+        if indicator_period == '5min':
+            df_bars = resample_to_5min(df_1min, verbose=True)
+            print(f"[OK] Donnees resamplees en 5-min : {len(df_bars)} barres")
+        else:
+            df_bars = df_1min
 
-        # 3. Charger les donnees 5-secondes
+        # 3. Calculer les indicateurs sur le timeframe choisi
+        df_bars = calculate_all_indicators(df_bars, config)
+        print(f"[OK] Indicateurs {indicator_period} calcules")
+
+        # 4. Charger les donnees 5-secondes
         df_5s = load_5s_data(config, verbose=True)
 
-        # 4. Lancer le backtest hybride
-        trades_df = run_hybrid_backtest(df_1min, df_5s, config)
+        # 5. Lancer le backtest hybride
+        trades_df = run_hybrid_backtest(df_bars, df_5s, config)
 
         # 5. Afficher le resume
         print_backtest_summary(trades_df, "BACKTEST HYBRIDE (1min + 5s)")

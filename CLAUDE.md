@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v1.5).
 
-**Current status**: **Phase D IN PROGRESS — Replay validation**. ACSIL v2.0 corrige: 100% unmanaged (sc.BuyOrder/SellOrder pour GC et SI), SI-first pattern avec order verification, IsFullRecalculation guard via goto. Leg GC validee (10 trades, $25,740 PnL GC-only, 80% win rate). Leg SI: a tester en replay. Config production : `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0_zSL4.0` (5-min pure Z-Score). **223 tests passing**. See `CHANGELOG.md` for detailed history.
+**Current status**: **Phase D IN PROGRESS — Replay validation**. ACSIL v2.0 revue complete: 100% unmanaged (sc.BuyOrder/SellOrder), bool skipTrading (pas goto), TradeAccount sur tous ordres SI, commission nette, open PnL, exit types detailles, anti double-entry, FlatEndOfSession + MaxHoldingBars optionnels. 30 inputs total. **Replay validation concluante** : 5/5 trades matchent SC vs Python (directions, contracts, Beta identiques). Cross-symbol replay limitation decouverte (SI fills au prix live, pas historique). Config production : `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0_zSL4.0` (5-min pure Z-Score). **223 tests passing**. See `CHANGELOG.md` for detailed history.
 
 ## Commands
 
@@ -260,6 +260,8 @@ Signal generation happens inside `backtest_engine_hybrid.py` and is not stored a
 
 ### Code Quirks
 - **ddof inconsistency**: Beta uses ddof=0, Z-Score uses ddof=1 (low impact but confusing)
+- **backtest_engine_hybrid.py main vs grid search**: le main respecte maintenant `indicators.period` (5min par defaut). Les grid searches utilisaient deja `resample_to_5min()` — seul le main etait incorrect.
+- **Hurst min_sub_periods=2**: avec adf_hurst_period=26, seules les sous-periodes 8 et 16 sont disponibles (32 > 26). SC calcule avec 2 points, Python aussi maintenant.
 - **hmmlearn covariance bug**: Getter returns (n_components, n_features, n_features), setter expects (n_components, n_features) - use `model._covars_` directly
 - **MGC/SIL ratios asymetriques** : MGC = 1/10 de GC, SIL = 1/5 de SI. Le sizing dollar-neutral est recalcule automatiquement via `get_contract_specs()`
 
@@ -304,7 +306,22 @@ See `CHANGELOG.md` for detailed tables, numbers, and phase-by-phase results.
 
 Python and Sierra Chart v1.5/v2.0 produce **identical indicator values** (< 0.01% difference).
 v2.0 = v1.5 indicators + automated spread trading (state machine, multi-symbol orders, Z-Score + dollar exits).
-Guards corriges pour adf=26 (period < 20 au lieu de < 50). 28 inputs total.
+Guards corriges pour adf=26 (period < 20 au lieu de < 50). 30 inputs total (28 originaux + FlatEndOfSession + MaxHoldingBars).
+
+### v2.0 Features (code review Feb 2026)
+- `bool skipTrading` au lieu de `goto SkipTrading` (C++ interdit goto par-dessus declaration de variable)
+- `sc.MaintainTradeStatisticsAndTradesData = 1` (requis pour Trade Activity Log)
+- `sc.SendOrdersToTradeService = !sc.GlobalTradeSimulationIsOn` (pas `= 1`)
+- Double guard: `AutoTradingEnabled && sc.IsAutoTradingEnabled`
+- Anti double-entry: `LastEntryBarIndex` (PersistentInt 8) empeche 2 entrees sur la meme barre
+- Commission nette: `netPnL = grossPnL - commission` (utilise InCommissionRT)
+- Open PnL affiche dans le text box quand en position
+- Exit types detailles dans les logs: `SL_DOLLAR`, `SL_ZSCORE`, `TP_DOLLAR`, `TP_ZSCORE`, `MAX_HOLD`, `END_SESSION`
+- Sizing detaille dans les logs d'entree: `NotGC=$%.0f NotSI=$%.0f Raw=%.2f->%d`
+- Input[28] `FlatEndOfSession` (YesNo, default off): flat-all en fin de session
+- Input[29] `MaxHoldingBars` (int, default 0=off): sortie forcee apres N barres
+- `NewOrder.TradeAccount = sc.SelectedTradeAccount` sur tous les ordres SI (8 ordres)
+- `sc.GetTradingErrorTextMessage(rc)` dans tous les logs d'erreur SI (4 logs)
 
 ### Sierra Chart Files
 - **v2.0 (trading)**: `DOC SIERRA/files/GC_SI_SpreadMeanReversion_v2.0.cpp`
@@ -346,30 +363,49 @@ SHORT spread (Sell SI + Buy GC):
   Exit:   sc.SellOrder(GC)     + sc.BuyOrder(SI, Symbol=SIH26_FUT_CME)
 ```
 - Tout en `sc.BuyOrder/SellOrder` (unmanaged) — NE PAS mixer avec managed (BuyEntry/SellEntry/BuyExit/SellExit)
-- `sc.SendOrdersToTradeService = 1` requis pour ordres cross-symbole
+- `sc.SendOrdersToTradeService = !sc.GlobalTradeSimulationIsOn` (pas `= 1`) requis pour ordres cross-symbole
 - `sc.SubmitOrder()` n'existe PAS dans ACSIL
 - Le Spread Order Entry Study est GUI-only, pas d'API ACSIL
 - SI-first pattern: soumettre SI d'abord, verifier rc, puis GC. Si GC echoue, reverser SI.
 
 ### Replay Validation (Feb 2026)
-GC leg validated (10 trades, directions OK). SI leg: v2.0 corrige (100% unmanaged + IsFullRecalculation guard + order verification). A tester en replay.
+**5/5 trades matchent** entre SC replay et Python backtest (Jan 12-21, 2026) :
+- Directions, contracts, Beta : identiques
+- Prix d'entree : < $2 de difference
+- Z-Score d'entree : < 0.06 de difference
+- PnL : ecarts de $55-$730 (differences d'exit bar)
+
+**Full-dataset comparison** (158,740 barres 5-min, 3 ans) :
+- Z-Score median delta: 0.005, correlation 0.957
+- 85% des signaux d'entree concordent (39/46)
+- Divergences aux rolls de contrat et barres marginales
+
+**Limitation cross-symbole en replay** : les ordres SI se remplissent au prix live (pas historique) car le simulateur local ne gere pas les fills cross-symbole en replay. Pas d'impact en paper trading live.
 
 ### ACSIL Gotchas (Phase D learnings)
 - **NE PAS mixer managed et unmanaged**: managed (BuyEntry/SellEntry) + unmanaged (BuyOrder/SellOrder) = conflits avec variables managed (MaximumPositionAllowed, SupportReversals, etc.)
 - **DRAWSTYLE_IGNORE** necessaire pour subgraphs trading (Hidden ne suffit pas, compresse le chart)
 - **Format symbole**: utiliser `SIH26_FUT_CME` (underscores) pas `SIH26.CME` (point)
-- **IsFullRecalculation**: utiliser `goto SkipTrading` (pas `return`) pour preserver le text box
+- **IsFullRecalculation**: utiliser `bool skipTrading` + `if (!skipTrading)` (pas `goto` — illegal en C++ si ca saute par-dessus une declaration de variable initialisee)
 - **Replay mode**: "Standard Replay" fonctionne, "Accurate Trading Back Test" non
 - **Jan 1 = holiday**: commencer le replay le 5 janvier
+- **Cross-symbol replay limitation**: les ordres cross-symbole en replay se remplissent au prix live, pas historique (confirmation SC Support Board #22882). Seul le symbole du chart a des fills corrects en replay.
+- **TradeAccount obligatoire pour ordres cross-symbole**: `NewOrder.TradeAccount = sc.SelectedTradeAccount` sur TOUS les ordres SI, sinon rc=-1
+- **sc.GetTradingErrorTextMessage(rc)**: utiliser dans les logs d'erreur pour diagnostiquer les rejets d'ordres
+- **sc.MaintainTradeStatisticsAndTradesData = 1**: requis dans SetDefaults pour que le Trade Activity Log fonctionne
+- **sc.IsAutoTradingEnabled**: guard global SC (en plus de l'input AutoTradingEnabled du study)
+- **sc.SendOrdersToTradeService**: utiliser `= !sc.GlobalTradeSimulationIsOn` (pas `= 1`)
 
 ## Roadmap (TODO)
 
 Phase B (grid search) and Phase C (statistical validation) are **complete**. See `CHANGELOG.md`.
 
 ### Phase D -- Sierra Chart Deployment (IN PROGRESS)
-- [ ] Tester v2.0 corrige en replay (100% unmanaged, SI-first, order verification)
-- [ ] Validation replay SC vs Python backtest complet (GC+SI, Janvier 2026)
-- [ ] Text box mise a jour + logging ameliore
+- [x] Code review v2.0 (10 points: skipTrading, MaintainTradeStats, IsAutoTrading, anti double-entry, commission nette, open PnL, exit types, sizing logs, FlatEndOfSession, MaxHoldingBars)
+- [x] Fix SI ordres rejetees (TradeAccount + GetTradingErrorTextMessage)
+- [x] Replay validation SC vs Python (5/5 trades match, 158K barres comparees, 85% signal concordance)
+- [x] Fix Python backtest: respecter `indicators.period: 5min` dans le main (etait calcule sur 1-min)
+- [x] Fix Hurst: accepter 2 sous-periodes (etait 3, causait NaN pour adf_hurst_period=26, +20pts Coint Score)
 - [ ] Paper trading 4-8 weeks (min 30 trades, compare vs Python backtest)
 - [ ] Production go-live (if paper trading validates)
 
