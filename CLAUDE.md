@@ -6,7 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v1.5).
 
-**Current status**: **Phase D IN PROGRESS — Replay validation**. ACSIL v2.0 revue complete: 100% unmanaged (sc.BuyOrder/SellOrder), bool skipTrading (pas goto), TradeAccount sur tous ordres SI, commission nette, open PnL, exit types detailles, anti double-entry, FlatEndOfSession + MaxHoldingBars optionnels. 30 inputs total. **Replay validation concluante** : 5/5 trades matchent SC vs Python (directions, contracts, Beta identiques). Cross-symbol replay limitation decouverte (SI fills au prix live, pas historique). Config production : `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0_zSL4.0` (5-min pure Z-Score). **223 tests passing**. See `CHANGELOG.md` for detailed history.
+**Current status**: Phase D — Paper trading next. Replay validation concluante (5/5 trades match, 85% signal concordance sur 158K barres).
+**Config production**: `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0_zSL4.0` (5-min). **223 tests passing**. See `CHANGELOG.md` for detailed history.
 
 ## Commands
 
@@ -97,100 +98,17 @@ See `docs/ARCHITECTURE.md` for full data pipeline diagram and module description
 All parameters are in `config/strategy_params.yaml`. Never hardcode values.
 Key field: `indicators.period` defines the calculation timeframe (1min, 5min, 15min, 1h, 1d).
 
-### Archiving Structure (archive_manager.py)
-```
-output/
-├── archive/                         <- Structured archive (git-tracked: config.yaml + metrics.json)
-│   └── {timeframe}/                 <- 1min, 5min
-│       └── {exit_mode}/             <- dollar, zscore, hybrid
-│           └── {config_name}/       <- e.g. b1320_zp24_cp30_adf96_zE3.5_co50_TP300_SL800
-│               ├── config.yaml      <- Config snapshot (saved once per config)
-│               └── {result_type}/   <- grid_search, walk_forward, top_pnl, top_sharpe
-│                   ├── {slip}_metrics.json   <- Metrics (JSON, parsable)
-│                   └── {slip}_trades.csv     <- Trades (gitignored, large)
-├── rankings/                        <- Generated ranking CSVs + DASHBOARD.md
-│   ├── {tf}_{em}_top{n}.csv        <- Per-category ranking
-│   ├── global_top50.csv            <- Cross-category ranking
-│   ├── walk_forward_best.csv       <- Walk-forward ranking (if any)
-│   └── DASHBOARD.md                <- Human-readable summary
-├── raw/                             <- Moved raw grid search CSVs (date-prefixed)
-│   └── grid_search/
-├── latest/                          <- Last single-run output (quick access)
-│   ├── backtest_hybrid.csv
-│   ├── metrics_report.txt
-│   └── equity_curve.png
-└── production/                      <- Active paper trading config
-
-CLI: python src/archive_manager.py --action {archive-campaign|compare|report|archive-top|generate-rankings|dashboard|list}
-
-output/archive/campaigns/               <- Phase B campaign archives
-    {campaign_name}/
-        campaign_meta.json               <- Campaign stats
-        full_results.csv                 <- Full CSV (gitignored)
-        top20/
-            01_{config_label}/
-                config.yaml + metrics.json
-```
-
-Git tracking: config.yaml and metrics.json are tracked; large files (*_trades.csv, *_equity.png) are gitignored.
+### Archiving
+Archive structure: `output/archive/{timeframe}/{exit_mode}/{config_name}/` with `config.yaml` + `metrics.json` (git-tracked) and `*_trades.csv` (gitignored).
+CLI: `python src/archive_manager.py --action {archive-campaign|compare|report|archive-top|generate-rankings|dashboard|list}`
 
 ## Trading Logic
 
-### State Machine (backtest_engine_hybrid.py)
-```
-FLAT (0)  -> LONG (1) or SHORT (-1)     [entry conditions met]
-LONG      -> FLAT                        [TP Z-Score: Z >= -2.0]
-LONG      -> COOLDOWN_LONG (2)           [SL Z-Score: Z <= -3.5]
-SHORT     -> FLAT                        [TP Z-Score: Z <= +2.0]
-SHORT     -> COOLDOWN_SHORT (-2)         [SL Z-Score: Z >= +3.5]
-COOLDOWN_LONG  -> FLAT                   [Z >= -1.0]
-COOLDOWN_SHORT -> FLAT                   [Z <= +1.0]
-```
-
-### Entry Conditions
-- LONG spread: Z-Score <= -3.5, Correlation > 0.60, Cointegration Score >= 50, Hurst < hurst_max
-- SHORT spread: Z-Score >= 3.5, Correlation > 0.60, Cointegration Score >= 50, Hurst < hurst_max
-- Note: `correlation_min` has no practical impact (always > 0.80 when other conditions met)
-- Note: `hurst_max` is redundant with Cointegration Score (Hurst < 0.45 on all traded bars). Default 1.0 = disabled.
-
-### Exit Conditions (OR logic)
-| Condition | LONG | SHORT |
-|-----------|------|-------|
-| TP Z-Score | >= zscore_tp_long | <= zscore_tp_short |
-| SL Z-Score | <= zscore_sl_long | >= zscore_sl_short |
-| TP Dollars | +pnl_take_profit | +pnl_take_profit |
-| SL Dollars | pnl_stop_loss | pnl_stop_loss |
-
-Default values (1-min best config): TP $1000 / SL -$1200, zTP disabled.
-
-- `exit.zscore_tp_enabled` (default false): set to true to enable TP_ZSCORE exits (disabled in best 1mn config)
-- `exit.zscore_tp_min_pnl` (default None): minimum PnL required for TP_ZSCORE exit (e.g., 100 = require $100 profit)
-
-### Key Rules
-- After take profit: immediate re-entry allowed if conditions met
-- After stop loss: cooldown until Z-Score returns to +/-1.0 (direction-specific)
-- Cooldown only blocks same direction (COOLDOWN_LONG blocks LONG, not SHORT)
-- Reversal allowed: close LONG and open SHORT on same bar
-- Exit priority: SL_DOLLAR > SL_ZSCORE > TP_DOLLAR > TP_ZSCORE
-- Single position at a time
-- Dollar-based exits (TP $300 / SL -$600) handled in backtest_engine_hybrid.py
+5 states: FLAT, LONG, SHORT, COOLDOWN_LONG, COOLDOWN_SHORT. Exit priority: SL_DOLLAR > SL_ZSCORE > TP_DOLLAR > TP_ZSCORE. Single position at a time. Cooldown blocks same direction only. Reversal allowed on same bar. See `docs/STRATEGY.md` for entry/exit conditions and parameter values.
 
 ## Backtest Engine
 
-### backtest_engine_hybrid.py (Hybrid 1-min + 5s)
-- Indicators and signals computed on 1-minute bars (normal lookbacks)
-- When in position, scans 5-second bars between consecutive 1-min bars
-- Dollar exits (SL/TP) detected on 5s Last prices (precise intra-bar detection)
-- Z-Score exits checked on 1-min bars only (after 5s scan finds no dollar trigger)
-- 5s data used ONLY for price monitoring, no indicators recalculated on 5s
-
-#### Exit priority per 1-min bar:
-```
-1a. Scan 5s bars: SL_DOLLAR (-$600) -> break
-1a. Scan 5s bars: TP_DOLLAR (+$300) -> break
-1b. If no 5s trigger: SL_ZSCORE on 1-min Z-Score
-1b. If no 5s trigger: TP_ZSCORE on 1-min Z-Score
-```
+**Hybrid 1-min + 5s**: Indicators on 1-min bars, 5s bars scanned only for dollar exit detection (SL/TP) when in position. Z-Score exits checked on 1-min bars after 5s scan finds no dollar trigger. No indicators recalculated on 5s.
 
 ## Contract Specifications
 
@@ -231,13 +149,7 @@ Signal generation happens inside `backtest_engine_hybrid.py` and is not stored a
 
 ## Hardware
 
-- **CPU**: AMD Ryzen 9 7900X -- 12 cores / 24 threads @ 4.70 GHz
-- **RAM**: 64 Go (63.2 Go utilisable)
-- **GPU**: 8 Go VRAM (multi-GPU)
-- **Stockage**: 2.73 TB (SSD)
-- **OS**: Windows 64-bit
-
-**Parallelisme** : Utiliser `multiprocessing.Pool(24)` pour les grid searches (24 threads via hyperthreading). Benchmark: +17.5% vs 12 workers. Chaque worker consomme ~600 Mo RAM (df_5min + df_5s), donc 24 workers ~= 15 Go sur 64 Go disponibles.
+AMD Ryzen 9 7900X (12c/24t), 64 Go RAM, Windows 64-bit. Grid searches: `multiprocessing.Pool(24)`, ~600 Mo/worker (~15 Go total).
 
 ## Conventions
 
@@ -256,7 +168,7 @@ Signal generation happens inside `backtest_engine_hybrid.py` and is not stored a
 - **correlation_min is redundant**: Always > 0.80 when Z-Score + Coint conditions met
 - **Correlation Daily (regime filter) != correlation_min**: Daily log-price corr on 40-day window, distinct from intraday bar-level correlation
 - **hurst_max is redundant**: Hurst < 0.45 on all traded bars (use Cointegration Score instead)
-- See "Research Conclusions" section for grid search findings
+
 
 ### Code Quirks
 - **ddof inconsistency**: Beta uses ddof=0, Z-Score uses ddof=1 (low impact but confusing)
@@ -281,26 +193,12 @@ Signal generation happens inside `backtest_engine_hybrid.py` and is not stored a
 - **5s bars**: 4,604,839 synchronized
 - **Parquet cache**: `data/processed/` (auto-invalidated by MD5 hash). Indicators are NOT cached (depend on config).
 
-## Research Conclusions (Summary)
+## Research Conclusions
 
-See `CHANGELOG.md` for detailed tables, numbers, and phase-by-phase results.
-
-### Key Verdicts
-- **5-min pure Z-Score = dominant mode** (B2 best: $59,172, PF 2.74, 0% slippage attrition)
-- **1min dollar = dead end** (2 ticks: 0/32,400 profitable; 1 tick: volume sans qualite)
-- **Regime filters = dead end** (6 tested C2, none survives walk-forward OOS C3)
-- **Block bootstrap P(perte 100tr) = 19.1%** (k=5), sizing 0.5x recommande
-- **Breakeven slippage = 8.0 ticks** (C5), marge 6x vs nominal
-- **Filtre horaire 0-9h CT**: MONITOR (PF 4.45, echantillon 61 trades)
-- **HMM regime filter**: Python-only, NO_HMM > HMM en PnL, HMM > en consistance. Disabled for SC.
 - **Config production**: `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0` (5-min pure Z-Score, no filter)
+- **5-min pure Z-Score = dominant mode**, 1min dollar = dead end, regime filters = dead end (none survives OOS)
 - **Known risk**: regime-dependent (2023-2024 losing, 2025-2026 profitable, 80% PnL on Jan 2026)
-
-### Key Parameter Findings
-- **zTP=-1.0 (overshoot) = game changer**: doubles PnL vs zTP=1.0
-- **adf=26 dominates non-HMM** (36/50 top B1) — always include in grids
-- **zE=3.5 quasi-exclusif a 2 ticks** (42/50) — trades rares mais qualite
-- **co=40 > co=60 in non-HMM** (31/50 vs 17/50, opposite of HMM audit)
+- See `CHANGELOG.md` for detailed tables, numbers, and phase-by-phase results
 
 ## Sierra Chart Integration (v2.0 - TRADING AUTOMATISE)
 
@@ -308,20 +206,11 @@ Python and Sierra Chart v1.5/v2.0 produce **identical indicator values** (< 0.01
 v2.0 = v1.5 indicators + automated spread trading (state machine, multi-symbol orders, Z-Score + dollar exits).
 Guards corriges pour adf=26 (period < 20 au lieu de < 50). 30 inputs total (28 originaux + FlatEndOfSession + MaxHoldingBars).
 
-### v2.0 Features (code review Feb 2026)
-- `bool skipTrading` au lieu de `goto SkipTrading` (C++ interdit goto par-dessus declaration de variable)
-- `sc.MaintainTradeStatisticsAndTradesData = 1` (requis pour Trade Activity Log)
-- `sc.SendOrdersToTradeService = !sc.GlobalTradeSimulationIsOn` (pas `= 1`)
-- Double guard: `AutoTradingEnabled && sc.IsAutoTradingEnabled`
-- Anti double-entry: `LastEntryBarIndex` (PersistentInt 8) empeche 2 entrees sur la meme barre
-- Commission nette: `netPnL = grossPnL - commission` (utilise InCommissionRT)
-- Open PnL affiche dans le text box quand en position
-- Exit types detailles dans les logs: `SL_DOLLAR`, `SL_ZSCORE`, `TP_DOLLAR`, `TP_ZSCORE`, `MAX_HOLD`, `END_SESSION`
-- Sizing detaille dans les logs d'entree: `NotGC=$%.0f NotSI=$%.0f Raw=%.2f->%d`
-- Input[28] `FlatEndOfSession` (YesNo, default off): flat-all en fin de session
-- Input[29] `MaxHoldingBars` (int, default 0=off): sortie forcee apres N barres
-- `NewOrder.TradeAccount = sc.SelectedTradeAccount` sur tous les ordres SI (8 ordres)
-- `sc.GetTradingErrorTextMessage(rc)` dans tous les logs d'erreur SI (4 logs)
+### v2.0 Key Design Choices
+- 100% unmanaged orders (`sc.BuyOrder/SellOrder`), `bool skipTrading` (no goto), double guard (`AutoTradingEnabled && sc.IsAutoTradingEnabled`)
+- Anti double-entry via `LastEntryBarIndex` (PersistentInt 8), commission nette via `InCommissionRT`
+- `TradeAccount = sc.SelectedTradeAccount` on all SI orders, `SendOrdersToTradeService = !sc.GlobalTradeSimulationIsOn`
+- Optional: `FlatEndOfSession` (Input[28]), `MaxHoldingBars` (Input[29])
 
 ### Sierra Chart Files
 - **v2.0 (trading)**: `DOC SIERRA/files/GC_SI_SpreadMeanReversion_v2.0.cpp`
@@ -382,19 +271,11 @@ SHORT spread (Sell SI + Buy GC):
 
 **Limitation cross-symbole en replay** : les ordres SI se remplissent au prix live (pas historique) car le simulateur local ne gere pas les fills cross-symbole en replay. Pas d'impact en paper trading live.
 
-### ACSIL Gotchas (Phase D learnings)
-- **NE PAS mixer managed et unmanaged**: managed (BuyEntry/SellEntry) + unmanaged (BuyOrder/SellOrder) = conflits avec variables managed (MaximumPositionAllowed, SupportReversals, etc.)
-- **DRAWSTYLE_IGNORE** necessaire pour subgraphs trading (Hidden ne suffit pas, compresse le chart)
-- **Format symbole**: utiliser `SIH26_FUT_CME` (underscores) pas `SIH26.CME` (point)
-- **IsFullRecalculation**: utiliser `bool skipTrading` + `if (!skipTrading)` (pas `goto` — illegal en C++ si ca saute par-dessus une declaration de variable initialisee)
-- **Replay mode**: "Standard Replay" fonctionne, "Accurate Trading Back Test" non
-- **Jan 1 = holiday**: commencer le replay le 5 janvier
-- **Cross-symbol replay limitation**: les ordres cross-symbole en replay se remplissent au prix live, pas historique (confirmation SC Support Board #22882). Seul le symbole du chart a des fills corrects en replay.
-- **TradeAccount obligatoire pour ordres cross-symbole**: `NewOrder.TradeAccount = sc.SelectedTradeAccount` sur TOUS les ordres SI, sinon rc=-1
-- **sc.GetTradingErrorTextMessage(rc)**: utiliser dans les logs d'erreur pour diagnostiquer les rejets d'ordres
-- **sc.MaintainTradeStatisticsAndTradesData = 1**: requis dans SetDefaults pour que le Trade Activity Log fonctionne
-- **sc.IsAutoTradingEnabled**: guard global SC (en plus de l'input AutoTradingEnabled du study)
-- **sc.SendOrdersToTradeService**: utiliser `= !sc.GlobalTradeSimulationIsOn` (pas `= 1`)
+### ACSIL Gotchas
+- **NE PAS mixer managed et unmanaged**: conflits avec MaximumPositionAllowed, SupportReversals, etc.
+- **DRAWSTYLE_IGNORE** pour subgraphs trading (Hidden compresse le chart)
+- **Format symbole**: `SIH26_FUT_CME` (underscores, pas `SIH26.CME`)
+- **Replay**: "Standard Replay" OK, "Accurate Trading Back Test" non. Cross-symbol fills au prix live (SC Support Board #22882).
 
 ## Roadmap (TODO)
 
@@ -459,14 +340,14 @@ Lance un grid search massif en background (milliers de configs), genere un rappo
 223 tests, all passing. Tests use synthetic data (fixtures in `conftest.py`), no dependency on real CSV files.
 Key fixtures: `sample_config`, `sample_prices_df`, `sample_df_with_indicators`.
 
-## Skills & References
-- **ACSIL/Sierra Chart**: Read `.claude/skills/sierra-acsil/SKILL.md` before any C++ Sierra Chart work
-- **Strategy logic**: Refer to `docs/STRATEGY.md` for indicator formulas and entry/exit rules
-- **Architecture**: Refer to `docs/ARCHITECTURE.md` for module interactions
+## Mandatory Pre-Read Rules
 
-## Reference Files
-- `config/strategy_params.yaml` - All strategy parameters
-- `CHANGELOG.md` - Full optimization history and detailed results
-- `analyse.md` - Code analysis and bug documentation
-- `output/archive/` - Archived configs with metrics reports
-- `output/latest_summary.txt` - Last grid search summary (generated by report_generator.py)
+Before ANY action, Claude Code MUST read the relevant file FIRST:
+
+| Trigger | Read FIRST |
+|---------|-----------|
+| C++ / Sierra Chart / ACSIL / .cpp | `.claude/skills/sierra-acsil/SKILL.md` |
+| Backtest / optimizer / grid search | `docs/ARCHITECTURE.md` |
+| Entry/exit logic / state machine | `docs/STRATEGY.md` |
+| Config changes / parameters | `config/strategy_params.yaml` |
+| Phase history / past results | `CHANGELOG.md` |
