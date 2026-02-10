@@ -18,7 +18,7 @@ data:
 # SPÉCIFICATIONS DES CONTRATS (CME/COMEX)
 # ----------------------------------------------------------------------------
 contracts:
-  mode: "micro"             # "micro" (MGC/SIL) pour sizing 0.5x (recommandation C4bis)
+  mode: "standard"          # "standard" (GC/SI) ou "micro" (MGC/SIL)
 
   standard:
     gc_point_value: 100     # $/point GC (100 oz x $1/oz)
