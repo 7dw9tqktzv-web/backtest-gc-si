@@ -10,7 +10,7 @@
 # ----------------------------------------------------------------------------
 data:
   gc_file: "data/raw/GCJ26_FUT_CME_1mn.scid_BarData.txt"
-  si_file: "data/raw/SIH26_FUT_CME-1mn.scid_BarData.txt"
+  si_file: "data/raw/SIH26_FUT_CME_1mn.scid_BarData.txt"
   gc_file_5s: "data/raw/GCJ26_FUT_CME_5secondes.scid_BarData.txt"
   si_file_5s: "data/raw/SIH26_FUT_CME_5secondes.scid_BarData.txt"
   

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v1.5).
 
-**Current status**: Phase D — Paper trading next. Replay validation concluante (5/5 trades match, 85% signal concordance sur 158K barres).
+**Current status**: Phase D — Paper trading EN COURS (simulation live). Tooling complet : reference Python, SC log parser, comparateur, dashboard. Donnees a jour jusqu'au 10 fev 2026 (60 trades, $51.7K). Replay validation : 4/4 trades matchent par Z-Score (delta < 0.03).
 **Config production**: `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0_zSL4.0` (5-min). **223 tests passing**. See `CHANGELOG.md` for detailed history.
 
 ## Commands
