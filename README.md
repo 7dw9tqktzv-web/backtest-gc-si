@@ -10,8 +10,10 @@ Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy base
 | Grid search (1-min + 5-min) | COMPLETE |
 | Walk-forward validation | COMPLETE |
 | Statistical validation (Monte Carlo, bootstrap) | COMPLETE |
-| Sierra Chart v2.0 (automated trading) | IN PROGRESS |
-| Replay validation | **COMPLETE** (5/5 trades match, 85% signal concordance on 158K bars) |
+| Sierra Chart v2.0 (automated trading) | COMPLETE |
+| Replay validation | COMPLETE (5/5 trades match, 85% signal concordance on 158K bars) |
+| Paper trading tooling | COMPLETE (reference, SC parser, comparator, dashboard) |
+| Paper trading validation | IN PROGRESS (0/30 trades) |
 
 **Production config**: `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0_zSL4.0` (5-min pure Z-Score)
 - 5-min best: **$59,172** PnL, PF 2.74, 0% slippage attrition
@@ -81,6 +83,10 @@ backtest_gc_si/
 ├── scripts/                            <- Execution scripts
 │   ├── run_grid_search.py              <- Generic YAML-driven grid search
 │   ├── run_walk_forward.py             <- Generic YAML-driven walk-forward
+│   ├── run_paper_trading_ref.py        <- Paper trading reference backtest
+│   ├── parse_sc_trades.py              <- SC Message Log trade parser
+│   ├── compare_sc_python.py            <- SC vs Python trade comparator
+│   ├── update_pt_dashboard.py          <- Cumulative paper trading dashboard
 │   └── run_*.py                        <- Special scripts (custom logic)
 ├── configs/experiments/                <- YAML experiment configs
 ├── tests/                              <- 223 unit tests (pytest)
@@ -167,9 +173,30 @@ v2.0 adds automated spread trading: state machine, multi-symbol orders (100% unm
 
 223 tests, all passing. Tests use synthetic data (no dependency on real CSV files).
 
+## Paper Trading Workflow
+
+```bash
+# 1. Export fresh CSV (1-min + 5s) from Sierra Chart into data/raw/
+# 2. Save SC Message Log: Window > Message Log > Save As
+
+# 3. Generate Python reference
+python scripts/run_paper_trading_ref.py --start 2026-02-01
+
+# 4. Parse SC trades
+python scripts/parse_sc_trades.py output/production/sc_message_log.txt --start 2026-02-01
+
+# 5. Compare SC vs Python
+python scripts/compare_sc_python.py
+
+# 6. Update dashboard
+python scripts/update_pt_dashboard.py --note "Week 1"
+```
+
+GO criteria (30+ trades): concordance >= 90%, exit match >= 85%, delta PnL median < $200.
+
 ## Next Steps
 
-1. **Paper trading** 4-8 weeks (min 30 trades, compare vs Python backtest)
+1. **Paper trading** 4-8 weeks (min 30 trades)
 2. **Production** go-live (if paper trading validates)
 
 ---

@@ -68,6 +68,12 @@ python src/archive_manager.py --action generate-rankings
 
 # Validate data at specific datetime
 python validate_data.py --date "2026-01-23 10:30:00"
+
+# Paper trading (Phase D)
+python scripts/run_paper_trading_ref.py --start 2026-02-01          # Reference Python
+python scripts/parse_sc_trades.py <message_log.txt> --start 2026-02-01  # Import trades SC
+python scripts/compare_sc_python.py                                  # Comparaison SC vs Python
+python scripts/update_pt_dashboard.py --note "Semaine 1"             # Dashboard cumulatif
 ```
 
 ## Architecture
@@ -287,6 +293,7 @@ Phase B (grid search) and Phase C (statistical validation) are **complete**. See
 - [x] Replay validation SC vs Python (5/5 trades match, 158K barres comparees, 85% signal concordance)
 - [x] Fix Python backtest: respecter `indicators.period: 5min` dans le main (etait calcule sur 1-min)
 - [x] Fix Hurst: accepter 2 sous-periodes (etait 3, causait NaN pour adf_hurst_period=26, +20pts Coint Score)
+- [x] Paper trading tooling (reference backtest, SC log parser, comparator, dashboard)
 - [ ] Paper trading 4-8 weeks (min 30 trades, compare vs Python backtest)
 - [ ] Production go-live (if paper trading validates)
 
