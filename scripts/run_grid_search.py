@@ -28,6 +28,9 @@ from grid_search_runner import (
     create_hybrid_entry_exit_generator,
     create_hybrid_label_builder,
     create_hybrid_result_builder,
+    create_micro_full_entry_exit_generator,
+    create_micro_full_label_builder,
+    create_micro_full_result_builder,
 )
 
 
@@ -75,8 +78,23 @@ def run_from_yaml(config_path: str):
         label_builder = create_hybrid_label_builder()
         result_builder = create_hybrid_result_builder()
 
+    elif exit_mode == "micro_full":
+        ee_gen = create_micro_full_entry_exit_generator(
+            zscore_entry=ee["zscore_entry"],
+            cointegration_min=ee["cointegration_min"],
+            zscore_tp=ee["zscore_tp"],
+            zscore_sl=ee["zscore_sl"],
+            dollar_tp=ee["dollar_tp"],
+            dollar_sl=ee["dollar_sl"],
+            flat_end_of_session=ee["flat_end_of_session"],
+            max_holding_bars=ee["max_holding_bars"],
+            micro_multiplier_max=ee["micro_multiplier_max"],
+        )
+        label_builder = create_micro_full_label_builder()
+        result_builder = create_micro_full_result_builder()
+
     else:
-        raise ValueError(f"exit_mode inconnu : '{exit_mode}' (dollar, zscore ou hybrid)")
+        raise ValueError(f"exit_mode inconnu : '{exit_mode}' (dollar, zscore, hybrid ou micro_full)")
 
     exec_cfg = cfg.get("execution", {})
 

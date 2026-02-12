@@ -6,8 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v1.5).
 
-**Current status**: Phase D — Paper trading EN COURS (simulation live). Tooling complet : reference Python, SC log parser, comparateur, dashboard. Donnees a jour jusqu'au 10 fev 2026 (60 trades, $51.7K). Replay validation : 4/4 trades matchent par Z-Score (delta < 0.03).
-**Config production**: `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0_zSL4.0` (5-min). **223 tests passing**. See `CHANGELOG.md` for detailed history.
+**Current status**: Phase D — Paper trading + micro sizing grid search. Premier trade live SC v2.0 reussi ($10K PnL). Sizing trop large pour prop firm -> migration micro (MGC/SIL) avec multiplicateur optimal 1x/2x. Grid search R1 (252K configs) pret a lancer.
+**Config production**: `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0_zSL4.0` (5-min, standard). **223 tests passing**. See `CHANGELOG.md` for detailed history.
 
 ## Commands
 
@@ -38,6 +38,7 @@ python scripts/run_grid_search.py --config configs/experiments/grid_5min.yaml   
 python scripts/run_grid_search.py --config configs/experiments/grid_beta_long.yaml   # 4,050 configs beta long
 python scripts/run_grid_search.py --config configs/experiments/grid_ztp_extended.yaml # Extended Z-Score TP
 python scripts/run_grid_search.py --config configs/experiments/grid_5min_test.yaml   # 12 configs smoke test
+python scripts/run_grid_search.py --config configs/experiments/grid_micro_r1.yaml   # 252K configs micro prop firm
 
 # Walk-forward (YAML-driven, unified runner)
 python scripts/run_walk_forward.py --config configs/experiments/wf_base.yaml         # 6-window validation
@@ -91,14 +92,7 @@ See `docs/ARCHITECTURE.md` for full data pipeline diagram and module description
 - `run_metrics()` in `metrics.py` - analyzes backtest results, generates report + equity curve, archives everything
 - `run_optimization(configs_list)` in `optimizer.py` - loads data once, runs N backtests, returns comparison table
 - `apply_overrides(config, overrides)` in `optimizer.py` - applies dotted-key overrides to config dict
-- `archive_config()` in `archive_manager.py` - archives a single config with metrics JSON + config YAML
-- `archive_top_n_from_grid()` in `archive_manager.py` - archives top N from grid search CSV
-- `generate_rankings()` in `archive_manager.py` - generates ranking CSVs + DASHBOARD.md
-- `generate_dashboard()` in `archive_manager.py` - generates DASHBOARD.md with summary tables
-- `list_configs()` in `archive_manager.py` - lists archived configs as DataFrame
-- `archive_campaign()` in `archive_manager.py` - archives a full campaign (meta + CSV + top N)
-- `compare_campaigns()` in `archive_manager.py` - compares campaigns side by side
-- `generate_campaign_report()` in `archive_manager.py` - generates Markdown report with GO/NO-GO
+- `archive_manager.py` - CLI with actions: `archive-campaign`, `compare`, `report`, `dashboard`, `list`, `archive-top`, `generate-rankings`
 
 ### Configuration
 All parameters are in `config/strategy_params.yaml`. Never hardcode values.
@@ -142,6 +136,11 @@ GC_contracts = round( (NotionalSI / NotionalGC) * Beta ) , minimum 1
 
 Beta varies from ~0.03 to ~6.3 on traded bars -> GC contracts range from 1 to 6.
 
+### Micro Optimal Multiplier (micro mode)
+Tests 1x and 2x multipliers, picks the one with better dollar-neutral ratio (>1% improvement threshold).
+Target: ~$250/trade avg, $2,500 max drawdown for prop firm day trading.
+`FlatEndOfSession`: force exit at 15:25 CT. `MaxHoldingBars`: force exit after N 1-min bars.
+
 ## DataFrame Columns
 
 After `calculate_all_indicators()`:
@@ -149,8 +148,6 @@ After `calculate_all_indicators()`:
 - Regression: `Beta`, `Alpha`
 - Spread: `Spread`, `Spread_Mean`, `Spread_Std`, `ZScore`
 - Quality: `Correlation`, `ADF_Statistic`, `Hurst`, `HalfLife`, `Cointegration_Score`
-- Regime filter (if enabled): `HalfLife_AR1` (daily, forward-filled), `Corr_Daily_GC_SI` (daily, forward-filled)
-
 Signal generation happens inside `backtest_engine_hybrid.py` and is not stored as separate DataFrame columns.
 
 ## Hardware
@@ -172,7 +169,6 @@ AMD Ryzen 9 7900X (12c/24t), 64 Go RAM, Windows 64-bit. Grid searches: `multipro
 
 ### Strategy Parameters
 - **correlation_min is redundant**: Always > 0.80 when Z-Score + Coint conditions met
-- **Correlation Daily (regime filter) != correlation_min**: Daily log-price corr on 40-day window, distinct from intraday bar-level correlation
 - **hurst_max is redundant**: Hurst < 0.45 on all traded bars (use Cointegration Score instead)
 
 
@@ -180,11 +176,12 @@ AMD Ryzen 9 7900X (12c/24t), 64 Go RAM, Windows 64-bit. Grid searches: `multipro
 - **ddof inconsistency**: Beta uses ddof=0, Z-Score uses ddof=1 (low impact but confusing)
 - **backtest_engine_hybrid.py main vs grid search**: le main respecte maintenant `indicators.period` (5min par defaut). Les grid searches utilisaient deja `resample_to_5min()` — seul le main etait incorrect.
 - **Hurst min_sub_periods=2**: avec adf_hurst_period=26, seules les sous-periodes 8 et 16 sont disponibles (32 > 26). SC calcule avec 2 points, Python aussi maintenant.
-- **hmmlearn covariance bug**: Getter returns (n_components, n_features, n_features), setter expects (n_components, n_features) - use `model._covars_` directly
 - **MGC/SIL ratios asymetriques** : MGC = 1/10 de GC, SIL = 1/5 de SI. Le sizing dollar-neutral est recalcule automatiquement via `get_contract_specs()`
 
 ### Grid Search
 - **24 workers optimal**: AMD Ryzen 9 7900X with 24 threads, each worker ~600 MB RAM
+- **~4.3s per config** (hybrid 5min+5s backtest, benchmarked Feb 2026)
+- **stdout buffering**: use `PYTHONUNBUFFERED=1` or redirect to log file for progress visibility
 - **grid_temp/ grows to 11+ GB**: Delete after grid search to free space
 - **indicator_cache_*.pkl**: Temporary files, safe to delete after run
 
@@ -215,6 +212,7 @@ Guards corriges pour adf=26 (period < 20 au lieu de < 50). 30 inputs total (28 o
 ### v2.0 Key Design Choices
 - 100% unmanaged orders (`sc.BuyOrder/SellOrder`), `bool skipTrading` (no goto), double guard (`AutoTradingEnabled && sc.IsAutoTradingEnabled`)
 - Anti double-entry via `LastEntryBarIndex` (PersistentInt 8), commission nette via `InCommissionRT`
+- **TradingInitialized flag** (PersistentInt 9): protege l'etat trading des full recalculations
 - `TradeAccount = sc.SelectedTradeAccount` on all SI orders, `SendOrdersToTradeService = !sc.GlobalTradeSimulationIsOn`
 - Optional: `FlatEndOfSession` (Input[28]), `MaxHoldingBars` (Input[29])
 
@@ -282,6 +280,7 @@ SHORT spread (Sell SI + Buy GC):
 - **DRAWSTYLE_IGNORE** pour subgraphs trading (Hidden compresse le chart)
 - **Format symbole**: `SIH26_FUT_CME` (underscores, pas `SIH26.CME`)
 - **Replay**: "Standard Replay" OK, "Accurate Trading Back Test" non. Cross-symbol fills au prix live (SC Support Board #22882).
+- **NE JAMAIS reset TradeState dans `if (sc.IsFullRecalculation)`** : avec AutoLoop=1, les reconnexions data declenchent des full recalc qui reprocessent depuis sc.Index==0. Si on reset l'etat trading la, le study "oublie" sa position en cours. Fix: utiliser un `TradingInitialized` PersistentInt flag (0=init needed, 1=skip). Seul le premier chargement init l'etat trading.
 
 ## Roadmap (TODO)
 
@@ -302,8 +301,7 @@ Phase B (grid search) and Phase C (statistical validation) are **complete**. See
 
 ## Known Code Issues (non-blocking)
 
-See `analyse.md` for comprehensive code review. Key issues:
-- **ddof inconsistency**: Beta ddof=0, Z-Score ddof=1 (low impact)
+See `analyse.md` for comprehensive code review. Key issue:
 - **run_hybrid_backtest() = 350+ lines**: needs decomposition
 
 ## Claude Code Skills
@@ -338,7 +336,7 @@ Lance un grid search massif en background (milliers de configs), genere un rappo
 
 ## Git Tracking
 
-`.gitignore` exclut : `.venv/`, `__pycache__/`, `data/raw/`, `DOC SIERRA/`, `.idea/`, `.claude/`, `results/`, `output_old/`
+`.gitignore` exclut : `.venv/`, `__pycache__/`, `data/raw/`, `DOC SIERRA/`, `.idea/`, `.claude/`
 
 `output/` uses selective tracking: `archive/` and `rankings/` are tracked (config.yaml + metrics.json), but large files (*_trades.csv, *_equity.png) are gitignored.
 

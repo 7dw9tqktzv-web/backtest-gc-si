@@ -1,0 +1,33 @@
+# Smoke test micro_full mode - 4 configs
+type: grid_search
+title: "TEST MICRO_FULL - 4 configs"
+exit_mode: micro_full
+
+execution:
+  timeframe: 5min
+  num_workers: 4
+  output_path: output/grid_micro_test.csv
+  min_trades_for_sharpe: 10
+
+indicators:
+  beta_lookback: [2640]
+  zscore_period: [20]
+  correlation_period: [30]
+  adf_hurst_period: [26]
+
+entry_exit:
+  zscore_entry: [3.5]
+  cointegration_min: [40]
+  zscore_tp: [1.0]
+  zscore_sl: [4.0]
+  dollar_tp: [0]
+  dollar_sl: [0]
+  flat_end_of_session: [false]
+  max_holding_bars: [0]
+  micro_multiplier_max: [1, 2]
+
+fixed_overrides:
+  contracts.mode: "micro"
+  exit.zscore_tp_enabled: true
+  costs.slippage_gc_ticks: 1
+  costs.slippage_si_ticks: 1

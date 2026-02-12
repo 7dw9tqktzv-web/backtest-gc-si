@@ -85,7 +85,31 @@ def calculate_position_size(
         notional_si = si_price * si_point_value
 
         gc_for_one_si = notional_si / notional_gc
-        gc_contracts_raw = gc_for_one_si * beta * si_contracts
+        gc_contracts_raw_1x = gc_for_one_si * beta * si_contracts
+
+        # Multiplicateur optimal en micro : teste 1x..Nx, garde le meilleur arrondi
+        micro_mult_max = config['sizing'].get('micro_multiplier_max', 1)
+        is_micro = config['contracts'].get('mode', 'standard') == 'micro'
+
+        if is_micro and micro_mult_max > 1:
+            best_mult = 1
+            best_error = abs(round(gc_contracts_raw_1x) - gc_contracts_raw_1x) / max(gc_contracts_raw_1x, 1)
+
+            for mult in range(2, micro_mult_max + 1):
+                gc_raw_mult = gc_contracts_raw_1x * mult
+                gc_rounded = round(gc_raw_mult)
+                # Erreur relative par rapport au nombre de contrats GC
+                error = abs(gc_rounded - gc_raw_mult) / max(gc_raw_mult, 1)
+                # 2x gagne seulement s'il ameliore significativement le ratio (>1% mieux)
+                if error < best_error - 0.01:
+                    best_error = error
+                    best_mult = mult
+
+            si_contracts = si_contracts * best_mult
+            gc_contracts_raw = gc_contracts_raw_1x * best_mult
+        else:
+            gc_contracts_raw = gc_contracts_raw_1x
+
         gc_contracts = round(gc_contracts_raw)
 
         # Securite : minimum 1 contrat
