@@ -6,8 +6,40 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v1.5).
 
-**Current status**: Phase D — Paper trading + micro sizing grid search. Premier trade live SC v2.0 reussi ($10K PnL). Sizing trop large pour prop firm -> migration micro (MGC/SIL) avec multiplicateur optimal 1x/2x. Grid search R1 (252K configs) pret a lancer.
+**Current status**: Phase D — Grid search R1 termine, PnL Decay Analysis termine, R2 a lancer.
 **Config production**: `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0_zSL4.0` (5-min, standard). **223 tests passing**. See `CHANGELOG.md` for detailed history.
+
+## Current State (Micro Sizing Pipeline)
+
+### Grid Search R1 (termine)
+- 252K configs micro (MGC/SIL), 68,588 profitables (27.2%)
+- **Parametres verrouilles** : zE=3.5, co=20, dTP=300, mm=2
+- **Parametres morts** (aucun impact) : zSL, dSL, mhb
+- 8 familles distinctes dans le top 100
+- **Top 1** : `zE3.5_co20_zTP1.5_dTP300_mm2` — $4,478, PF 2.15, DD -$955, Sharpe 0.26
+- Exit breakdown : ~37% TP_ZSCORE, ~22% TP_DOLLAR, ~41% END_SESSION
+- Fichiers : `output/grid_micro_r1.csv`, `output/grid_micro_r1_top100.csv`
+
+### PnL Decay Analysis (termine)
+Analyse intra-trade bar-par-bar (1-min + 5s) sur les 8 familles R1. Resultats cles :
+
+- **TP_DOLLAR** : MFE moyen $905, median $465 apres trigger $300 — dTP coupe trop tot, tester $400-500
+- **TP_ZSCORE** : decay ratio negatif (-0.14 a -0.83) — trades repassent negatifs apres le peak Z
+- **END_SESSION** : MFE ~$50, decay ~0.09, bruit pur — gate ADF les filtrerait
+- **MAE P5** : -$253 (F1) a -$470 (F4) — SL recommande $300-$560
+- **PnL contribution** : TP_DOLLAR = 154% du PnL total, TP_ZSCORE = -17%, END_SESSION = -36%
+- Peak MFE arrive en 0-2 barres — mhb inutile tant que dTP fait le travail
+- **zTP optimal** : 1.5 (meilleur Calmar)
+- Fichiers : `output/reports/PNL_DECAY_ANALYSIS.md`, `output/reports/pnl_decay_plots/`
+- Script : `scripts/pnl_decay_analysis.py`
+
+### Recommandations R2
+- **dTP** : tester [350, 400, 450, 500, 600] (sweet spot ~$400-450)
+- **dSL** : tester [-350, -400, -500] (base sur P95 MAE)
+- **mhb** : parametre mort, fixer a 0
+- **zSL** : parametre mort, fixer a 99
+- Croiser avec 476 combos indicateurs (Court/Moyen/Long)
+- Gate ADF < -2.86 a implementer en Phase C+
 
 ## Commands
 
@@ -161,6 +193,24 @@ AMD Ryzen 9 7900X (12c/24t), 64 Go RAM, Windows 64-bit. Grid searches: `multipro
 - Session: 17:30 - 15:30 CT (22 hours, 264 bars 5-min per day)
 - User level: Python beginner, Sierra Chart expert
 - Approach: Pedagogical, step-by-step with explanations
+
+## Post-Edit Rules
+Apres CHAQUE modification de code dans `src/` :
+1. Lancer `pytest tests/ -v` — 0 failures obligatoire
+2. Si la logique backtest a change : relancer le backtest de reference et comparer les metriques
+
+## Plugin Usage Rules
+**Auto** : context7
+**Explicites** : comprehensive-review, unit-testing, quantitative-trading
+
+## CRITICAL: HUMAN-ONLY Decisions
+Ne JAMAIS modifier autonomement :
+- `config/strategy_params.yaml`
+- Choix des parametres d'entree/sortie (zE, zTP, dTP, dSL, mhb, mm)
+- Seuils de filtres (cointegration_min, correlation_min, ADF gate)
+- Decisions go/no-go entre phases (R1->R2->R3->paper->live)
+
+Claude Code peut PROPOSER mais ne doit JAMAIS APPLIQUER sans validation explicite.
 
 ## Gotchas
 
