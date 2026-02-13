@@ -433,8 +433,14 @@ def compute_exit_analysis(trades):
         e['dur_avg'] = round(statistics.mean(e['durations']), 1) if e['durations'] else 0
 
     # Ordre fixe pour affichage
-    order = ['TP_DOLLAR', 'TP_ZSCORE', 'SL_DOLLAR', 'SL_ZSCORE']
-    return {k: exits.get(k, {'trades': 0, 'wins': 0, 'pnl': 0, 'win_rate': 0, 'pnl_avg': 0, 'dur_avg': 0}) for k in order}
+    order = ['TP_DOLLAR', 'TP_ZSCORE', 'SL_DOLLAR', 'SL_ZSCORE',
+             'FLAT_EOD', 'MAX_HOLD', 'END_SESSION']
+    # Inclure aussi les exit reasons non-standard detectees dans les trades
+    for reason in exits:
+        if reason not in order:
+            order.append(reason)
+    default = {'trades': 0, 'wins': 0, 'pnl': 0, 'win_rate': 0, 'pnl_avg': 0, 'dur_avg': 0}
+    return {k: exits.get(k, dict(default)) for k in order}
 
 
 # ============================================================================
@@ -801,7 +807,7 @@ def update_index(config, gm, am, archive_path, trades):
         "TP;SL;Corr_Min;Coint_Min;"
         "Trades;LONG;SHORT;Winners;Win_Rate;PnL_Net;PnL_Avg;"
         "Best;Worst;Max_DD;Profit_Factor;Sharpe;Calmar;"
-        "Days_Loaded;TP_DOLLAR;TP_ZSCORE;SL_DOLLAR;SL_ZSCORE"
+        "Days_Loaded;TP_DOLLAR;TP_ZSCORE;SL_DOLLAR;SL_ZSCORE;FLAT_EOD;MAX_HOLD;END_SESSION"
     )
 
     # Compter les exits
@@ -822,7 +828,8 @@ def update_index(config, gm, am, archive_path, trades):
         f"{gm['profit_factor']};{am['sharpe']};{am['calmar']};"
         f"{gm['days_loaded']};"
         f"{exits.get('TP_DOLLAR', 0)};{exits.get('TP_ZSCORE', 0)};"
-        f"{exits.get('SL_DOLLAR', 0)};{exits.get('SL_ZSCORE', 0)}"
+        f"{exits.get('SL_DOLLAR', 0)};{exits.get('SL_ZSCORE', 0)};"
+        f"{exits.get('FLAT_EOD', 0)};{exits.get('MAX_HOLD', 0)};{exits.get('END_SESSION', 0)}"
     )
 
     ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)

@@ -72,7 +72,7 @@ def process_group(args):
     group_key, configs, base_config, df_1min, df_5s, completed_labels = args
 
     from indicators import calculate_all_indicators
-    from backtest_engine_hybrid import run_hybrid_backtest
+    from backtest_engine_numba import run_hybrid_backtest
     from optimizer import apply_overrides, compute_metrics
 
     # Indicateurs communs au groupe

@@ -24,7 +24,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from data_loader import load_and_prepare_data, resample_to_5min, load_5s_data
 from indicators import calculate_all_indicators
-from backtest_engine_hybrid import run_hybrid_backtest
+from backtest_engine_numba import run_hybrid_backtest
 
 
 def compute_metrics(trades_df):

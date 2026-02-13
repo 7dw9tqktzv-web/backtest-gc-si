@@ -189,7 +189,7 @@ print("=" * 80)
 # Run Python backtest to get trade states
 # We'll use the hybrid backtest engine
 try:
-    from backtest_engine_hybrid import run_hybrid_backtest
+    from backtest_engine_numba import run_hybrid_backtest
     from data_loader import load_5s_data
 
     print("\nRunning Python hybrid backtest for trade state comparison...")

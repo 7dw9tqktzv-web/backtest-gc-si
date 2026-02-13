@@ -19,7 +19,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from data_loader import load_and_prepare_data, load_5s_data
 from indicators import calculate_all_indicators
-from backtest_engine_hybrid import run_hybrid_backtest, export_backtest
+from backtest_engine_numba import run_hybrid_backtest
+from backtest_engine_hybrid import export_backtest
 from metrics import run_metrics
 from optimizer import apply_overrides
 

@@ -117,7 +117,7 @@ def process_group(args):
     g_idx, ind_group, ee_variants, base_config, df_1min, df_5s, completed_labels = args
 
     from indicators import calculate_all_indicators
-    from backtest_engine_hybrid import run_hybrid_backtest
+    from backtest_engine_numba import run_hybrid_backtest
     from optimizer import apply_overrides, compute_metrics
 
     # Calculer les indicateurs une fois

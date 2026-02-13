@@ -1,19 +1,11 @@
 # ============================================================================
-# BACKTEST_ENGINE_HYBRID.PY - Approche A : Hybride 1min + 5s
+# BACKTEST_ENGINE_HYBRID.PY - Version Python pure (REFERENCE / FALLBACK)
 # ============================================================================
-#
-# Principe :
-#   - Les signaux d'entree/sortie Z-Score sont calcules sur barres 1-minute
-#     (meme pipeline que backtest_engine.py)
-#   - Quand on est en position, on surveille le PnL sur barres 5 secondes
-#     pour detecter les sorties TP Dollar (+$400) et SL Dollar (-$800)
-#   - Si aucun trigger dollar sur les barres 5s, on verifie les sorties
-#     Z-Score sur la barre 1-minute suivante
-#
-# Avantage : precision des exits en dollars sans recalculer les indicateurs
-#
-# Auteur: Assistant IA
-# Date: Janvier 2026
+# La version active est backtest_engine_numba.py (Numba JIT, ~10x plus rapide).
+# Ce fichier est conserve pour :
+#   - Validation de parite (scripts/benchmark_numba.py)
+#   - Fallback si Numba pose probleme
+#   - export_backtest() et print_backtest_summary() (utilitaires partages)
 # ============================================================================
 
 import json

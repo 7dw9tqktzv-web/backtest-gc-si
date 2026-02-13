@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from data_loader import load_and_prepare_data, load_5s_data, resample_to_5min
 from indicators import calculate_all_indicators
-from backtest_engine_hybrid import run_hybrid_backtest
+from backtest_engine_numba import run_hybrid_backtest
 from optimizer import apply_overrides, apply_overrides_fast, compute_metrics
 
 
@@ -44,6 +44,8 @@ def _init_worker(df_main_arg, path_5s):
     df_main (5-min, petit) passe par pickle. df_5s (4.6M lignes) est lu depuis parquet."""
     _WORKER_DATA['df_main'] = df_main_arg
     _WORKER_DATA['df_5s'] = pd.read_parquet(path_5s)
+    from backtest_engine_numba import warmup_numba
+    warmup_numba()
 
 
 def _process_indicator_group(args):
@@ -67,7 +69,7 @@ def _process_indicator_group(args):
 
     # Import dans le worker (necessaire pour multiprocessing sur Windows)
     from indicators import calculate_all_indicators
-    from backtest_engine_hybrid import run_hybrid_backtest
+    from backtest_engine_numba import run_hybrid_backtest
     from optimizer import apply_overrides, apply_overrides_fast, compute_metrics
 
     # Construire le prefixe du groupe d'indicateurs
@@ -253,7 +255,7 @@ class GridSearchRunner:
         n_groups = len(self.indicator_groups)
         if n_groups < num_workers and len(self.entry_exit_variants) > 1000:
             # Splitter les variants en petits chunks (~1000 configs) pour
-            # avoir des resultats intermediaires reguliers (~1h entre chaque)
+            # avoir des resultats intermediaires reguliers (~70min entre chaque)
             all_variants = self.entry_exit_variants
             target_chunk_size = 1000
             chunk_size = max(1, min(target_chunk_size, len(all_variants) // num_workers))
