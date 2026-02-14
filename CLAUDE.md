@@ -70,7 +70,7 @@ Archive structure: `output/archive/{timeframe}/{exit_mode}/{config_name}/` with 
 
 ## Trading Logic
 
-5 states: FLAT, LONG, SHORT, COOLDOWN_LONG, COOLDOWN_SHORT. Exit priority: SL_DOLLAR > SL_ZSCORE > TP_DOLLAR > TP_ZSCORE. Single position at a time. Cooldown blocks same direction only. Reversal allowed on same bar. See `docs/STRATEGY.md` for entry/exit conditions and parameter values.
+5 states: FLAT, LONG, SHORT, COOLDOWN_LONG, COOLDOWN_SHORT. Exit priority: SL_DOLLAR > TP_DOLLAR > SL_ZSCORE > TP_ZSCORE > MAX_HOLD > FLAT_EOD. Single position at a time. Cooldown blocks same direction only. Reversal allowed on same bar. See `docs/STRATEGY.md` for entry/exit conditions and parameter values.
 
 ## Backtest Engine
 
@@ -145,7 +145,7 @@ AMD Ryzen 9 7900X (12c/24t), 64 Go RAM, Windows 64-bit. Grid searches: `multipro
 Apres CHAQUE modification de code dans `src/` :
 1. Lancer `pyright src/` — 0 errors obligatoire (warnings tolerees)
 2. Lancer `pytest tests/ -v` — 0 failures obligatoire
-2. Si la logique backtest a change : relancer le backtest de reference et comparer les metriques
+3. Si la logique backtest a change : relancer le backtest de reference et comparer les metriques
 
 ## Plugin Usage Rules
 **Auto** : pyright, context7
@@ -200,7 +200,8 @@ Claude Code peut PROPOSER mais ne doit JAMAIS APPLIQUER sans validation explicit
 ## Sierra Chart Integration
 
 v2.0 = automated spread trading (100% unmanaged orders). Python and SC produce identical indicator values (< 0.01% difference). 5/5 trades validated via replay.
-- **Files**: `DOC SIERRA/files/GC_SI_SpreadMeanReversion_v2.0.cpp` (trading), `v1.5.cpp` (indicators)
+- **Standard**: `F:\SierreChart_Backtest_2\ACS_Source\GC_SI_SpreadMeanReversion_v2.0.cpp` (GC/SI)
+- **Micro**: `F:\SierreChart_Backtest_GC_SI_micro\ACS_Source\GC_SI_SpreadMeanReversion_v2.0_micro.cpp` (MGC/SIL, SCDLLName="GC_SI_SpreadMeanReversion_Micro", config C6, fixed x2 SIL)
 - **Skill**: `.claude/skills/sierra-acsil/SKILL.md` — read FIRST for any ACSIL work
 - **Critical gotchas**: NE PAS mixer managed/unmanaged orders. NE JAMAIS reset TradeState dans `IsFullRecalculation` (utiliser TradingInitialized PersistentInt flag).
 - See `CHANGELOG.md` for replay validation details
