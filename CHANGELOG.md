@@ -5,6 +5,51 @@ Historique des optimisations, resultats detailles et ameliorations du backtest G
 ---
 
 
+## [2026-02-14] Walk-Forward Validation C6 & C9
+
+### Contexte
+Validation OOS des 2 configs finalistes issues du R2c. Protocole anchored expanding window (5 fenetres, train cumulatif depuis 2023).
+
+### Configs testees
+- **C6** (Primary) : b3960_zp33_cp27_adf144_zE3.25_co45_zTP0.0_dTP250 -- 258 trades
+- **C9** (Backup) : b4620_zp30_cp30_adf96_zE3.5_co40_zTP0.0_dTP250 -- 174 trades
+
+### Resultats Walk-Forward
+
+| Config | Windows profit. | Cumul OOS PnL | OOS Sharpe | Pire window |
+|--------|-----------------|---------------|------------|-------------|
+| **C6** | **4/5 (80%)** | **$10,571** | **1.14** | W2 -$192 |
+| **C9** | **4/5 (80%)** | **$7,316** | **1.21** | W1 -$541 |
+
+#### Detail par fenetre
+
+| Window | Test Period | C6 PnL | C6 WR | C9 PnL | C9 WR |
+|--------|-------------|--------|-------|--------|-------|
+| W1 | Jan-Jun 2024 | $147 | 65% | -$541 | 60% |
+| W2 | Jul-Dec 2024 | -$192 | 67% | $492 | 76% |
+| W3 | Jan-Jun 2025 | $1,235 | 59% | $1,088 | 87% |
+| W4 | Jul-Dec 2025 | $3,259 | 76% | $2,424 | 73% |
+| W5 | Jan 2026 | $6,123 | 100% | $3,853 | 100% |
+
+Pas de degradation : performance ameliore au fil du temps (W3-W5 >> W1-W2).
+
+### Investigation regime 2024
+- **Trades perdants 2024 = 100% TP_ZSCORE** (32/32 C6, 20/20 C9). Zero TP_DOLLAR perdant.
+- Spread volatilite identique 2023 vs 2024 (std=0.01). ADF identique (-1.74 vs -1.69).
+- **Conclusion** : 2024 flat = bruit statistique sur TP_ZSCORE, pas un probleme structurel.
+
+### Classement final
+1. **C6** -- Primary prop firm (volume + consistency 72.2% mois+)
+2. **C9** -- Backup solide (meilleur Sharpe OOS 1.21)
+3. C1 -- Conservateur (4/4 ans, DD -$1,147)
+4. C3 -- Reserve (106 trades, trop peu)
+5. ~~C5~~ -- Elimine (consistency insuffisante 57.1%)
+
+### Scripts et fichiers
+- Script: `scripts/walkforward_c6_c9.py`
+- Rapport: `output/reports/WALKFORWARD_C6_C9.md`
+
+
 ## [2026-02-14] Grid Search Micro R2c -- Affinage C2 Sweet Spot
 
 ### Contexte
