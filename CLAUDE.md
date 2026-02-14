@@ -6,40 +6,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v1.5).
 
-**Current status**: Phase D — Grid search R1 termine, PnL Decay Analysis termine, R2 a lancer.
-**Config production**: `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0_zSL4.0` (5-min, standard). **223 tests passing**. See `CHANGELOG.md` for detailed history.
+**Current status**: Phase D — Config micro retenue, pret pour deployment Sierra Chart.
+**Config production standard**: `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0_zSL4.0` (5-min, standard).
+**Config production micro**: `b3960_zp33_cp27_adf144_zE3.25_co45_zTP0.0_dTP250` (5-min, MGC/SIL).
+**223 tests passing**. See `CHANGELOG.md` for detailed history.
 
-## Current State (Micro Sizing Pipeline)
+## Config Micro Retenue : C6
 
-### Grid Search R1 (termine)
-- 252K configs micro (MGC/SIL), 68,588 profitables (27.2%)
-- **Parametres verrouilles** : zE=3.5, co=20, dTP=300, mm=2
-- **Parametres morts** (aucun impact) : zSL, dSL, mhb
-- 8 familles distinctes dans le top 100
-- **Top 1** : `zE3.5_co20_zTP1.5_dTP300_mm2` — $4,478, PF 2.15, DD -$955, Sharpe 0.26
-- Exit breakdown : ~37% TP_ZSCORE, ~22% TP_DOLLAR, ~41% END_SESSION
-- Fichiers : `output/grid_micro_r1.csv`, `output/grid_micro_r1_top100.csv`
+**Config** : `b3960_zp33_cp27_adf144_zE3.25_co45_zTP0.0_dTP250`
+- beta_lookback=3960, zscore_period=33, correlation_period=27, adf_hurst_period=144
+- zscore_long=-3.25, zscore_short=3.25, cointegration_score_min=45
+- zscore_tp_long=0.0, zscore_tp_short=0.0 (disabled), pnl_take_profit=250
+- zscore_sl/pnl_stop_loss = disabled, max_holding_bars=0, flat_end_of_session=True
+- contracts.mode=micro, micro_multiplier_max=2, slippage 1 tick
 
-### PnL Decay Analysis (termine)
-Analyse intra-trade bar-par-bar (1-min + 5s) sur les 8 familles R1. Resultats cles :
+**Resultats** : 258 trades, $11,803 PnL, PF 2.33, DD -$965, Sharpe 0.26, Calmar 12.23
+**Walk-Forward** : 4/5 fenetres profitables, OOS Sharpe 1.14
+**Monte Carlo** : 0.2% hit -$3K DD (block k=5), 99.9% profitable apres 200 trades
+**Backup** : C9 `b4620_zp30_cp30_adf96_zE3.5_co40_zTP0.0_dTP250` (174 trades, $8,203)
 
-- **TP_DOLLAR** : MFE moyen $905, median $465 apres trigger $300 — dTP coupe trop tot, tester $400-500
-- **TP_ZSCORE** : decay ratio negatif (-0.14 a -0.83) — trades repassent negatifs apres le peak Z
-- **END_SESSION** : MFE ~$50, decay ~0.09, bruit pur — gate ADF les filtrerait
-- **MAE P5** : -$253 (F1) a -$470 (F4) — SL recommande $300-$560
-- **PnL contribution** : TP_DOLLAR = 154% du PnL total, TP_ZSCORE = -17%, END_SESSION = -36%
-- Peak MFE arrive en 0-2 barres — mhb inutile tant que dTP fait le travail
-- **zTP optimal** : 1.5 (meilleur Calmar)
-- Fichiers : `output/reports/PNL_DECAY_ANALYSIS.md`, `output/reports/pnl_decay_plots/`
-- Script : `scripts/pnl_decay_analysis.py`
-
-### Recommandations R2
-- **dTP** : tester [350, 400, 450, 500, 600] (sweet spot ~$400-450)
-- **dSL** : tester [-350, -400, -500] (base sur P95 MAE)
-- **mhb** : parametre mort, fixer a 0
-- **zSL** : parametre mort, fixer a 99
-- Croiser avec 476 combos indicateurs (Court/Moyen/Long)
-- Gate ADF < -2.86 a implementer en Phase C+
+### Output Structure
+- Grid searches : `output/grid_searches/r1|r2a|r2b|r2c/`
+- Reports : `output/reports/` (PNL_DECAY, WALKFORWARD, MONTE_CARLO, R2B/R2C deep analysis)
+- Plots : `output/plots/pnl_decay|monte_carlo/`
+- Logs : `output/logs/`
+- Legacy (standard pipeline) : `output/legacy/`
 
 ## Commands
 
@@ -200,9 +191,10 @@ Claude Code peut PROPOSER mais ne doit JAMAIS APPLIQUER sans validation explicit
 
 ## Research Conclusions
 
-- **Config production**: `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0` (5-min pure Z-Score, no filter)
+- **Config production standard**: `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0` (5-min pure Z-Score, no filter)
+- **Config production micro** : `b3960_zp33_cp27_adf144_zE3.25_co45_zTP0.0_dTP250` (C6, validated WF+MC)
 - **5-min pure Z-Score = dominant mode**, 1min dollar = dead end, regime filters = dead end (none survives OOS)
-- **Known risk**: regime-dependent (2023-2024 losing, 2025-2026 profitable, 80% PnL on Jan 2026)
+- **Known risk**: regime-dependent (2023-2024 losing/flat, 2025-2026 profitable)
 - See `CHANGELOG.md` for detailed tables and phase-by-phase results
 
 ## Sierra Chart Integration
@@ -216,6 +208,10 @@ v2.0 = automated spread trading (100% unmanaged orders). Python and SC produce i
 ## Roadmap (TODO)
 
 ### Phase D -- Sierra Chart Deployment (IN PROGRESS)
+- [x] Grid search micro R1->R2a->R2b->R2c (config C6 retenue)
+- [x] Walk-Forward validation (4/5 fenetres profitables)
+- [x] Monte Carlo bootstrap (i.i.d. + block k=5, GO)
+- [ ] Deploy C6 config in Sierra Chart v2.0 (MGC/SIL)
 - [ ] Paper trading 4-8 weeks (min 30 trades, compare vs Python backtest)
 - [ ] Production go-live (if paper trading validates)
 

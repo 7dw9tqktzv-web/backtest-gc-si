@@ -5,6 +5,73 @@ Historique des optimisations, resultats detailles et ameliorations du backtest G
 ---
 
 
+## [2026-02-14] CONFIG MICRO RETENUE -- GO Paper Trading
+
+### Config retenue : C6
+- **Nom complet** : `b3960_zp33_cp27_adf144_zE3.25_co45_zTP0.0_dTP250`
+- **Mode** : micro (MGC/SIL), multiplier max = 2, slippage 1 tick
+- **Resultats backtest** : 258 trades, $11,803 PnL, PF 2.33, DD -$965, Sharpe 0.26, Calmar 12.23
+- **Consistency** : 72.2% mois positifs, 3/4 ans rentables (2024 flat -$45)
+- **Walk-Forward** : 4/5 fenetres profitables, $10,571 cumul OOS, Sharpe 1.14
+- **Monte Carlo i.i.d.** : median $9,312 / 200 trades, 0% hit -$3K DD, 100% profitable
+- **Monte Carlo block k=5** : median $8,843 / 200 trades, 0.2% hit -$3K DD, 99.9% profitable
+
+### Backup : C9
+- `b4620_zp30_cp30_adf96_zE3.5_co40_zTP0.0_dTP250`
+- 174 trades, $8,203 PnL, OOS Sharpe 1.21
+
+### Parametres fixes (identiques C6/C9)
+- zSL=99 (disabled), dSL=0 (disabled), mhb=0 (disabled)
+- flat_end_of_session=True
+
+### Pipeline de validation complete
+1. Grid Search R1 (252K configs) -> R2a/R2b/R2c (affinages successifs)
+2. PnL Decay Analysis (intra-trade bar-par-bar)
+3. Deep Analysis temporelle (10 configs, stabilite annuelle)
+4. Walk-Forward 5 fenetres anchored expanding
+5. Monte Carlo bootstrap (i.i.d. + block k=5)
+6. **Verdict : GO paper trading avec C6**
+
+### Reorganisation output/
+Fichiers micro reorganises dans structure propre :
+- `output/grid_searches/r1|r2a|r2b|r2c/` -- resultats grid search
+- `output/reports/` -- rapports d'analyse (inchange)
+- `output/plots/pnl_decay|monte_carlo/` -- graphiques
+- `output/logs/` -- logs grid search
+- `output/configs_archive/` -- copies YAML
+- `output/legacy/` -- anciens fichiers pipeline standard (phases B/C)
+
+---
+
+## [2026-02-14] Monte Carlo Bootstrap C6 (i.i.d. + Block k=5)
+
+### Resultats i.i.d. (1,000 chemins, 200 trades)
+| Metrique | Median | P5 | P95 |
+|----------|--------|----|----|
+| PnL final | $9,312 | $5,648 | $13,005 |
+| Max DD | -$846 | -$1,497 | -$511 |
+| Sharpe | 2.78 | 1.67 | 3.96 |
+
+### Resultats Block k=5 (1,000 chemins, 200 trades)
+| Metrique | Median | P5 | P95 |
+|----------|--------|----|----|
+| PnL final | $8,843 | $4,421 | $13,372 |
+| Max DD | -$1,055 | -$2,130 | -$524 |
+| Sharpe | 2.54 | 1.14 | 3.89 |
+
+### Risque prop firm
+| Critere | i.i.d. | Block k=5 |
+|---------|--------|-----------|
+| Hit -$3K DD | 0.0% | 0.2% |
+| Profitable 200 trades | 100.0% | 99.9% |
+
+### Scripts et fichiers
+- Script: `scripts/monte_carlo_c6.py`
+- Rapport: `output/reports/MONTE_CARLO_C6.md`
+- Graphiques: `output/plots/monte_carlo/`
+
+---
+
 ## [2026-02-14] Walk-Forward Validation C6 & C9
 
 ### Contexte
@@ -98,8 +165,8 @@ Best PnL: C6 b3960_zp33_cp27_adf144_zE3.25_co45_zTP0.0_dTP250 -- 258 trades, $11
 ### Scripts et fichiers
 - Config: `configs/experiments/grid_micro_r2c.yaml`
 - Analyse: `scripts/deep_analysis_r2c.py`
-- Rapports: `output/grid_micro_r2c_report.txt`, `output/reports/R2C_DEEP_ANALYSIS.md`
-- Donnees: `output/grid_micro_r2c.csv`
+- Rapports: `output/grid_searches/r2c/grid_micro_r2c_report.txt`, `output/reports/R2C_DEEP_ANALYSIS.md`
+- Donnees: `output/grid_searches/r2c/grid_micro_r2c.csv`
 
 
 ## [2026-02-08] Phase C4bis -- Block Bootstrap + Filtre horaire
