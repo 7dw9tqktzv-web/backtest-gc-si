@@ -5,6 +5,58 @@ Historique des optimisations, resultats detailles et ameliorations du backtest G
 ---
 
 
+## [2026-02-14] Grid Search Micro R2c -- Affinage C2 Sweet Spot
+
+### Contexte
+Suite au R2b (2.9M configs), C2 (b3960_zp36_cp30_adf128_zE3.25_co50) etait le seul profil stable 4/4 ans. R2c affine autour de ce sweet spot avec 200,000 configs (625 groupes indicateurs x 320 exits).
+
+### Grille R2c
+- beta: [3300, 3630, 3960, 4290, 4620]
+- zp: [30, 33, 36, 39, 42], cp: [24, 27, 30, 33, 36], adf: [96, 112, 128, 144, 160]
+- zE: [3.0, 3.125, 3.25, 3.375, 3.5], co: [40, 45, 50, 55]
+- zTP: [0.0, 0.5, 1.0, 1.5], dTP: [250, 300, 350, 400]
+- Fixes: zSL=99, dSL=0, mhb=0, mm=2, micro mode, slippage 1 tick
+
+### Resultats globaux
+- 200,000 configs, 84,734 profitables (42.4%)
+- Filtre (trades>=80, PF>=1.3, DD>=-$3,000): 15,387 configs (7.7%)
+
+### Top 3 Sharpe (filtres)
+
+| Rk | Config | Trades | WR | PnL | PF | DD | Sharpe |
+|----|--------|--------|----|-----|----|----|--------|
+| 1 | b4620_zp30_cp27_adf160_zE3.5_co45_zTP0.0_dTP300 | 139 | 71% | $6,044 | 2.44 | -$1,147 | 0.320 |
+| 2 | b4620_zp30_cp27_adf160_zE3.5_co45_zTP0.0_dTP250 | 139 | 71% | $5,244 | 2.25 | -$1,147 | 0.300 |
+| 3 | b4290_zp33_cp30_adf128_zE3.5_co50_zTP0.0_dTP300 | 106 | 71% | $4,679 | 2.28 | -$861 | 0.290 |
+
+Best PnL: C6 b3960_zp33_cp27_adf144_zE3.25_co45_zTP0.0_dTP250 -- 258 trades, $11,803 PnL, Calmar 12.23
+
+### Deep Analysis -- Stabilite temporelle (10 configs)
+
+**3 configs stables 4/4 ans:**
+
+| Config | Trades | PnL | Mois+ | 2023 | 2024 | 2025 | 2026 |
+|--------|--------|-----|-------|------|------|------|------|
+| C1 b4620_zp30_cp27_adf160_dTP300 | 139 | $6,044 | 67.6% | $5 | $608 | $2,627 | $2,804 |
+| C2 b4620_zp30_cp27_adf160_dTP250 | 139 | $5,244 | 67.6% | $5 | $608 | $2,327 | $2,304 |
+| C3 b4290_zp33_cp30_adf128_dTP300 | 106 | $4,679 | 60.6% | $22 | $343 | $1,791 | $2,523 |
+
+**Meilleure consistency mensuelle:** C6 b3960 (72.2% mois+, $328/mois moyen) mais 3/4 ans (-$45 en 2024)
+
+### Conclusions cles
+- **zTP=0.0 domine** : pure mean reversion avec dollar TP = meilleur profil
+- **Beta long confirme** : b3960-4620 (15-18 jours) = zone optimale
+- **TP_ZSCORE profitable** : $11-18 avg (vs breakeven en R2b) grace au beta plus long
+- **Neighborhood MARGINAL** : aucune config "STABLE" par voisinage, toutes MARGINAL
+- **C1/C2 = meme config** (seul dTP differe), C1 (dTP300) legerement meilleur
+
+### Scripts et fichiers
+- Config: `configs/experiments/grid_micro_r2c.yaml`
+- Analyse: `scripts/deep_analysis_r2c.py`
+- Rapports: `output/grid_micro_r2c_report.txt`, `output/reports/R2C_DEEP_ANALYSIS.md`
+- Donnees: `output/grid_micro_r2c.csv`
+
+
 ## [2026-02-08] Phase C4bis -- Block Bootstrap + Filtre horaire
 
 ### Contexte

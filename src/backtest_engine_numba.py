@@ -715,6 +715,10 @@ def run_hybrid_backtest(
     gc_pv = cfg[CFG_GC_PV]
     si_pv = cfg[CFG_SI_PV]
 
+    # Detecter la resolution temporelle (pandas 2.x=ns, 3.x=us)
+    _ts_reso = ts_1min.dtype  # datetime64[us] ou datetime64[ns]
+    _ts_unit = 'us' if 'us' in str(_ts_reso) else 'ns'
+
     for t in range(n_trades):
         r = raw[t]
         e_idx = int(r[2])
@@ -724,7 +728,7 @@ def run_hybrid_backtest(
 
         entry_dt = ts_1min.iloc[e_idx]
         if r[16] > 0:
-            exit_dt = pd.Timestamp(int(r[16]), unit='ns')
+            exit_dt = pd.Timestamp(int(r[16]), unit=_ts_unit)
         else:
             exit_dt = ts_1min.iloc[x_idx]
         dur = (exit_dt - entry_dt).total_seconds() / 60.0
