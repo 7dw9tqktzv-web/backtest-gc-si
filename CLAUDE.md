@@ -15,15 +15,10 @@ Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy base
 
 **Config** : `b3960_zp33_cp27_adf144_zE3.25_co45_zTP0.0_dTP250`
 - beta_lookback=3960, zscore_period=33, correlation_period=27, adf_hurst_period=144
-- zscore_long=-3.25, zscore_short=3.25, cointegration_score_min=45
-- zscore_tp_long=0.0, zscore_tp_short=0.0 (disabled), pnl_take_profit=250
-- zscore_sl/pnl_stop_loss = disabled, max_holding_bars=0, flat_end_of_session=True
-- contracts.mode=micro, micro_multiplier_max=2, slippage 1 tick
-
-**Resultats** : 258 trades, $11,803 PnL, PF 2.33, DD -$965, Sharpe 0.26, Calmar 12.23
-**Walk-Forward** : 4/5 fenetres profitables, OOS Sharpe 1.14
-**Monte Carlo** : 0.2% hit -$3K DD (block k=5), 99.9% profitable apres 200 trades
-**Backup** : C9 `b4620_zp30_cp30_adf96_zE3.5_co40_zTP0.0_dTP250` (174 trades, $8,203)
+- zscore_long=-3.25, zscore_short=3.25, cointegration_score_min=45, pnl_take_profit=250
+- contracts.mode=micro, fixed x2 SIL, flat_end_of_session=True
+- **Resultats** : 258 trades, $11,803 PnL, PF 2.33, DD -$965, Sharpe 0.26, Calmar 12.23
+- See `CHANGELOG.md` for WF/MC validation details and backup config C9
 
 ### Output Structure
 - Grid searches : `output/grid_searches/r1|r2a|r2b|r2c/`
@@ -103,7 +98,7 @@ Configurable via `contracts.mode` dans `strategy_params.yaml` :
 | Ratio vs standard | 1x | 1/10 | 1x | 1/5 |
 
 Mode par defaut : `standard`. Basculer a `micro` pour sizing 0.5x (recommandation C4bis).
-Commission: $4.00 round-trip per contract ($2.00 per side). Slippage: 1 tick per leg (default in YAML, 2 ticks in grid searches).
+Commission: standard $4.00 RT, micro $1.88 RT. Slippage: 1 tick per leg (default in YAML, 2 ticks in grid searches).
 
 ## Position Sizing (position.py)
 
@@ -115,9 +110,8 @@ GC_contracts = round( (NotionalSI / NotionalGC) * Beta ) , minimum 1
 
 Beta varies from ~0.03 to ~6.3 on traded bars -> GC contracts range from 1 to 6.
 
-### Micro Optimal Multiplier (micro mode)
-Tests 1x and 2x multipliers, picks the one with better dollar-neutral ratio (>1% improvement threshold).
-Target: ~$250/trade avg, $2,500 max drawdown for prop firm day trading.
+### Micro Multiplier (micro mode)
+Tests x1 et x2 SIL : si le sizing arrondi donne deja un nombre entier de MGC, x1 suffit (evite les commissions inutiles). Sinon x2 ameliore le ratio dollar-neutral. Config C6 : fixed x2 SIL.
 `FlatEndOfSession`: force exit at 15:25 CT. `MaxHoldingBars`: force exit after N 1-min bars.
 
 ## DataFrame Columns
@@ -216,16 +210,19 @@ v2.0 = automated spread trading (100% unmanaged orders). Python and SC produce i
 - [ ] Paper trading 4-8 weeks (min 30 trades, compare vs Python backtest)
 - [ ] Production go-live (if paper trading validates)
 
-### Phase C+ -- Trade Augmentation (future)
-- [ ] Analyze losing trades, volatility filter, hourly filter, relaxed zE with filters
+### Future Tests (apres paper trading)
+- [ ] Validation sur timeframes plus longs (15min, 1h)
+- [ ] Filtre de volatilite (VIX, ATR)
+- [ ] Focus sessions US uniquement
+- [ ] TP dynamique en fonction de la volatilite
 
 ## Known Code Issues
-See `analyse.md`. Key: `run_hybrid_backtest()` dans backtest_engine_hybrid.py = 350+ lines (reference only, le kernel Numba est deja decompose en helpers inlines).
+`run_hybrid_backtest()` dans backtest_engine_hybrid.py = 350+ lines (reference only, le kernel Numba est deja decompose en helpers inlines).
 
 ## Claude Code Skills
 - **/backtest-runner** : Lance backtest hybrid + metrics, compare avec run precedent
 - **/optimize** : Teste parametres via langage naturel FR, syntaxe "/" pour grid (ex: "teste beta 1320/2640")
-- **/results** : Archive campagnes, compare, genere rapports via `archive_manager.py`
+- **/archive** : Archive campagnes, compare, genere rapports via `archive_manager.py`
 - **/grid-search** : Grid search massif en background, genere rapport + CHANGELOG
 
 ## Git Tracking
