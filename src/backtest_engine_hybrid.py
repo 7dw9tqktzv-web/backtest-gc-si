@@ -1,19 +1,11 @@
 # ============================================================================
-# BACKTEST_ENGINE_HYBRID.PY - Approche A : Hybride 1min + 5s
+# BACKTEST_ENGINE_HYBRID.PY - Version Python pure (REFERENCE / FALLBACK)
 # ============================================================================
-#
-# Principe :
-#   - Les signaux d'entree/sortie Z-Score sont calcules sur barres 1-minute
-#     (meme pipeline que backtest_engine.py)
-#   - Quand on est en position, on surveille le PnL sur barres 5 secondes
-#     pour detecter les sorties TP Dollar (+$400) et SL Dollar (-$800)
-#   - Si aucun trigger dollar sur les barres 5s, on verifie les sorties
-#     Z-Score sur la barre 1-minute suivante
-#
-# Avantage : precision des exits en dollars sans recalculer les indicateurs
-#
-# Auteur: Assistant IA
-# Date: Janvier 2026
+# La version active est backtest_engine_numba.py (Numba JIT, ~10x plus rapide).
+# Ce fichier est conserve pour :
+#   - Validation de parite (scripts/benchmark_numba.py)
+#   - Fallback si Numba pose probleme
+#   - export_backtest() et print_backtest_summary() (utilitaires partages)
 # ============================================================================
 
 import json
@@ -107,6 +99,7 @@ def run_hybrid_backtest(
     datetimes_1min = df_1min['DateTime'].values
     timestamps_1min = pd.to_datetime(df_1min['DateTime'])
     hours_1min = timestamps_1min.dt.hour.values
+    minutes_1min = timestamps_1min.dt.minute.values
 
     # Preparer les donnees 5s pour acces rapide
     # On cree un index pour retrouver les barres 5s entre deux barres 1-min
@@ -128,6 +121,14 @@ def run_hybrid_backtest(
     # Filtre horaire optionnel (bloque les entrees, pas les sorties)
     entry_start_hour = config['session'].get('entry_start_hour', 0)
     entry_end_hour = config['session'].get('entry_end_hour', 24)
+
+    # MaxHoldingBars : force exit apres N barres en position (0 = desactive)
+    max_holding_bars = config['exit'].get('max_holding_bars', 0)
+
+    # FlatEndOfSession : force exit avant fin de session (false = desactive)
+    flat_end_of_session = config['session'].get('flat_end_of_session', False)
+    session_end_hour = 15   # 15h CT = derniere barre avant cloture
+    session_end_min = 25    # 15:25 CT (5 min avant fin session 15:30)
 
     # Regime filter (Phase C2b) - indicateurs daily pre-extraits en numpy
     rf_config = config.get('regime_filter', {})
@@ -330,6 +331,20 @@ def run_hybrid_backtest(
                 min_pnl_intra = current_pnl
 
             should_exit, reason = check_zscore_exit(z, state, config)
+
+            # MaxHoldingBars : force exit apres N barres (priorite basse)
+            if not should_exit and max_holding_bars > 0:
+                bars_held = i - entry_1min_idx
+                if bars_held >= max_holding_bars:
+                    should_exit = True
+                    reason = 'MAX_HOLD'
+
+            # FlatEndOfSession : force exit avant fin de session
+            if not should_exit and flat_end_of_session:
+                h, m = hours_1min[i], minutes_1min[i]
+                if h > session_end_hour or (h == session_end_hour and m >= session_end_min):
+                    should_exit = True
+                    reason = 'END_SESSION'
 
             # Filtre optionnel : bloquer TP_ZSCORE si PnL NET < seuil
             # Config: exit.zscore_tp_min_pnl (defaut: None = desactive)

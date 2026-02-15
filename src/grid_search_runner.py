@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from data_loader import load_and_prepare_data, load_5s_data, resample_to_5min
 from indicators import calculate_all_indicators
-from backtest_engine_hybrid import run_hybrid_backtest
+from backtest_engine_numba import run_hybrid_backtest
 from optimizer import apply_overrides, apply_overrides_fast, compute_metrics
 
 
@@ -39,10 +39,13 @@ from optimizer import apply_overrides, apply_overrides_fast, compute_metrics
 
 _WORKER_DATA = {}
 
-def _init_worker(df_main_arg, df_5s_arg):
-    """Initialise les donnees partagees dans chaque worker (1 fois par worker)."""
+def _init_worker(df_main_arg, path_5s):
+    """Initialise les donnees partagees dans chaque worker (1 fois par worker).
+    df_main (5-min, petit) passe par pickle. df_5s (4.6M lignes) est lu depuis parquet."""
     _WORKER_DATA['df_main'] = df_main_arg
-    _WORKER_DATA['df_5s'] = df_5s_arg
+    _WORKER_DATA['df_5s'] = pd.read_parquet(path_5s)
+    from backtest_engine_numba import warmup_numba
+    warmup_numba()
 
 
 def _process_indicator_group(args):
@@ -66,7 +69,7 @@ def _process_indicator_group(args):
 
     # Import dans le worker (necessaire pour multiprocessing sur Windows)
     from indicators import calculate_all_indicators
-    from backtest_engine_hybrid import run_hybrid_backtest
+    from backtest_engine_numba import run_hybrid_backtest
     from optimizer import apply_overrides, apply_overrides_fast, compute_metrics
 
     # Construire le prefixe du groupe d'indicateurs
@@ -114,11 +117,13 @@ def _process_indicator_group(args):
             tp_dollar = (trades['Exit_Reason'] == 'TP_DOLLAR').sum()
             sl_zscore = (trades['Exit_Reason'] == 'SL_ZSCORE').sum()
             sl_dollar = (trades['Exit_Reason'] == 'SL_DOLLAR').sum()
+            max_hold = (trades['Exit_Reason'] == 'MAX_HOLD').sum()
+            end_session = (trades['Exit_Reason'] == 'END_SESSION').sum()
         else:
-            tp_zscore = tp_dollar = sl_zscore = sl_dollar = 0
+            tp_zscore = tp_dollar = sl_zscore = sl_dollar = max_hold = end_session = 0
 
         # Construire le resultat via le callback
-        result = result_builder(label, ind_ov, ee, m, tp_zscore, tp_dollar, sl_zscore, sl_dollar)
+        result = result_builder(label, ind_ov, ee, m, tp_zscore, tp_dollar, sl_zscore, sl_dollar, max_hold, end_session)
         batch_results.append(result)
 
     return g_idx, batch_results, dt_ind
@@ -245,12 +250,38 @@ class GridSearchRunner:
             print(f"\n[RESUME] {len(completed_labels):,} configs deja completees, reprise...")
 
         # --- Preparer les arguments pour les workers ---
-        worker_args = [
-            (g_idx, ind_ov, base_config, self.entry_exit_variants,
-             completed_labels, self.fixed_overrides, self.label_builder,
-             self.result_builder, self.timeframe)
-            for g_idx, ind_ov in enumerate(self.indicator_groups)
-        ]
+        # Si peu de groupes indicateurs vs workers, chunker les variants
+        # pour paralleliser sur les entry/exit au lieu des indicateurs
+        n_groups = len(self.indicator_groups)
+        if n_groups < num_workers and len(self.entry_exit_variants) > 1000:
+            # Splitter les variants en petits chunks (~1000 configs) pour
+            # avoir des resultats intermediaires reguliers (~70min entre chaque)
+            all_variants = self.entry_exit_variants
+            target_chunk_size = 1000
+            chunk_size = max(1, min(target_chunk_size, len(all_variants) // num_workers))
+            variant_chunks = [
+                all_variants[i:i + chunk_size]
+                for i in range(0, len(all_variants), chunk_size)
+            ]
+            worker_args = []
+            for g_idx, ind_ov in enumerate(self.indicator_groups):
+                for chunk in variant_chunks:
+                    worker_args.append(
+                        (g_idx, ind_ov, base_config, chunk,
+                         completed_labels, self.fixed_overrides, self.label_builder,
+                         self.result_builder, self.timeframe)
+                    )
+            # Mettre a jour le nombre de groupes pour l'affichage de progression
+            self._total_tasks = len(worker_args)
+            print(f"\n[CHUNK] {n_groups} groupe(s) x {len(variant_chunks)} chunks = {len(worker_args)} taches paralleles")
+        else:
+            worker_args = [
+                (g_idx, ind_ov, base_config, self.entry_exit_variants,
+                 completed_labels, self.fixed_overrides, self.label_builder,
+                 self.result_builder, self.timeframe)
+                for g_idx, ind_ov in enumerate(self.indicator_groups)
+            ]
+            self._total_tasks = len(worker_args)
 
         # --- Lancer le pool multiprocessing ---
         print(f"\nLancement de {num_workers} workers en parallele...")
@@ -261,9 +292,16 @@ class GridSearchRunner:
         best_pnl_global = -999999
         best_label_global = ""
 
+        # Ecrire df_5s en parquet temporaire pour eviter le pickle (4.6M lignes)
+        import tempfile
+        tmp_5s = Path(tempfile.mktemp(suffix='_5s.parquet'))
+        df_5s.to_parquet(tmp_5s)
+        del df_5s  # Liberer la memoire du processus parent
+        print(f"   [OK] df_5s ecrit en parquet temporaire ({tmp_5s})")
+
         with mp.Pool(processes=num_workers,
                      initializer=_init_worker,
-                     initargs=(df_main, df_5s)) as pool:
+                     initargs=(df_main, tmp_5s)) as pool:
             for g_idx, batch_results, dt_ind in pool.imap_unordered(_process_indicator_group, worker_args):
                 groups_done += 1
 
@@ -271,8 +309,8 @@ class GridSearchRunner:
                     # Groupe deja complet ou aucun resultat
                     if groups_done % 50 == 0:
                         elapsed = time.time() - t_start
-                        pct = groups_done / len(self.indicator_groups) * 100
-                        print(f"[{groups_done:>4}/{len(self.indicator_groups)}] (skip) "
+                        pct = groups_done / self._total_tasks * 100
+                        print(f"[{groups_done:>4}/{self._total_tasks}] (skip) "
                               f"{pct:.0f}% {elapsed/60:.0f}min", flush=True)
                     continue
 
@@ -290,18 +328,22 @@ class GridSearchRunner:
                     best_label_global = best["label"]
 
                 elapsed = time.time() - t_start
-                pct = groups_done / len(self.indicator_groups) * 100
-                eta_min = (elapsed / groups_done * (len(self.indicator_groups) - groups_done)) / 60 if groups_done > 0 else 0
+                pct = groups_done / self._total_tasks * 100
+                eta_min = (elapsed / groups_done * (self._total_tasks - groups_done)) / 60 if groups_done > 0 else 0
 
                 # Retrouver les params du groupe pour l'affichage
                 ind_ov = self.indicator_groups[g_idx]
                 beta = ind_ov.get("indicators.beta_lookback", 0)
                 zp = ind_ov.get("indicators.zscore_period", 0)
 
-                print(f"[{groups_done:>4}/{len(self.indicator_groups)}] b{beta}_zp{zp} "
+                print(f"[{groups_done:>4}/{self._total_tasks}] b{beta}_zp{zp} "
                       f"ind={dt_ind:.1f}s | {len(batch_results)} configs | "
                       f"best=${best['pnl_net']:>+10,.0f} Sh={best.get('sharpe', 0):>+6.2f} | "
                       f"{pct:.0f}% {elapsed/60:.0f}min ETA={eta_min:.0f}min", flush=True)
+
+        # Cleanup parquet temporaire
+        if tmp_5s.exists():
+            tmp_5s.unlink()
 
         # --- Afficher les resultats ---
         t_total = time.time() - t_start
@@ -430,7 +472,7 @@ def _standard_label_builder(group_prefix: str, ee: Dict) -> str:
     return f"{group_prefix}_zE{zE}_co{co}_TP{tp}_SL{sl}"
 
 
-def _standard_result_builder(label, ind_ov, ee, m, tp_zscore, tp_dollar, sl_zscore, sl_dollar):
+def _standard_result_builder(label, ind_ov, ee, m, tp_zscore, tp_dollar, sl_zscore, sl_dollar, max_hold=0, end_session=0):
     """Result builder standard (module-level, picklable)."""
     beta = ind_ov.get("indicators.beta_lookback", 0)
     zp = ind_ov.get("indicators.zscore_period", 0)
@@ -534,7 +576,7 @@ def _zscore_label_builder(group_prefix: str, ee: Dict) -> str:
             f"_zTP{ee['zTP']}_zSL{ee['zSL']}_{mode_tag}")
 
 
-def _zscore_result_builder(label, ind_ov, ee, m, tp_zscore, tp_dollar, sl_zscore, sl_dollar):
+def _zscore_result_builder(label, ind_ov, ee, m, tp_zscore, tp_dollar, sl_zscore, sl_dollar, max_hold=0, end_session=0):
     """Result builder pour le mode Z-Score pur (module-level, picklable)."""
     beta = ind_ov.get("indicators.beta_lookback", 0)
     zp = ind_ov.get("indicators.zscore_period", 0)
@@ -630,7 +672,7 @@ def _hybrid_label_builder(group_prefix: str, ee: Dict) -> str:
             f"_zTP{ee['zTP']}_SL{ee['SL']}{tp_tag}")
 
 
-def _hybrid_result_builder(label, ind_ov, ee, m, tp_zscore, tp_dollar, sl_zscore, sl_dollar):
+def _hybrid_result_builder(label, ind_ov, ee, m, tp_zscore, tp_dollar, sl_zscore, sl_dollar, max_hold=0, end_session=0):
     """Result builder pour le mode hybride (module-level, picklable)."""
     beta = ind_ov.get("indicators.beta_lookback", 0)
     zp = ind_ov.get("indicators.zscore_period", 0)
@@ -664,3 +706,112 @@ def create_hybrid_label_builder() -> Callable[[str, Dict], str]:
 def create_hybrid_result_builder() -> Callable:
     """Retourne le result builder pour le mode hybride."""
     return _hybrid_result_builder
+
+
+# ============================================================================
+# HELPERS POUR LE MODE MICRO_FULL (tous parametres explores)
+# ============================================================================
+
+def create_micro_full_entry_exit_generator(
+    zscore_entry: List[float],
+    cointegration_min: List[int],
+    zscore_tp: List[float],
+    zscore_sl: List[float],
+    dollar_tp: List[int],
+    dollar_sl: List[int],
+    flat_end_of_session: List[bool],
+    max_holding_bars: List[int],
+    micro_multiplier_max: List[int],
+) -> Callable[[], List[Dict]]:
+    """
+    Generateur pour le mode micro_full : exploration complete de tous les
+    parametres entry/exit/session/sizing pour le sizing micro prop firm.
+    """
+    def generator():
+        variants = []
+        for zE in zscore_entry:
+            for co in cointegration_min:
+                for zTP in zscore_tp:
+                    for zSL in zscore_sl:
+                        # Skip si zSL <= zE (SL declenche immediatement)
+                        if zSL != 99 and zSL <= zE:
+                            continue
+                        for dTP in dollar_tp:
+                            for dSL in dollar_sl:
+                                for feos in flat_end_of_session:
+                                    for mhb in max_holding_bars:
+                                        for mm in micro_multiplier_max:
+                                            ov = {
+                                                "entry.zscore_long": -abs(zE),
+                                                "entry.zscore_short": abs(zE),
+                                                "entry.cointegration_score_min": co,
+                                                "exit.zscore_tp_long": -zTP,
+                                                "exit.zscore_tp_short": zTP,
+                                                "exit.zscore_sl_long": -abs(zSL),
+                                                "exit.zscore_sl_short": abs(zSL),
+                                                "exit.pnl_take_profit": dTP if dTP > 0 else 99999,
+                                                "exit.pnl_stop_loss": dSL if dSL < 0 else -99999,
+                                                "exit.max_holding_bars": mhb,
+                                                "session.flat_end_of_session": feos,
+                                                "sizing.micro_multiplier_max": mm,
+                                            }
+                                            variants.append({
+                                                "overrides": ov,
+                                                "zE": zE, "co": co,
+                                                "zTP": zTP, "zSL": zSL,
+                                                "dTP": dTP, "dSL": dSL,
+                                                "feos": feos, "mhb": mhb,
+                                                "mm": mm,
+                                            })
+        return variants
+    return generator
+
+
+def _micro_full_label_builder(group_prefix: str, ee: Dict) -> str:
+    """Label builder pour le mode micro_full (module-level, picklable)."""
+    feos_tag = "feos" if ee["feos"] else "nofeos"
+    mhb_tag = f"mhb{ee['mhb']}" if ee["mhb"] > 0 else "nohold"
+    dtp_tag = f"dTP{ee['dTP']}" if ee["dTP"] > 0 else "nodTP"
+    dsl_tag = f"dSL{abs(ee['dSL'])}" if ee["dSL"] < 0 else "nodSL"
+    return (f"{group_prefix}_zE{ee['zE']}_co{ee['co']}"
+            f"_zTP{ee['zTP']}_zSL{ee['zSL']}"
+            f"_{dtp_tag}_{dsl_tag}_{feos_tag}_{mhb_tag}_mm{ee['mm']}")
+
+
+def _micro_full_result_builder(label, ind_ov, ee, m, tp_zscore, tp_dollar, sl_zscore, sl_dollar, max_hold=0, end_session=0):
+    """Result builder pour le mode micro_full (module-level, picklable)."""
+    beta = ind_ov.get("indicators.beta_lookback", 0)
+    zp = ind_ov.get("indicators.zscore_period", 0)
+    cp = ind_ov.get("indicators.correlation_period", 0)
+    adf = ind_ov.get("indicators.adf_hurst_period", 0)
+
+    return {
+        "label": label,
+        "beta": beta, "zp": zp, "cp": cp, "adf": adf,
+        "zE": ee["zE"], "co": ee["co"],
+        "zTP": ee["zTP"], "zSL": ee["zSL"],
+        "dTP": ee["dTP"], "dSL": ee["dSL"],
+        "feos": ee["feos"], "mhb": ee["mhb"], "mm": ee["mm"],
+        "trades": m["trades"], "long": m["long"], "short": m["short"],
+        "win_rate": round(m["win_rate"], 1),
+        "pnl_net": round(m["pnl_net"], 0),
+        "pnl_avg": round(m["pnl_avg"], 2),
+        "profit_factor": round(m["profit_factor"], 2),
+        "max_dd": round(m["max_dd"], 0),
+        "sharpe": round(m["sharpe"], 2),
+        "calmar": round(m["pnl_net"] / abs(m["max_dd"]), 2) if m["max_dd"] != 0 else 0,
+        "sortino": round(m.get("sortino", 0), 3),
+        "tp_zscore": tp_zscore, "tp_dollar": tp_dollar,
+        "sl_zscore": sl_zscore, "sl_dollar": sl_dollar,
+        "max_hold": max_hold, "end_session": end_session,
+    }
+
+
+def create_micro_full_label_builder() -> Callable[[str, Dict], str]:
+    """Retourne le label builder pour le mode micro_full."""
+    return _micro_full_label_builder
+
+
+def create_micro_full_result_builder() -> Callable:
+    """Retourne le result builder pour le mode micro_full."""
+    return _micro_full_result_builder

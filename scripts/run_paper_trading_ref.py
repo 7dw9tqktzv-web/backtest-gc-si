@@ -28,7 +28,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 import pandas as pd
 from data_loader import load_and_prepare_data, resample_to_5min, load_5s_data
 from indicators import calculate_all_indicators
-from backtest_engine_hybrid import run_hybrid_backtest, export_backtest
+from backtest_engine_numba import run_hybrid_backtest
+from backtest_engine_hybrid import export_backtest
 from common import build_config_fingerprint
 
 

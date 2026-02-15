@@ -5,6 +5,170 @@ Historique des optimisations, resultats detailles et ameliorations du backtest G
 ---
 
 
+## [2026-02-14] CONFIG MICRO RETENUE -- GO Paper Trading
+
+### Config retenue : C6
+- **Nom complet** : `b3960_zp33_cp27_adf144_zE3.25_co45_zTP0.0_dTP250`
+- **Mode** : micro (MGC/SIL), multiplier max = 2, slippage 1 tick
+- **Resultats backtest** : 258 trades, $11,803 PnL, PF 2.33, DD -$965, Sharpe 0.26, Calmar 12.23
+- **Consistency** : 72.2% mois positifs, 3/4 ans rentables (2024 flat -$45)
+- **Walk-Forward** : 4/5 fenetres profitables, $10,571 cumul OOS, Sharpe 1.14
+- **Monte Carlo i.i.d.** : median $9,312 / 200 trades, 0% hit -$3K DD, 100% profitable
+- **Monte Carlo block k=5** : median $8,843 / 200 trades, 0.2% hit -$3K DD, 99.9% profitable
+
+### Backup : C9
+- `b4620_zp30_cp30_adf96_zE3.5_co40_zTP0.0_dTP250`
+- 174 trades, $8,203 PnL, OOS Sharpe 1.21
+
+### Parametres fixes (identiques C6/C9)
+- zSL=99 (disabled), dSL=0 (disabled), mhb=0 (disabled)
+- flat_end_of_session=True
+
+### Pipeline de validation complete
+1. Grid Search R1 (252K configs) -> R2a/R2b/R2c (affinages successifs)
+2. PnL Decay Analysis (intra-trade bar-par-bar)
+3. Deep Analysis temporelle (10 configs, stabilite annuelle)
+4. Walk-Forward 5 fenetres anchored expanding
+5. Monte Carlo bootstrap (i.i.d. + block k=5)
+6. **Verdict : GO paper trading avec C6**
+
+### Reorganisation output/
+Fichiers micro reorganises dans structure propre :
+- `output/grid_searches/r1|r2a|r2b|r2c/` -- resultats grid search
+- `output/reports/` -- rapports d'analyse (inchange)
+- `output/plots/pnl_decay|monte_carlo/` -- graphiques
+- `output/logs/` -- logs grid search
+- `output/configs_archive/` -- copies YAML
+- `output/legacy/` -- anciens fichiers pipeline standard (phases B/C)
+
+---
+
+## [2026-02-14] Monte Carlo Bootstrap C6 (i.i.d. + Block k=5)
+
+### Resultats i.i.d. (1,000 chemins, 200 trades)
+| Metrique | Median | P5 | P95 |
+|----------|--------|----|----|
+| PnL final | $9,312 | $5,648 | $13,005 |
+| Max DD | -$846 | -$1,497 | -$511 |
+| Sharpe | 2.78 | 1.67 | 3.96 |
+
+### Resultats Block k=5 (1,000 chemins, 200 trades)
+| Metrique | Median | P5 | P95 |
+|----------|--------|----|----|
+| PnL final | $8,843 | $4,421 | $13,372 |
+| Max DD | -$1,055 | -$2,130 | -$524 |
+| Sharpe | 2.54 | 1.14 | 3.89 |
+
+### Risque prop firm
+| Critere | i.i.d. | Block k=5 |
+|---------|--------|-----------|
+| Hit -$3K DD | 0.0% | 0.2% |
+| Profitable 200 trades | 100.0% | 99.9% |
+
+### Scripts et fichiers
+- Script: `scripts/monte_carlo_c6.py`
+- Rapport: `output/reports/MONTE_CARLO_C6.md`
+- Graphiques: `output/plots/monte_carlo/`
+
+---
+
+## [2026-02-14] Walk-Forward Validation C6 & C9
+
+### Contexte
+Validation OOS des 2 configs finalistes issues du R2c. Protocole anchored expanding window (5 fenetres, train cumulatif depuis 2023).
+
+### Configs testees
+- **C6** (Primary) : b3960_zp33_cp27_adf144_zE3.25_co45_zTP0.0_dTP250 -- 258 trades
+- **C9** (Backup) : b4620_zp30_cp30_adf96_zE3.5_co40_zTP0.0_dTP250 -- 174 trades
+
+### Resultats Walk-Forward
+
+| Config | Windows profit. | Cumul OOS PnL | OOS Sharpe | Pire window |
+|--------|-----------------|---------------|------------|-------------|
+| **C6** | **4/5 (80%)** | **$10,571** | **1.14** | W2 -$192 |
+| **C9** | **4/5 (80%)** | **$7,316** | **1.21** | W1 -$541 |
+
+#### Detail par fenetre
+
+| Window | Test Period | C6 PnL | C6 WR | C9 PnL | C9 WR |
+|--------|-------------|--------|-------|--------|-------|
+| W1 | Jan-Jun 2024 | $147 | 65% | -$541 | 60% |
+| W2 | Jul-Dec 2024 | -$192 | 67% | $492 | 76% |
+| W3 | Jan-Jun 2025 | $1,235 | 59% | $1,088 | 87% |
+| W4 | Jul-Dec 2025 | $3,259 | 76% | $2,424 | 73% |
+| W5 | Jan 2026 | $6,123 | 100% | $3,853 | 100% |
+
+Pas de degradation : performance ameliore au fil du temps (W3-W5 >> W1-W2).
+
+### Investigation regime 2024
+- **Trades perdants 2024 = 100% TP_ZSCORE** (32/32 C6, 20/20 C9). Zero TP_DOLLAR perdant.
+- Spread volatilite identique 2023 vs 2024 (std=0.01). ADF identique (-1.74 vs -1.69).
+- **Conclusion** : 2024 flat = bruit statistique sur TP_ZSCORE, pas un probleme structurel.
+
+### Classement final
+1. **C6** -- Primary prop firm (volume + consistency 72.2% mois+)
+2. **C9** -- Backup solide (meilleur Sharpe OOS 1.21)
+3. C1 -- Conservateur (4/4 ans, DD -$1,147)
+4. C3 -- Reserve (106 trades, trop peu)
+5. ~~C5~~ -- Elimine (consistency insuffisante 57.1%)
+
+### Scripts et fichiers
+- Script: `scripts/walkforward_c6_c9.py`
+- Rapport: `output/reports/WALKFORWARD_C6_C9.md`
+
+
+## [2026-02-14] Grid Search Micro R2c -- Affinage C2 Sweet Spot
+
+### Contexte
+Suite au R2b (2.9M configs), C2 (b3960_zp36_cp30_adf128_zE3.25_co50) etait le seul profil stable 4/4 ans. R2c affine autour de ce sweet spot avec 200,000 configs (625 groupes indicateurs x 320 exits).
+
+### Grille R2c
+- beta: [3300, 3630, 3960, 4290, 4620]
+- zp: [30, 33, 36, 39, 42], cp: [24, 27, 30, 33, 36], adf: [96, 112, 128, 144, 160]
+- zE: [3.0, 3.125, 3.25, 3.375, 3.5], co: [40, 45, 50, 55]
+- zTP: [0.0, 0.5, 1.0, 1.5], dTP: [250, 300, 350, 400]
+- Fixes: zSL=99, dSL=0, mhb=0, mm=2, micro mode, slippage 1 tick
+
+### Resultats globaux
+- 200,000 configs, 84,734 profitables (42.4%)
+- Filtre (trades>=80, PF>=1.3, DD>=-$3,000): 15,387 configs (7.7%)
+
+### Top 3 Sharpe (filtres)
+
+| Rk | Config | Trades | WR | PnL | PF | DD | Sharpe |
+|----|--------|--------|----|-----|----|----|--------|
+| 1 | b4620_zp30_cp27_adf160_zE3.5_co45_zTP0.0_dTP300 | 139 | 71% | $6,044 | 2.44 | -$1,147 | 0.320 |
+| 2 | b4620_zp30_cp27_adf160_zE3.5_co45_zTP0.0_dTP250 | 139 | 71% | $5,244 | 2.25 | -$1,147 | 0.300 |
+| 3 | b4290_zp33_cp30_adf128_zE3.5_co50_zTP0.0_dTP300 | 106 | 71% | $4,679 | 2.28 | -$861 | 0.290 |
+
+Best PnL: C6 b3960_zp33_cp27_adf144_zE3.25_co45_zTP0.0_dTP250 -- 258 trades, $11,803 PnL, Calmar 12.23
+
+### Deep Analysis -- Stabilite temporelle (10 configs)
+
+**3 configs stables 4/4 ans:**
+
+| Config | Trades | PnL | Mois+ | 2023 | 2024 | 2025 | 2026 |
+|--------|--------|-----|-------|------|------|------|------|
+| C1 b4620_zp30_cp27_adf160_dTP300 | 139 | $6,044 | 67.6% | $5 | $608 | $2,627 | $2,804 |
+| C2 b4620_zp30_cp27_adf160_dTP250 | 139 | $5,244 | 67.6% | $5 | $608 | $2,327 | $2,304 |
+| C3 b4290_zp33_cp30_adf128_dTP300 | 106 | $4,679 | 60.6% | $22 | $343 | $1,791 | $2,523 |
+
+**Meilleure consistency mensuelle:** C6 b3960 (72.2% mois+, $328/mois moyen) mais 3/4 ans (-$45 en 2024)
+
+### Conclusions cles
+- **zTP=0.0 domine** : pure mean reversion avec dollar TP = meilleur profil
+- **Beta long confirme** : b3960-4620 (15-18 jours) = zone optimale
+- **TP_ZSCORE profitable** : $11-18 avg (vs breakeven en R2b) grace au beta plus long
+- **Neighborhood MARGINAL** : aucune config "STABLE" par voisinage, toutes MARGINAL
+- **C1/C2 = meme config** (seul dTP differe), C1 (dTP300) legerement meilleur
+
+### Scripts et fichiers
+- Config: `configs/experiments/grid_micro_r2c.yaml`
+- Analyse: `scripts/deep_analysis_r2c.py`
+- Rapports: `output/grid_searches/r2c/grid_micro_r2c_report.txt`, `output/reports/R2C_DEEP_ANALYSIS.md`
+- Donnees: `output/grid_searches/r2c/grid_micro_r2c.csv`
+
+
 ## [2026-02-08] Phase C4bis -- Block Bootstrap + Filtre horaire
 
 ### Contexte
