@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "ibkr-volatility": {
+      "command": "C:\\Users\\Bonjour\\Desktop\\backtest_gc_si\\.venv\\Scripts\\python.exe",
+      "args": ["C:\\Users\\Bonjour\\Desktop\\backtest_gc_si\\mcp_servers\\ibkr_volatility\\server.py"]
+    }
+  }
+}
