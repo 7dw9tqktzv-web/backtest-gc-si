@@ -75,10 +75,13 @@ def _find_nearest_expiry(expirations: list[str], target_dte: int = 30) -> str:
     return best
 
 
-def _get_atm_iv(ib: IB, symbol: str, exchange: str, opt_exchange: str,
-                opt_symbol: str, target_dte: int = 30) -> dict:
-    """Recupere l'IV ATM pour un future : prix future, strike ATM, IV call+put."""
-    # 1. Trouver le premier future qui a une chaine d'options
+def _resolve_option_chain(ib: IB, symbol: str, exchange: str, opt_exchange: str,
+                          target_dte: int = 30) -> dict:
+    """Trouve le future, son prix, et la chaine d'options la plus proche de target_dte.
+
+    Retourne dict avec keys: fut_contract, fut_price, chain, expiry, dte, strikes, atm_strike.
+    Ou dict avec key 'error' si echec.
+    """
     fut = Future(symbol=symbol, exchange=exchange)
     all_contracts = ib.reqContractDetails(fut)
     if not all_contracts:
@@ -100,42 +103,57 @@ def _get_atm_iv(ib: IB, symbol: str, exchange: str, opt_exchange: str,
     if fut_contract is None:
         return {"error": f"Aucun future avec options trouve pour {symbol}"}
 
-    # 2. Prix du future
     [ticker] = ib.reqTickers(fut_contract)
     fut_price = ticker.marketPrice()
-    if fut_price != fut_price:  # NaN check
+    if fut_price != fut_price:
         fut_price = ticker.close
     if fut_price != fut_price:
         return {"error": f"Pas de prix pour {symbol}", "contract": fut_contract.localSymbol}
 
-    # Trouver la chaine sur le bon exchange
     chain = None
     for c in chains:
         if c.exchange == opt_exchange:
             chain = c
             break
     if chain is None:
-        chain = chains[0]  # fallback
+        chain = chains[0]
 
-    # 4. Expiration la plus proche de target_dte
     expiry = _find_nearest_expiry(list(chain.expirations), target_dte)
     if expiry is None:
         return {"error": "Aucune expiration valide trouvee", "expirations": list(chain.expirations)}
 
     dte = (datetime.strptime(expiry, "%Y%m%d").date() - datetime.now().date()).days
-
-    # 5. Strike ATM (le plus proche du prix future)
     strikes = sorted(chain.strikes)
     atm_strike = min(strikes, key=lambda s: abs(s - fut_price))
 
-    # 6. Qualifier call et put ATM
+    return {
+        "fut_contract": fut_contract,
+        "fut_price": fut_price,
+        "expiry": expiry,
+        "dte": dte,
+        "strikes": strikes,
+        "atm_strike": atm_strike,
+    }
+
+
+def _get_atm_iv(ib: IB, symbol: str, exchange: str, opt_exchange: str,
+                opt_symbol: str, target_dte: int = 30) -> dict:
+    """Recupere l'IV ATM pour un future : prix future, strike ATM, IV call+put."""
+    info = _resolve_option_chain(ib, symbol, exchange, opt_exchange, target_dte)
+    if "error" in info:
+        return info
+
+    fut_price = info["fut_price"]
+    expiry = info["expiry"]
+    dte = info["dte"]
+    atm_strike = info["atm_strike"]
+
     call = Option(symbol=opt_symbol, lastTradeDateOrContractMonth=expiry,
                   strike=atm_strike, right="C", exchange=opt_exchange)
     put = Option(symbol=opt_symbol, lastTradeDateOrContractMonth=expiry,
                  strike=atm_strike, right="P", exchange=opt_exchange)
     qualified = ib.qualifyContracts(call, put)
 
-    # 7. Recuperer les tickers (IV via model greeks, mis a jour in-place)
     tickers = ib.reqTickers(*qualified)
     for _ in range(5):
         ib.sleep(1)
@@ -160,6 +178,157 @@ def _get_atm_iv(ib: IB, symbol: str, exchange: str, opt_exchange: str,
             result[f"delta_{right}"] = None
 
     return result
+
+
+def _get_risk_reversal(ib: IB, symbol: str, exchange: str, opt_exchange: str,
+                       opt_symbol: str, target_dte: int = 30) -> dict:
+    """Calcule RR25 et RR10 pour un symbole via IV par delta."""
+    info = _resolve_option_chain(ib, symbol, exchange, opt_exchange, target_dte)
+    if "error" in info:
+        return info
+
+    fut_price = info["fut_price"]
+    expiry = info["expiry"]
+    dte = info["dte"]
+    strikes = info["strikes"]
+    atm_strike = info["atm_strike"]
+
+    # Filtrer strikes dans +-20% autour du prix ATM
+    lo = fut_price * 0.80
+    hi = fut_price * 1.20
+    nearby_strikes = [s for s in strikes if lo <= s <= hi]
+
+    if not nearby_strikes:
+        return {"error": f"Aucun strike dans +-20% de {fut_price}", "symbol": symbol}
+
+    # Qualifier calls et puts en batch
+    options = []
+    for s in nearby_strikes:
+        options.append(Option(symbol=opt_symbol, lastTradeDateOrContractMonth=expiry,
+                              strike=s, right="C", exchange=opt_exchange))
+        options.append(Option(symbol=opt_symbol, lastTradeDateOrContractMonth=expiry,
+                              strike=s, right="P", exchange=opt_exchange))
+
+    qualified = ib.qualifyContracts(*options)
+    qualified = [q for q in qualified if q is not None]
+
+    if not qualified:
+        return {"error": "Aucune option qualifiee", "symbol": symbol}
+
+    # Recuperer les Greeks en batch avec polling
+    tickers = ib.reqTickers(*qualified)
+    for _ in range(5):
+        ib.sleep(1)
+        if all(t.modelGreeks for t in tickers):
+            break
+
+    # Construire la table strike/right/delta/iv
+    rows = []
+    for t in tickers:
+        g = t.modelGreeks
+        if g and g.delta is not None and g.impliedVol is not None:
+            rows.append({
+                "strike": t.contract.strike,
+                "right": t.contract.right,
+                "delta": float(g.delta),
+                "iv": float(g.impliedVol) * 100,
+            })
+
+    market_open = len(rows) > 0
+
+    result = {
+        "symbol": symbol,
+        "future_price": fut_price,
+        "expiry": expiry,
+        "dte": dte,
+        "atm_strike": atm_strike,
+        "strikes_analyzed": len(nearby_strikes),
+        "market_open": market_open,
+    }
+
+    if not market_open:
+        result["rr25"] = None
+        result["rr10"] = None
+        return result
+
+    calls = [r for r in rows if r["right"] == "C"]
+    puts = [r for r in rows if r["right"] == "P"]
+
+    # Trouver les options les plus proches des deltas cibles
+    DELTA_TOLERANCE = 0.05
+
+    for label, target_delta in [("rr25", 0.25), ("rr10", 0.10)]:
+        # Call : delta le plus proche de +target_delta
+        best_call = min(calls, key=lambda r: abs(r["delta"] - target_delta)) if calls else None
+        # Put : delta le plus proche de -target_delta (comparer en valeur absolue)
+        best_put = min(puts, key=lambda r: abs(abs(r["delta"]) - target_delta)) if puts else None
+
+        if (best_call and best_put
+                and abs(best_call["delta"] - target_delta) <= DELTA_TOLERANCE
+                and abs(abs(best_put["delta"]) - target_delta) <= DELTA_TOLERANCE):
+            rr_val = round(best_call["iv"] - best_put["iv"], 2)
+            result[label] = rr_val
+            result[f"{label}_call"] = {
+                "strike": best_call["strike"],
+                "delta": round(best_call["delta"], 4),
+                "iv": round(best_call["iv"], 2),
+            }
+            result[f"{label}_put"] = {
+                "strike": best_put["strike"],
+                "delta": round(best_put["delta"], 4),
+                "iv": round(best_put["iv"], 2),
+            }
+        else:
+            result[label] = None
+            result[f"{label}_reliable"] = False
+            if best_call:
+                result[f"{label}_call_nearest"] = {
+                    "strike": best_call["strike"],
+                    "delta": round(best_call["delta"], 4),
+                    "delta_gap": round(abs(best_call["delta"] - target_delta), 4),
+                }
+            if best_put:
+                result[f"{label}_put_nearest"] = {
+                    "strike": best_put["strike"],
+                    "delta": round(best_put["delta"], 4),
+                    "delta_gap": round(abs(abs(best_put["delta"]) - target_delta), 4),
+                }
+
+    return result
+
+
+@mcp.tool
+def get_risk_reversal(target_dte: int = 30) -> dict:
+    """RR25 et RR10 pour GC (OG) et SI (SO). Necessite marche ouvert pour les Greeks."""
+    ib = IB()
+    try:
+        ib.connect(TWS_HOST, TWS_PORT, clientId=CLIENT_ID, timeout=10)
+
+        gc_rr = _get_risk_reversal(ib, symbol="GC", exchange="COMEX",
+                                   opt_exchange="COMEX", opt_symbol="OG", target_dte=target_dte)
+        si_rr = _get_risk_reversal(ib, symbol="SI", exchange="COMEX",
+                                   opt_exchange="COMEX", opt_symbol="SO", target_dte=target_dte)
+
+        has_data = any(
+            d.get("market_open", False) for d in [gc_rr, si_rr] if "error" not in d
+        )
+
+        return {
+            "status": "ok",
+            "market_open": has_data,
+            "server_time": str(ib.reqCurrentTime()),
+            "GC": gc_rr,
+            "SI": si_rr,
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e) or repr(e),
+            "error_type": type(e).__name__,
+        }
+    finally:
+        if ib.isConnected():
+            ib.disconnect()
 
 
 @mcp.tool
@@ -226,7 +395,12 @@ def _fetch_vol_history(ib: IB, symbol: str, duration: str = "2 Y") -> pd.DataFra
     df = df_iv.merge(df_hv, on="date", how="outer").sort_values("date").reset_index(drop=True)
     df["date"] = pd.to_datetime(df["date"])
     df["symbol"] = symbol
+
+    # Filtre outliers ContFuture : V30 doit etre entre 5% et 100% (HV30 peut depasser 100% legitimement)
+    raw_len = len(df)
+    df = df[(df["v30"] >= 0.05) & (df["v30"] <= 1.0)].reset_index(drop=True)
     df["vrp"] = df["v30"] - df["hv30"]
+    df.attrs["rows_filtered"] = raw_len - len(df)
     return df
 
 
@@ -250,6 +424,7 @@ def backfill_iv_history(duration: str = "2 Y") -> dict:
             results[symbol] = {
                 "status": "ok",
                 "bars": len(df),
+                "rows_filtered": df.attrs.get("rows_filtered", 0),
                 "date_start": str(df["date"].min().date()),
                 "date_end": str(df["date"].max().date()),
                 "v30_last": round(float(df["v30"].iloc[-1]) * 100, 2),
@@ -397,6 +572,7 @@ def get_regime_dashboard() -> dict:
             "status": "ok",
             "date": str(last["date"].date()) if hasattr(last["date"], "date") else str(last["date"]),
             "data_bars": len(df),
+            "data_quality": "filtered_contfuture",
             "GC": {
                 "v30": round(float(last["v30_gc"]) * 100, 2),
                 "hv30": round(float(last["hv30_gc"]) * 100, 2),

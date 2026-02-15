@@ -221,16 +221,15 @@ Skill: `.claude/skills/ibkr-volatility/SKILL.md`. Data: `data/vol_metrics/`.
 - [x] get_iv_snapshot — IV ATM pour GC (OG) et SI (SO) via modelGreeks
 - [x] backfill_iv_history — V30/HV30 2Y daily via ContFuture + Parquet
 - [x] get_regime_dashboard — ratio IV, percentiles, deltas abs+pct, VRP z-scores, signaux
-- [ ] Valider get_iv_snapshot marche ouvert (greeks, expirations completes) — NEXT
-- [ ] Valider reqHistoricalData OPTION_IMPLIED_VOLATILITY post-weekend (expirations)
-- [ ] Ajouter IV par delta (25D, 10D) pour RR25/RR10 temps reel
-- [ ] Ajouter signaux skew divergent (RR25 GC vs SI de signe oppose)
+- [x] Filtre outliers V30 ContFuture (5%-100%), flag data_quality: filtered_contfuture
+- [x] get_risk_reversal — RR25/RR10 via delta matching (code pret, a tester lundi)
+- [ ] Valider get_iv_snapshot + get_risk_reversal marche ouvert — NEXT
+- [ ] Ajouter signaux skew divergent (RR25 GC vs SI de signe oppose) dans dashboard
 - [ ] Collecte daily automatique RR25/RR10 -> daily_snapshots.parquet
 - [ ] Merge branche dans master une fois stabilise
 
 ### Future Tests (apres paper trading)
 - [ ] Validation sur timeframes plus longs (15min, 1h)
-- [ ] Filtre de volatilite (VIX, ATR)
 - [ ] Focus sessions US uniquement
 - [ ] TP dynamique en fonction de la volatilite
 
