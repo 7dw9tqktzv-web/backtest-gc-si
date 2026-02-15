@@ -245,6 +245,7 @@ Before ANY action, Claude Code MUST read the relevant file FIRST:
 | Trigger | Read FIRST |
 |---------|-----------|
 | C++ / Sierra Chart / ACSIL / .cpp | `.claude/skills/sierra-acsil/SKILL.md` |
+| IBKR / TWS / IV / options / greeks / vol / regime | `.claude/skills/ibkr-volatility/SKILL.md` |
 | Backtest / optimizer / grid search | `docs/ARCHITECTURE.md` |
 | Entry/exit logic / state machine | `docs/STRATEGY.md` |
 | Config changes / parameters | `config/strategy_params.yaml` |
