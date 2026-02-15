@@ -9,14 +9,18 @@ import nest_asyncio
 nest_asyncio.apply()
 
 from datetime import datetime
+from pathlib import Path
+
+import pandas as pd
 from fastmcp import FastMCP
-from ib_insync import IB, Future, Option
+from ib_insync import IB, ContFuture, Future, Option
 
 mcp = FastMCP("IBKR Volatility")
 
 TWS_HOST = "127.0.0.1"
 TWS_PORT = 7497
 CLIENT_ID = 50  # ID dedie MCP, evite conflit avec autres clients
+VOL_METRICS_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "vol_metrics"
 
 
 @mcp.tool
@@ -192,6 +196,227 @@ def get_iv_snapshot(target_dte: int = 30) -> dict:
     finally:
         if ib.isConnected():
             ib.disconnect()
+
+
+def _fetch_vol_history(ib: IB, symbol: str, duration: str = "2 Y") -> pd.DataFrame:
+    """Telecharge V30 + HV30 daily pour un future continu."""
+    contract = ContFuture(symbol=symbol, exchange="COMEX")
+    ib.qualifyContracts(contract)
+
+    bars_iv = ib.reqHistoricalData(
+        contract, endDateTime="", durationStr=duration,
+        barSizeSetting="1 day", whatToShow="OPTION_IMPLIED_VOLATILITY",
+        useRTH=True, formatDate=1,
+    )
+    bars_hv = ib.reqHistoricalData(
+        contract, endDateTime="", durationStr=duration,
+        barSizeSetting="1 day", whatToShow="HISTORICAL_VOLATILITY",
+        useRTH=True, formatDate=1,
+    )
+
+    if not bars_iv and not bars_hv:
+        return pd.DataFrame()
+
+    df_iv = pd.DataFrame([{"date": b.date, "v30": b.close} for b in bars_iv])
+    df_hv = pd.DataFrame([{"date": b.date, "hv30": b.close} for b in bars_hv])
+
+    if df_iv.empty:
+        return pd.DataFrame()
+
+    df = df_iv.merge(df_hv, on="date", how="outer").sort_values("date").reset_index(drop=True)
+    df["date"] = pd.to_datetime(df["date"])
+    df["symbol"] = symbol
+    df["vrp"] = df["v30"] - df["hv30"]
+    return df
+
+
+@mcp.tool
+def backfill_iv_history(duration: str = "2 Y") -> dict:
+    """Backfill historique V30/HV30 pour GC et SI. Sauvegarde en Parquet."""
+    ib = IB()
+    try:
+        ib.connect(TWS_HOST, TWS_PORT, clientId=CLIENT_ID, timeout=10)
+        VOL_METRICS_DIR.mkdir(parents=True, exist_ok=True)
+
+        results = {}
+        for symbol in ["GC", "SI"]:
+            df = _fetch_vol_history(ib, symbol, duration)
+            if df.empty:
+                results[symbol] = {"status": "error", "message": "Aucune donnee retournee"}
+                continue
+
+            path = VOL_METRICS_DIR / f"iv_history_{symbol}.parquet"
+            df.to_parquet(path, index=False)
+            results[symbol] = {
+                "status": "ok",
+                "bars": len(df),
+                "date_start": str(df["date"].min().date()),
+                "date_end": str(df["date"].max().date()),
+                "v30_last": round(float(df["v30"].iloc[-1]) * 100, 2),
+                "hv30_last": round(float(df["hv30"].iloc[-1]) * 100, 2),
+                "vrp_last": round(float(df["vrp"].iloc[-1]) * 100, 2),
+                "path": str(path),
+            }
+
+        return {"status": "ok", "server_time": str(ib.reqCurrentTime()), **results}
+    except Exception as e:
+        return {"status": "error", "message": str(e) or repr(e), "error_type": type(e).__name__}
+    finally:
+        if ib.isConnected():
+            ib.disconnect()
+
+
+def _percentile_rank(series: pd.Series, value: float) -> float:
+    """Rang percentile de value dans series (0-100)."""
+    return float((series < value).sum() / len(series) * 100)
+
+
+@mcp.tool
+def get_regime_dashboard() -> dict:
+    """Tableau de regime spread GC/SI base sur V30, HV30, VRP et ratio IV.
+
+    Lit les Parquet locaux (backfill_iv_history doit avoir ete lance au prealable).
+    Retourne metriques courantes, percentiles historiques et signaux de regime.
+    """
+    gc_path = VOL_METRICS_DIR / "iv_history_GC.parquet"
+    si_path = VOL_METRICS_DIR / "iv_history_SI.parquet"
+
+    if not gc_path.exists() or not si_path.exists():
+        return {
+            "status": "error",
+            "message": "Parquet manquant. Lancer backfill_iv_history d'abord.",
+        }
+
+    try:
+        df_gc = pd.read_parquet(gc_path)
+        df_si = pd.read_parquet(si_path)
+
+        # Merge sur date
+        df = df_gc[["date", "v30", "hv30", "vrp"]].merge(
+            df_si[["date", "v30", "hv30", "vrp"]],
+            on="date", suffixes=("_gc", "_si"),
+        ).sort_values("date").reset_index(drop=True)
+
+        if len(df) < 60:
+            return {"status": "error", "message": f"Pas assez de donnees ({len(df)} bars, min 60)"}
+
+        # Ratio IV = V30(GC) / V30(SI)
+        df["ratio_iv"] = df["v30_gc"] / df["v30_si"]
+
+        # Valeurs courantes (derniere ligne)
+        last = df.iloc[-1]
+        ratio_now = float(last["ratio_iv"])
+
+        # Deltas jour/jour et semaine/semaine
+        ratio_series = df["ratio_iv"]
+        deltas = {}
+        for offset, label in [(1, "1d"), (5, "5d"), (20, "20d")]:
+            if len(ratio_series) > offset:
+                prev = float(ratio_series.iloc[-(offset + 1)])
+                deltas[label] = {
+                    "abs": round(ratio_now - prev, 4),
+                    "pct": round((ratio_now - prev) / prev * 100, 1) if prev != 0 else None,
+                }
+            else:
+                deltas[label] = None
+
+        # Percentiles du ratio IV sur differentes fenetres
+        percentiles = {}
+        for window, label in [(5, "5d"), (20, "20d"), (60, "60d")]:
+            window_data = ratio_series.iloc[-window:]
+            percentiles[label] = {
+                "percentile": round(_percentile_rank(window_data, ratio_now), 1),
+                "mean": round(float(window_data.mean()), 4),
+                "std": round(float(window_data.std()), 4),
+                "min": round(float(window_data.min()), 4),
+                "max": round(float(window_data.max()), 4),
+                "zscore": round(
+                    (ratio_now - float(window_data.mean())) / float(window_data.std())
+                    if window_data.std() > 0 else 0.0, 2
+                ),
+            }
+
+        # Signaux de regime
+        signals = []
+        zscore_60d = percentiles["60d"]["zscore"]
+
+        # 1. Ratio IV : RED >2 sigma, ORANGE >1.5 sigma
+        if abs(zscore_60d) > 2.0:
+            signals.append({
+                "signal": "RATIO_IV_EXTREME",
+                "severity": "RED",
+                "detail": f"Ratio IV z-score={zscore_60d} vs 60d",
+            })
+        elif abs(zscore_60d) > 1.5:
+            signals.append({
+                "signal": "RATIO_IV_ELEVATED",
+                "severity": "ORANGE",
+                "detail": f"Ratio IV z-score={zscore_60d} vs 60d",
+            })
+
+        # 2. VRP : RED >2 sigma, ORANGE >1.5 sigma (les deux symboles)
+        vrp_gc_60 = df["vrp_gc"].iloc[-60:]
+        vrp_si_60 = df["vrp_si"].iloc[-60:]
+        vrp_gc_now = float(last["vrp_gc"])
+        vrp_si_now = float(last["vrp_si"])
+
+        vrp_zscores = {}
+        for sym, vrp_series, vrp_now in [("GC", vrp_gc_60, vrp_gc_now), ("SI", vrp_si_60, vrp_si_now)]:
+            vrp_z = (vrp_now - float(vrp_series.mean())) / float(vrp_series.std()) if vrp_series.std() > 0 else 0.0
+            vrp_zscores[sym] = round(vrp_z, 2)
+            if abs(vrp_z) > 2.0:
+                signals.append({
+                    "signal": f"VRP_SPIKE_{sym}",
+                    "severity": "RED",
+                    "detail": f"VRP({sym}) z-score={round(vrp_z, 2)} vs 60d",
+                })
+            elif abs(vrp_z) > 1.5:
+                signals.append({
+                    "signal": f"VRP_ELEVATED_{sym}",
+                    "severity": "ORANGE",
+                    "detail": f"VRP({sym}) z-score={round(vrp_z, 2)} vs 60d",
+                })
+
+        # 3. Environnement favorable (ratio stable, pas de spike)
+        if abs(zscore_60d) < 1.0 and not any(s["signal"].startswith("VRP_SPIKE") for s in signals):
+            signals.append({
+                "signal": "FAVORABLE",
+                "severity": "GREEN",
+                "detail": f"Ratio IV stable (z={zscore_60d}), pas de VRP spike",
+            })
+
+        # Si aucun signal
+        if not signals:
+            signals.append({
+                "signal": "NEUTRAL",
+                "severity": "YELLOW",
+                "detail": "Aucun signal extreme detecte",
+            })
+
+        return {
+            "status": "ok",
+            "date": str(last["date"].date()) if hasattr(last["date"], "date") else str(last["date"]),
+            "data_bars": len(df),
+            "GC": {
+                "v30": round(float(last["v30_gc"]) * 100, 2),
+                "hv30": round(float(last["hv30_gc"]) * 100, 2),
+                "vrp": round(float(last["vrp_gc"]) * 100, 2),
+                "vrp_zscore_60d": vrp_zscores.get("GC", 0.0),
+            },
+            "SI": {
+                "v30": round(float(last["v30_si"]) * 100, 2),
+                "hv30": round(float(last["hv30_si"]) * 100, 2),
+                "vrp": round(float(last["vrp_si"]) * 100, 2),
+                "vrp_zscore_60d": vrp_zscores.get("SI", 0.0),
+            },
+            "ratio_iv": round(ratio_now, 4),
+            "ratio_iv_deltas": deltas,
+            "percentiles": percentiles,
+            "signals": signals,
+        }
+
+    except Exception as e:
+        return {"status": "error", "message": str(e) or repr(e), "error_type": type(e).__name__}
 
 
 if __name__ == "__main__":
