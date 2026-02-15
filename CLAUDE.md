@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v1.5).
 
-**Current status**: Phase D — Config micro retenue, pret pour deployment Sierra Chart.
+**Current status**: Phase D — SC micro deploye, en attente paper trading live.
 **Config production standard**: `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0_zSL4.0` (5-min, standard).
 **Config production micro**: `b3960_zp33_cp27_adf144_zE3.25_co45_zTP0.0_dTP250` (5-min, MGC/SIL).
 **223 tests passing**. See `CHANGELOG.md` for detailed history.
@@ -196,8 +196,12 @@ Claude Code peut PROPOSER mais ne doit JAMAIS APPLIQUER sans validation explicit
 v2.0 = automated spread trading (100% unmanaged orders). Python and SC produce identical indicator values (< 0.01% difference). 5/5 trades validated via replay.
 - **Standard**: `F:\SierreChart_Backtest_2\ACS_Source\GC_SI_SpreadMeanReversion_v2.0.cpp` (GC/SI)
 - **Micro**: `F:\SierreChart_Backtest_GC_SI_micro\ACS_Source\GC_SI_SpreadMeanReversion_v2.0_micro.cpp` (MGC/SIL, SCDLLName="GC_SI_SpreadMeanReversion_Micro", config C6, fixed x2 SIL)
+- **SC Instance micro**: `F:\SierreChart_Backtest_GC_SI_micro\` — MGC chart + SIL chart, continuous contracts, volume rollover, back adjusted
+- **Compilation**: via SC `Analysis > Build Custom Studies DLL` (pas le .bat)
 - **Skill**: `.claude/skills/sierra-acsil/SKILL.md` — read FIRST for any ACSIL work
 - **Critical gotchas**: NE PAS mixer managed/unmanaged orders. NE JAMAIS reset TradeState dans `IsFullRecalculation` (utiliser TradingInitialized PersistentInt flag).
+- **Cross-symbol replay limitation**: SIL fills at live price during replay, not replay price (SC Support Board #22882). PnL unreliable for cross-symbol trades in replay mode.
+- **Paper trading activation**: Input 16 = Yes + `Trade > Auto Trading Enabled` (Sim1 mode)
 - See `CHANGELOG.md` for replay validation details
 
 ## Roadmap (TODO)
@@ -206,8 +210,8 @@ v2.0 = automated spread trading (100% unmanaged orders). Python and SC produce i
 - [x] Grid search micro R1->R2a->R2b->R2c (config C6 retenue)
 - [x] Walk-Forward validation (4/5 fenetres profitables)
 - [x] Monte Carlo bootstrap (i.i.d. + block k=5, GO)
-- [ ] Deploy C6 config in Sierra Chart v2.0 (MGC/SIL)
-- [ ] Paper trading 4-8 weeks (min 30 trades, compare vs Python backtest)
+- [x] Deploy C6 config in Sierra Chart v2.0 (MGC/SIL) — compiled, text box compacted, 1-month replay validated
+- [ ] Paper trading 4-8 weeks (min 30 trades, compare vs Python backtest) — NEXT
 - [ ] Production go-live (if paper trading validates)
 
 ### Future Tests (apres paper trading)
