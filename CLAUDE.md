@@ -214,6 +214,20 @@ v2.0 = automated spread trading (100% unmanaged orders). Python and SC produce i
 - [ ] Paper trading 4-8 weeks (min 30 trades, compare vs Python backtest) — NEXT
 - [ ] Production go-live (if paper trading validates)
 
+### Phase E -- MCP IBKR Volatility / Regime Dashboard (IN PROGRESS)
+Branche: `feature/mcp-ibkr-volatility`. Serveur: `mcp_servers/ibkr_volatility/server.py`.
+Skill: `.claude/skills/ibkr-volatility/SKILL.md`. Data: `data/vol_metrics/`.
+- [x] MCP server minimal (ping, connect_tws) — chaine Claude Code -> TWS validee
+- [x] get_iv_snapshot — IV ATM pour GC (OG) et SI (SO) via modelGreeks
+- [x] backfill_iv_history — V30/HV30 2Y daily via ContFuture + Parquet
+- [x] get_regime_dashboard — ratio IV, percentiles, deltas abs+pct, VRP z-scores, signaux
+- [ ] Valider get_iv_snapshot marche ouvert (greeks, expirations completes) — NEXT
+- [ ] Valider reqHistoricalData OPTION_IMPLIED_VOLATILITY post-weekend (expirations)
+- [ ] Ajouter IV par delta (25D, 10D) pour RR25/RR10 temps reel
+- [ ] Ajouter signaux skew divergent (RR25 GC vs SI de signe oppose)
+- [ ] Collecte daily automatique RR25/RR10 -> daily_snapshots.parquet
+- [ ] Merge branche dans master une fois stabilise
+
 ### Future Tests (apres paper trading)
 - [ ] Validation sur timeframes plus longs (15min, 1h)
 - [ ] Filtre de volatilite (VIX, ATR)
@@ -245,7 +259,7 @@ Before ANY action, Claude Code MUST read the relevant file FIRST:
 | Trigger | Read FIRST |
 |---------|-----------|
 | C++ / Sierra Chart / ACSIL / .cpp | `.claude/skills/sierra-acsil/SKILL.md` |
-| IBKR / TWS / IV / options / greeks / vol / regime | `.claude/skills/ibkr-volatility/SKILL.md` |
+| IBKR / TWS / IV / options / greeks / vol / regime / mcp_servers | `.claude/skills/ibkr-volatility/SKILL.md` |
 | Backtest / optimizer / grid search | `docs/ARCHITECTURE.md` |
 | Entry/exit logic / state machine | `docs/STRATEGY.md` |
 | Config changes / parameters | `config/strategy_params.yaml` |
