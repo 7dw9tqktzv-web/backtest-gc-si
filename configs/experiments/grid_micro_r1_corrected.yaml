@@ -1,16 +1,17 @@
 # Grid Search Micro R1 CORRIGE - Post bugfix sizing + FLAT_EOD
-# Memes plages que l'ancien R1, avec corrections :
+# Grille elargie indicateurs + entry/exit avec corrections :
+#   - sizing smart multiplier (etait cap=2)
+#   - flat_end_of_session actif (etait ignore par pack_config)
 #   - slippage 2 ticks (etait 1)
-#   - micro_multiplier_max fixe a 2 (etait [1, 2])
-#   - flat_end_of_session: true (etait present mais ignore par pack_config)
+#   - micro_multiplier_max fixe a 2
 #
-# 126,000 configs (6 zE * 4 zSL valides en moyenne * 5 co * 6 zTP * 6 dTP * 7 dSL * 1 feos * 1 mm)
+# 450 groupes indicateurs x ~44,800 entry/exit = ~20,160,000 configs
 # Filtre dynamique : skip si zSL <= zE
 #
 # Usage: python scripts/run_grid_search.py --config configs/experiments/grid_micro_r1_corrected.yaml
 
 type: grid_search
-title: "GRID MICRO R1 CORRIGE - Sizing smart + FLAT_EOD + 2 ticks (126K configs)"
+title: "GRID MICRO R1 CORRIGE - 450 groupes x 44.8K ee (~20M configs)"
 exit_mode: micro_full
 
 execution:
@@ -20,18 +21,18 @@ execution:
   min_trades_for_sharpe: 10
 
 indicators:
-  beta_lookback: [2640]
-  zscore_period: [20]
-  correlation_period: [30]
-  adf_hurst_period: [26]
+  beta_lookback: [1980, 2640, 3960, 4620, 5280]
+  zscore_period: [12, 20, 24, 30, 36]
+  correlation_period: [20, 24, 30]
+  adf_hurst_period: [26, 32, 48, 64, 96, 144]
 
 entry_exit:
-  zscore_entry: [2.5, 3.0, 3.25, 3.5, 3.75, 4.0]
+  zscore_entry: [2.5, 2.75, 3.0, 3.25, 3.5, 3.75]
   cointegration_min: [20, 30, 40, 50, 60]
-  zscore_tp: [0.0, 0.5, 0.75, 1.0, 1.5, 2.0]
+  zscore_tp: [-1.5, -1.0, -0.5, 0.0, 0.25, 0.5, 0.75, 1.0]
   zscore_sl: [3.5, 4.0, 5.0, 99]
-  dollar_tp: [0, 300, 400, 500, 600, 700]
-  dollar_sl: [0, -400, -500, -600, -800, -1000, -1200]
+  dollar_tp: [0, 250, 300, 350, 400, 450, 500, 600]
+  dollar_sl: [0, -300, -400, -500, -600, -800, -1000]
   flat_end_of_session: [true]
   max_holding_bars: [0]
   micro_multiplier_max: [2]
