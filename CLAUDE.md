@@ -220,7 +220,7 @@ v2.0 = automated spread trading (100% unmanaged orders). Python and SC produce i
 - [x] Deploy C6 in Sierra Chart v2.0 micro — plugin C++ correct, paper trading actif
 - [x] Code review + fix sizing smart multiplier + fix flat_end_of_session path
 - [x] Fast grid engine (scan 5s factorise, 13.4x speedup, 300/300 parite)
-- [ ] **Grid search R1 micro CORRIGE** (~20M configs, ~4h, YAML pret) — NEXT
+- [ ] **Grid search R1 micro CORRIGE** (~20M configs, ~4h, `configs/experiments/grid_micro_r1_corrected.yaml`) — NEXT
 - [ ] Analyse top configs (4 scorings : PnL, Calmar, Consistency, Balanced)
 - [ ] PnL decay + calibrage max_holding_bars
 - [ ] Grid search R2 affinages sur top configs R1
