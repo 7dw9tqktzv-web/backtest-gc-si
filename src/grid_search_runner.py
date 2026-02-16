@@ -337,19 +337,26 @@ def _process_indicator_group_fast(args):
                 n_long = int(sum(1 for i in range(n_trades) if results[i, 1] == 1.0))
                 n_short = n_trades - n_long
 
-                # Sharpe / Sortino
+                # Sharpe / Sortino (non annualise, aligne sur compute_metrics)
                 if n_trades >= 2:
-                    std = float(pnl_nets.std(ddof=1))
-                    sharpe = (pnl_avg / std) * np.sqrt(252) if std > 0 else 0.0
+                    std = float(pnl_nets.std(ddof=1))  # ddof=1, comme pandas default
+                    sharpe = pnl_avg / std if std > 0 else 0.0
                     neg = pnl_nets[pnl_nets < 0]
-                    if len(neg) > 0:
-                        ds = float(np.sqrt(np.mean(neg ** 2)))
-                        sortino = (pnl_avg / ds) * np.sqrt(252) if ds > 0 else 0.0
+                    if len(neg) > 1:
+                        ds = float(neg.std(ddof=1))  # stdev classique, ddof=1
+                        sortino = pnl_avg / ds if ds > 0 else 0.0
                     else:
-                        sortino = 99.99
+                        sortino = 0.0
                 else:
                     sharpe = 0.0
                     sortino = 0.0
+
+                # Calmar = PnL net / |max drawdown|
+                calmar = round(pnl_sum / abs(max_dd), 2) if max_dd != 0 else 0.0
+
+                # Best / Worst / Winners
+                best_trade = float(pnl_nets.max())
+                worst_trade = float(pnl_nets.min())
 
                 # Exit reason counts
                 tp_zscore = tp_dollar = sl_zscore = sl_dollar = max_hold_cnt = end_session = 0
@@ -364,13 +371,16 @@ def _process_indicator_group_fast(args):
                     elif rname == 'FLAT_EOD': end_session += 1
 
                 m = {"trades": n_trades, "long": n_long, "short": n_short,
-                     "win_rate": win_rate, "pnl_net": pnl_sum,
-                     "pnl_avg": pnl_avg, "profit_factor": profit_factor,
-                     "max_dd": max_dd, "sharpe": sharpe, "sortino": sortino}
+                     "winners": n_wins, "win_rate": win_rate, "pnl_net": pnl_sum,
+                     "pnl_avg": pnl_avg, "best": best_trade, "worst": worst_trade,
+                     "profit_factor": profit_factor,
+                     "max_dd": max_dd, "sharpe": sharpe, "sortino": sortino,
+                     "calmar": calmar}
             else:
-                m = {"trades": 0, "long": 0, "short": 0, "win_rate": 0,
-                     "pnl_net": 0, "pnl_avg": 0, "profit_factor": 0,
-                     "max_dd": 0, "sharpe": 0, "sortino": 0}
+                m = {"trades": 0, "long": 0, "short": 0, "winners": 0,
+                     "win_rate": 0, "pnl_net": 0, "pnl_avg": 0,
+                     "best": 0, "worst": 0, "profit_factor": 0,
+                     "max_dd": 0, "sharpe": 0, "sortino": 0, "calmar": 0}
                 tp_zscore = tp_dollar = sl_zscore = sl_dollar = max_hold_cnt = end_session = 0
 
             result = result_builder(label, ind_ov, ee, m,

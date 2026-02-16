@@ -317,13 +317,12 @@ def build_paths_and_thresholds(
         # On ne recule JAMAIS idx_5s — si une entree est avant le curseur, c'est un
         # probleme. Mais en pratique, les entrees sont triees par bar_idx.
 
-        # Sauvegarder idx_5s pour cette entree (on va le faire avancer temporairement)
-        idx_5s_entry = idx_5s
-
-        # Avancer idx_5s jusqu'au timestamp de l'entry bar
+        # Avancer idx_5s global jusqu'au timestamp de l'entry bar
+        # (les entrees sont triees → idx_5s avance monotoniquement)
         entry_ts = timestamps_1min_ns[entry_bar]
-        while idx_5s_entry < n_5s and dt_5s_ns[idx_5s_entry] < entry_ts:
-            idx_5s_entry += 1
+        while idx_5s < n_5s and dt_5s_ns[idx_5s] < entry_ts:
+            idx_5s += 1
+        idx_5s_entry = idx_5s
 
         # Scan forward barre par barre (1-min)
         all_found = False
