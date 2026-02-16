@@ -188,7 +188,7 @@ def pack_config(config: dict) -> np.ndarray:
 
     # Nouveaux parametres micro
     cfg[CFG_MAX_HOLDING_BARS]  = float(ext.get('max_holding_bars', 0))
-    cfg[CFG_FLAT_END_SESSION]  = 1.0 if ext.get('flat_end_of_session', False) else 0.0
+    cfg[CFG_FLAT_END_SESSION]  = 1.0 if ses.get('flat_end_of_session', False) else 0.0
     cfg[CFG_MICRO_MULT_MAX]    = float(siz.get('micro_multiplier_max', 0))
 
     # Session end en minutes depuis minuit (Fix #4 : precision sub-heure)
