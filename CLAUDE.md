@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v1.5).
 
-**Current status**: Phase D — Bugs critiques corriges (sizing + FLAT_EOD). Grid search R1 a relancer. Paper trading en cours sur SC (config C6 en l'etat).
+**Current status**: Phase D — Fast grid engine merge. Grid search R1 corrige pret a lancer (~20M configs, ~4h). Paper trading SC en cours (C6).
 **Config production standard**: `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0_zSL4.0` (5-min, standard). NON REVALIDEE.
-**Config production micro**: A DETERMINER — grid search R1 a relancer avec sizing + FLAT_EOD corriges.
+**Config production micro**: A DETERMINER — grid search R1 corrige avec sizing smart + FLAT_EOD + session 18:00-14:55 CT + slippage 2 ticks.
 **210 tests passing**. See `CHANGELOG.md` for detailed history.
 
 ## Config Micro : EN ATTENTE RE-OPTIMISATION
@@ -34,6 +34,8 @@ pytest tests/ -v                                                    # Run all te
 python src/backtest_engine_numba.py                                 # Backtest (Numba JIT)
 python src/metrics.py                                               # Performance analysis
 python scripts/run_grid_search.py --config configs/experiments/<yaml>  # Grid search
+python scripts/validate_fast_engine.py                              # Validate fast engine parity (300 configs)
+python scripts/benchmark_fast_engine.py                             # Benchmark fast vs reference engine
 python src/archive_manager.py --action {archive-campaign|compare|report|dashboard|list}
 ```
 
@@ -67,23 +69,47 @@ Archive structure: `output/archive/{timeframe}/{exit_mode}/{config_name}/` with 
 
 5 states: FLAT, LONG, SHORT, COOLDOWN_LONG, COOLDOWN_SHORT. Exit priority: SL_DOLLAR > TP_DOLLAR > SL_ZSCORE > TP_ZSCORE > MAX_HOLD > FLAT_EOD. Single position at a time. Cooldown blocks same direction only. Reversal allowed on same bar. See `docs/STRATEGY.md` for entry/exit conditions and parameter values.
 
-## Backtest Engine
+## Backtest Engines
 
-**Moteur actif** : `src/backtest_engine_numba.py` (Numba JIT, ~10x plus rapide).
-**Reference/fallback** : `src/backtest_engine_hybrid.py` (Python pur, utilise par les tests).
+Trois moteurs coexistent, chacun avec un role precis :
 
-Architecture "Config Vector" : tous les parametres sont dans un numpy array `cfg[]`.
-Pour ajouter un nouveau parametre : ajouter `CFG_xxx` + extraction dans `pack_config()` + utiliser `cfg[CFG_xxx]` dans le kernel + incrementer `CFG_SIZE`.
+| Moteur | Fichier | Usage | Vitesse |
+|--------|---------|-------|---------|
+| **Numba** | `src/backtest_engine_numba.py` | Backtests unitaires, analyses ponctuelles, reference pour validation | ~0.04s/config (pure zscore), ~1.5s/config (dollar exits avec scan 5s) |
+| **Fast Grid** | `src/fast_grid_engine.py` | Grid searches massifs (micro_full). Factorise le scan 5s par (zE, co, mm) | ~13x plus rapide que Numba pour grids |
+| **Hybrid** | `src/backtest_engine_hybrid.py` | Tests unitaires (Python pur, pas de dependance Numba) | ~0.4s/config |
 
-**Logique** : Indicators on 1-min/5-min bars. 5s bars scanned only for dollar exit detection (SL/TP) when in position. Exit priority : SL_DOLLAR > TP_DOLLAR > SL_ZSCORE > TP_ZSCORE > MAX_HOLD > FLAT_EOD.
-Exit reasons supportes : TP_ZSCORE, SL_ZSCORE, TP_DOLLAR, SL_DOLLAR, STILL_OPEN, FLAT_EOD, MAX_HOLD.
+### Quand utiliser quel moteur
 
-**Regles** :
+- **Backtest d'une config** : `run_hybrid_backtest()` depuis `backtest_engine_numba.py`
+- **Grid search micro_full** : automatique — `grid_search_runner.py` detecte `exit_mode=micro_full` et utilise le fast engine
+- **Tests unitaires** : `backtest_engine_hybrid.py` (210 tests, fixtures synthetiques)
+- **Validation de parite** : `scripts/validate_fast_engine.py` (300 configs, 181K trades valides)
+
+### Architecture Fast Grid Engine
+
+Principe : pour un meme (groupe indicateur, zE, co, mm), les entrees sont identiques. Seules les sorties changent. On scanne les 5s UNE SEULE FOIS par groupe d'entrees, puis on replay N combos de sortie en O(1) par entree.
+
+4 composants Numba dans `fast_grid_engine.py` :
+1. `scan_entries()` — identifie toutes les entrees potentielles (ignore l'etat)
+2. `build_paths_and_thresholds()` — scan forward unique, pre-calcule les seuils de croisement pour tous les zTP/zSL/dTP/dSL
+3. `precompute_cooldown_reset()` — arrays de reset cooldown O(1) via backward scan
+4. `replay_state_machine()` — replay rapide sans scan 5s, gere cooldown + reversal same-bar
+
+Integration : `_process_indicator_group_fast()` dans `grid_search_runner.py`. Detection auto si `exit_mode == "micro_full"`.
+
+### Architecture Config Vector (Numba)
+
+Tous les parametres sont dans un numpy array `cfg[]`. Pour ajouter un parametre : ajouter `CFG_xxx` + extraction dans `pack_config()` + utiliser `cfg[CFG_xxx]` dans le kernel + incrementer `CFG_SIZE`.
+
+### Regles moteurs
+
 - Tout nouveau script dans `scripts/` importe depuis `backtest_engine_numba`. JAMAIS depuis hybrid.
 - Ne jamais modifier `backtest_engine_hybrid.py` sauf bug de reference.
-- Si on modifie la logique trading dans le kernel Numba, mettre a jour `backtest_engine_hybrid.py` en miroir pour garder la parite.
-- Tests unitaires (`tests/`) restent sur l'engine hybrid (Python pur, pas de dependance Numba).
-- Benchmark de parite : `python scripts/benchmark_numba.py` (60/60 trades, $0.00 diff, 10.3x speedup).
+- Si on modifie la logique trading dans le kernel Numba, mettre a jour `backtest_engine_hybrid.py` ET `fast_grid_engine.py` en miroir.
+- Tests unitaires (`tests/`) restent sur l'engine hybrid (Python pur).
+- Benchmark de parite Numba : `python scripts/benchmark_numba.py`
+- Validation parite Fast Grid : `python scripts/validate_fast_engine.py` (critere : 100% identique trade par trade)
 
 ## Contract Specifications
 
@@ -169,9 +195,11 @@ Claude Code peut PROPOSER mais ne doit JAMAIS APPLIQUER sans validation explicit
 - **MGC/SIL ratios asymetriques** : MGC = 1/10 de GC, SIL = 1/5 de SI. Sizing recalcule via `get_contract_specs()`
 
 ### Grid Search
-- **24 workers optimal**, ~0.04s per config (Numba) / ~0.4s (Python), ~600 MB/worker
+- **Fast engine auto** : `exit_mode=micro_full` → fast engine. Autre mode → moteur Numba standard.
+- **24 workers optimal**, ~600 MB/worker (~15 Go total)
+- **Benchmark fast engine** : `python scripts/benchmark_fast_engine.py` (13.4x sur 1,792 variants/groupe)
 - **stdout buffering**: use `PYTHONUNBUFFERED=1` or redirect to log file
-- **grid_temp/ grows to 11+ GB**: Delete after grid search to free space
+- **Session prop firm** : entry_start=18:00 CT, entry_end=14:00 CT, FLAT_EOD=14:55 CT. Ces valeurs sont dans le YAML R1, pas hardcodees dans le moteur.
 
 ### pack_config() Numba
 - **Toujours verifier la source des parametres** : `ext` = exit, `ses` = session, `siz` = sizing. Le bug flat_end_of_session venait d'une lecture depuis `ext` au lieu de `ses`.
@@ -215,10 +243,14 @@ v2.0 = automated spread trading (100% unmanaged orders). Python and SC produce i
 - [x] Grid search micro R1->R2c (INVALIDE — sizing cap=2 + FLAT_EOD OFF)
 - [x] Deploy C6 in Sierra Chart v2.0 micro — plugin C++ correct, paper trading actif
 - [x] Code review + fix sizing smart multiplier + fix flat_end_of_session path
-- [ ] **Grid search R1 micro CORRIGE** (sizing smart + FLAT_EOD=True + slippage 2 ticks) — NEXT
+- [x] Fast grid engine (scan 5s factorise, 13.4x speedup, 300/300 parite)
+- [ ] **Grid search R1 micro CORRIGE** (~20M configs, ~4h, YAML pret) — NEXT
+- [ ] Analyse top configs (4 scorings : PnL, Calmar, Consistency, Balanced)
+- [ ] PnL decay + calibrage max_holding_bars
 - [ ] Grid search R2 affinages sur top configs R1
 - [ ] Walk-Forward + Monte Carlo sur config retenue
-- [ ] Paper trading 4-8 weeks (min 30 trades) avec config validee
+- [ ] Mise a jour plugin SC avec config validee
+- [ ] Paper trading 4-8 weeks (min 30 trades)
 - [ ] Production go-live
 
 ### Phase E -- MCP IBKR Volatility / Regime Dashboard (IN PROGRESS)
@@ -267,6 +299,7 @@ Before ANY action, Claude Code MUST read the relevant file FIRST:
 | C++ / Sierra Chart / ACSIL / .cpp | `.claude/skills/sierra-acsil/SKILL.md` |
 | IBKR / TWS / IV / options / greeks / vol / regime / mcp_servers | `.claude/skills/ibkr-volatility/SKILL.md` |
 | Backtest / optimizer / grid search | `docs/ARCHITECTURE.md` |
+| Grid search micro_full / fast engine | `src/fast_grid_engine.py` (header + composants) |
 | Entry/exit logic / state machine | `docs/STRATEGY.md` |
 | Config changes / parameters | `config/strategy_params.yaml` |
 | Phase history / past results | `CHANGELOG.md` |
