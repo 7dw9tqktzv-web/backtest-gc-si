@@ -119,6 +119,11 @@ def pack_config(config: dict) -> np.ndarray:
     """
     cfg = np.zeros(CFG_SIZE, dtype=np.float64)
 
+    # Resoudre les specs micro/standard si pas encore fait
+    if 'gc_point_value' not in config.get('contracts', {}):
+        from common import resolve_contract_specs
+        resolve_contract_specs(config)
+
     ent = config['entry']
     ext = config['exit']
     con = config['contracts']
