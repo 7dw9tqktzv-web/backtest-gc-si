@@ -283,11 +283,21 @@ def build_paths_and_thresholds(
         si_c = int(entry_signals[e, ES_SI_C])
 
         # Flags pour savoir quels seuils sont deja trouves
+        # Marquer les seuils desactives comme "deja trouves" pour l'early exit
         ztp_found = np.zeros(n_ztp, dtype=np.int8)
         zsl_found = np.zeros(n_zsl, dtype=np.int8)
         dtp_found = np.zeros(n_dtp, dtype=np.int8)
         dsl_found = np.zeros(n_dsl, dtype=np.int8)
-        eod_found = False
+        for d in range(n_dtp):
+            if dtp_values[d] >= 50000.0:
+                dtp_found[d] = 1
+        for d in range(n_dsl):
+            if dsl_values[d] <= -50000.0:
+                dsl_found[d] = 1
+        for t in range(n_zsl):
+            if abs(zsl_values[t]) >= 50.0:  # zSL=99 → jamais atteint
+                zsl_found[t] = 1
+        eod_found = not flat_eod  # Si FLAT_EOD desactive, marquer comme deja trouve
 
         # MFE/MAE tracking — on les track separement pour 1-min et 5s
         max_pnl_1min = 0.0

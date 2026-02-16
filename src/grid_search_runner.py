@@ -39,13 +39,17 @@ from optimizer import apply_overrides, apply_overrides_fast, compute_metrics
 
 _WORKER_DATA = {}
 
-def _init_worker(df_main_arg, path_5s):
+def _init_worker(df_main_arg, path_5s, use_fast_engine=False):
     """Initialise les donnees partagees dans chaque worker (1 fois par worker).
     df_main (5-min, petit) passe par pickle. df_5s (4.6M lignes) est lu depuis parquet."""
     _WORKER_DATA['df_main'] = df_main_arg
     _WORKER_DATA['df_5s'] = pd.read_parquet(path_5s)
+    _WORKER_DATA['use_fast'] = use_fast_engine
     from backtest_engine_numba import warmup_numba
     warmup_numba()
+    if use_fast_engine:
+        from fast_grid_engine import warmup_fast_engine
+        warmup_fast_engine()
 
 
 def _process_indicator_group(args):
@@ -129,6 +133,254 @@ def _process_indicator_group(args):
     return g_idx, batch_results, dt_ind
 
 
+def _process_indicator_group_fast(args):
+    """
+    Worker function FAST : pour micro_full, factorise le scan 5s.
+
+    Pour chaque (zE, co, mm) unique dans les ee_variants :
+      1. scan_entries() — identifie les entrees potentielles
+      2. build_paths_and_thresholds() — scan forward UNIQUE
+      3. Pour chaque combo (zTP, zSL, dTP, dSL, feos, mhb) :
+         replay_state_machine() — replay rapide O(n_entries)
+    """
+    (g_idx, ind_ov, base_config, ee_variants,
+     completed_labels, fixed_overrides, label_builder, result_builder, timeframe) = args
+
+    df_main = _WORKER_DATA['df_main']
+    df_5s = _WORKER_DATA['df_5s']
+
+    from indicators import calculate_all_indicators
+    from backtest_engine_numba import pack_config, CFG_ZSCORE_RESET_LONG, CFG_ZSCORE_RESET_SHORT
+    from optimizer import apply_overrides_fast, compute_metrics
+    from fast_grid_engine import (
+        scan_entries, build_paths_and_thresholds,
+        precompute_cooldown_reset, replay_state_machine,
+        ES_BAR_IDX,
+    )
+
+    beta = ind_ov.get("indicators.beta_lookback", 0)
+    zp = ind_ov.get("indicators.zscore_period", 0)
+    cp = ind_ov.get("indicators.correlation_period", 0)
+    adf = ind_ov.get("indicators.adf_hurst_period", 0)
+    group_prefix = f"b{beta}_zp{zp}_cp{cp}_adf{adf}"
+
+    # Skip si tout le groupe est deja fait
+    group_done = all(
+        label_builder(group_prefix, ee) in completed_labels
+        for ee in ee_variants
+    )
+    if group_done:
+        return g_idx, [], 0.0
+
+    # Calculer les indicateurs (1 fois par groupe)
+    config_ind = apply_overrides_fast(base_config, {**ind_ov, **fixed_overrides})
+    t_ind = time.time()
+    df_ind = calculate_all_indicators(df_main, config_ind, verbose=False)
+    dt_ind = time.time() - t_ind
+
+    # Extraire les arrays numpy (1 fois par groupe)
+    zscores = df_ind['ZScore'].values.astype(np.float64)
+    correlations = df_ind['Correlation'].values.astype(np.float64)
+    coint_scores = df_ind['Cointegration_Score'].values.astype(np.float64)
+    hursts = (df_ind['Hurst'].values.astype(np.float64)
+              if 'Hurst' in df_ind.columns else np.full(len(df_ind), np.nan))
+    gc_prices = df_ind['Last_GC'].values.astype(np.float64)
+    si_prices = df_ind['Last_SI'].values.astype(np.float64)
+    betas = df_ind['Beta'].values.astype(np.float64)
+    ts_dt = pd.to_datetime(df_ind['DateTime'])
+    hours = ts_dt.dt.hour.values.astype(np.int32)
+    minutes = ts_dt.dt.minute.values.astype(np.int32)
+    timestamps_ns = ts_dt.values.astype(np.int64)
+    dt_5s_ns = pd.to_datetime(df_5s['DateTime']).values.astype(np.int64)
+    gc_5s = df_5s['Last_GC'].values.astype(np.float64)
+    si_5s = df_5s['Last_SI'].values.astype(np.float64)
+
+    # Regime filter arrays (vides si desactive)
+    rf = config_ind.get('regime_filter', {})
+    rf_enabled = rf.get('enabled', False)
+    hl_on = rf_enabled and rf.get('halflife_ar1', {}).get('enabled', False)
+    corr_on = rf_enabled and rf.get('correlation_daily', {}).get('enabled', False)
+    hl_ar1 = (df_ind['HalfLife_AR1'].values.astype(np.float64)
+              if hl_on and 'HalfLife_AR1' in df_ind.columns
+              else np.empty(0, dtype=np.float64))
+    corr_daily = (df_ind['Corr_Daily_GC_SI'].values.astype(np.float64)
+                  if corr_on and 'Corr_Daily_GC_SI' in df_ind.columns
+                  else np.empty(0, dtype=np.float64))
+
+    # Grouper les variants par (zE, co, mm) — meme entrees pour ces combos
+    from collections import defaultdict
+    groups = defaultdict(list)
+    for ee in ee_variants:
+        label = label_builder(group_prefix, ee)
+        if label in completed_labels:
+            continue
+        key = (ee["zE"], ee["co"], ee["mm"])
+        groups[key].append(ee)
+
+    # Collecter toutes les valeurs uniques de seuils pour le build_paths_and_thresholds
+    all_ztp = sorted(set(ee["zTP"] for ee in ee_variants))
+    all_zsl = sorted(set(ee["zSL"] for ee in ee_variants))
+    all_dtp_raw = sorted(set(ee["dTP"] for ee in ee_variants))
+    all_dsl_raw = sorted(set(ee["dSL"] for ee in ee_variants))
+
+    # Convertir : 0 → 99999/-99999 (desactive)
+    all_dtp = [d if d > 0 else 99999 for d in all_dtp_raw]
+    all_dsl = [d if d < 0 else -99999 for d in all_dsl_raw]
+
+    ztp_values = np.array(all_ztp, dtype=np.float64)
+    zsl_values = np.array(all_zsl, dtype=np.float64)
+    dtp_values = np.array(all_dtp, dtype=np.float64)
+    dsl_values = np.array(all_dsl, dtype=np.float64)
+
+    n_ztp = len(ztp_values)
+    n_zsl = len(zsl_values)
+    n_dtp = len(dtp_values)
+    n_dsl = len(dsl_values)
+
+    # Indices de seuils dans la threshold_table
+    off_zsl = n_ztp
+    off_dtp = off_zsl + n_zsl
+    off_dsl = off_dtp + n_dtp
+    off_eod = off_dsl + n_dsl
+
+    # Maps seuil → index
+    ztp_idx_map = {v: i for i, v in enumerate(all_ztp)}
+    zsl_idx_map = {v: i for i, v in enumerate(all_zsl)}
+    dtp_idx_map = {v: i + off_dtp for i, v in enumerate(all_dtp)}
+    dsl_idx_map = {v: i + off_dsl for i, v in enumerate(all_dsl)}
+
+    # Exit reason name maps
+    reason_names = {0: 'TP_ZSCORE', 1: 'SL_ZSCORE', 2: 'TP_DOLLAR',
+                    3: 'SL_DOLLAR', 4: 'STILL_OPEN', 5: 'FLAT_EOD', 6: 'MAX_HOLD'}
+
+    batch_results = []
+
+    for (zE, co, mm), group_variants in groups.items():
+        # Build config pour ce (zE, co, mm) — pour pack_config
+        first_ee = group_variants[0]
+        merged = {**ind_ov, **first_ee["overrides"], **fixed_overrides}
+        config_test = apply_overrides_fast(base_config, merged)
+        cfg = pack_config(config_test)
+
+        # 1. Scan entries pour ce (zE, co, mm)
+        entries = scan_entries(
+            zscores, correlations, coint_scores, hursts,
+            gc_prices, si_prices, betas,
+            hours, minutes, hl_ar1, corr_daily, cfg,
+        )
+
+        if entries.shape[0] == 0:
+            # Aucune entree → tous les variants ont 0 trades
+            for ee in group_variants:
+                label = label_builder(group_prefix, ee)
+                m = {"trades": 0, "long": 0, "short": 0, "win_rate": 0,
+                     "pnl_net": 0, "pnl_avg": 0, "profit_factor": 0,
+                     "max_dd": 0, "sharpe": 0, "sortino": 0}
+                result = result_builder(label, ind_ov, ee, m, 0, 0, 0, 0, 0, 0)
+                batch_results.append(result)
+            continue
+
+        # 2. Build thresholds (1 scan forward pour TOUS les seuils)
+        table = build_paths_and_thresholds(
+            entries, zscores, gc_prices, si_prices,
+            hours, minutes, timestamps_ns,
+            dt_5s_ns, gc_5s, si_5s, cfg,
+            ztp_values, zsl_values, dtp_values, dsl_values,
+        )
+
+        # 3. Precompute cooldown reset (1 fois par (zE, co, mm))
+        first_z_ge, first_z_le = precompute_cooldown_reset(
+            zscores, cfg[CFG_ZSCORE_RESET_LONG], cfg[CFG_ZSCORE_RESET_SHORT])
+
+        # 4. Replay pour chaque (zTP, zSL, dTP, dSL, feos, mhb) combo
+        for ee in group_variants:
+            label = label_builder(group_prefix, ee)
+
+            ztp_idx = ztp_idx_map[ee["zTP"]]
+            zsl_idx = off_zsl + zsl_idx_map[ee["zSL"]]
+
+            dtp_raw = ee["dTP"]
+            dsl_raw = ee["dSL"]
+            has_dtp = dtp_raw > 0
+            has_dsl = dsl_raw < 0
+            dtp_mapped = dtp_raw if dtp_raw > 0 else 99999
+            dsl_mapped = dsl_raw if dsl_raw < 0 else -99999
+            dtp_idx = dtp_idx_map[dtp_mapped] if has_dtp else -1
+            dsl_idx = dsl_idx_map[dsl_mapped] if has_dsl else -1
+
+            has_eod = ee["feos"]
+            max_hold = ee["mhb"]
+
+            results, n_trades = replay_state_machine(
+                entries, table, zscores, gc_prices, si_prices,
+                first_z_ge, first_z_le,
+                ztp_idx, zsl_idx, dtp_idx, dsl_idx, off_eod,
+                has_dtp, has_dsl, has_eod, max_hold, cfg,
+            )
+
+            # Compute metrics from replay results
+            if n_trades > 0:
+                pnl_nets = np.array([results[i, 12] for i in range(n_trades)])
+                pnl_sum = float(pnl_nets.sum())
+                pnl_avg = float(pnl_nets.mean())
+                wins = pnl_nets > 0
+                n_wins = int(wins.sum())
+                win_rate = 100.0 * n_wins / n_trades
+                win_pnl = float(pnl_nets[wins].sum()) if n_wins > 0 else 0.0
+                loss_pnl = float(pnl_nets[~wins].sum()) if n_wins < n_trades else 0.0
+                profit_factor = win_pnl / abs(loss_pnl) if loss_pnl != 0 else 99.99
+                cumul = np.cumsum(pnl_nets)
+                peak = np.maximum.accumulate(cumul)
+                dd = cumul - peak
+                max_dd = float(dd.min())
+
+                n_long = int(sum(1 for i in range(n_trades) if results[i, 1] == 1.0))
+                n_short = n_trades - n_long
+
+                # Sharpe / Sortino
+                if n_trades >= 2:
+                    std = float(pnl_nets.std(ddof=1))
+                    sharpe = (pnl_avg / std) * np.sqrt(252) if std > 0 else 0.0
+                    neg = pnl_nets[pnl_nets < 0]
+                    if len(neg) > 0:
+                        ds = float(np.sqrt(np.mean(neg ** 2)))
+                        sortino = (pnl_avg / ds) * np.sqrt(252) if ds > 0 else 0.0
+                    else:
+                        sortino = 99.99
+                else:
+                    sharpe = 0.0
+                    sortino = 0.0
+
+                # Exit reason counts
+                tp_zscore = tp_dollar = sl_zscore = sl_dollar = max_hold_cnt = end_session = 0
+                for i in range(n_trades):
+                    r = int(results[i, 13])
+                    rname = reason_names.get(r, '')
+                    if rname == 'TP_ZSCORE': tp_zscore += 1
+                    elif rname == 'TP_DOLLAR': tp_dollar += 1
+                    elif rname == 'SL_ZSCORE': sl_zscore += 1
+                    elif rname == 'SL_DOLLAR': sl_dollar += 1
+                    elif rname == 'MAX_HOLD': max_hold_cnt += 1
+                    elif rname == 'FLAT_EOD': end_session += 1
+
+                m = {"trades": n_trades, "long": n_long, "short": n_short,
+                     "win_rate": win_rate, "pnl_net": pnl_sum,
+                     "pnl_avg": pnl_avg, "profit_factor": profit_factor,
+                     "max_dd": max_dd, "sharpe": sharpe, "sortino": sortino}
+            else:
+                m = {"trades": 0, "long": 0, "short": 0, "win_rate": 0,
+                     "pnl_net": 0, "pnl_avg": 0, "profit_factor": 0,
+                     "max_dd": 0, "sharpe": 0, "sortino": 0}
+                tp_zscore = tp_dollar = sl_zscore = sl_dollar = max_hold_cnt = end_session = 0
+
+            result = result_builder(label, ind_ov, ee, m,
+                                    tp_zscore, tp_dollar, sl_zscore, sl_dollar,
+                                    max_hold_cnt, end_session)
+            batch_results.append(result)
+
+    return g_idx, batch_results, dt_ind
+
+
 # ============================================================================
 # CLASSE PRINCIPALE
 # ============================================================================
@@ -159,6 +411,7 @@ class GridSearchRunner:
         fixed_overrides: Optional[Dict[str, Any]] = None,
         timeframe: str = "1min",
         title: str = "GRID SEARCH",
+        exit_mode: str = "dollar",
     ):
         """
         Initialise le runner.
@@ -172,6 +425,7 @@ class GridSearchRunner:
             fixed_overrides: Overrides fixes appliques a toutes les configs
             timeframe: "1min" ou "5min" pour le resampling
             title: Titre affiche au lancement
+            exit_mode: Mode de sortie (dollar, zscore, hybrid, micro_full)
         """
         self.indicator_params = indicator_params
         self.entry_exit_generator = entry_exit_generator
@@ -180,6 +434,8 @@ class GridSearchRunner:
         self.fixed_overrides = fixed_overrides or {}
         self.timeframe = timeframe
         self.title = title
+        self.exit_mode = exit_mode
+        self.use_fast = (exit_mode == "micro_full")
 
         # Generer les combinaisons
         self.indicator_groups = self._generate_indicator_groups()
@@ -299,10 +555,14 @@ class GridSearchRunner:
         del df_5s  # Liberer la memoire du processus parent
         print(f"   [OK] df_5s ecrit en parquet temporaire ({tmp_5s})")
 
+        worker_fn = _process_indicator_group_fast if self.use_fast else _process_indicator_group
+        if self.use_fast:
+            print("   [FAST ENGINE] Moteur factorise active (micro_full)")
+
         with mp.Pool(processes=num_workers,
                      initializer=_init_worker,
-                     initargs=(df_main, tmp_5s)) as pool:
-            for g_idx, batch_results, dt_ind in pool.imap_unordered(_process_indicator_group, worker_args):
+                     initargs=(df_main, tmp_5s, self.use_fast)) as pool:
+            for g_idx, batch_results, dt_ind in pool.imap_unordered(worker_fn, worker_args):
                 groups_done += 1
 
                 if not batch_results:

@@ -46,59 +46,101 @@ def generate_test_configs():
     """Genere 100+ configs de test couvrant tous les edge cases."""
     configs = []
 
-    # Groupes indicateurs varies
+    # 6 groupes indicateurs — betas extremes (1980, 5280) + intermediaires
     indicator_groups = [
+        # Beta court (1980) — plus de signaux, plus de trades
+        {"indicators.beta_lookback": 1980, "indicators.zscore_period": 12,
+         "indicators.correlation_period": 20, "indicators.adf_hurst_period": 26},
         {"indicators.beta_lookback": 1980, "indicators.zscore_period": 20,
          "indicators.correlation_period": 30, "indicators.adf_hurst_period": 26},
+        # Intermediaire
         {"indicators.beta_lookback": 2640, "indicators.zscore_period": 24,
          "indicators.correlation_period": 20, "indicators.adf_hurst_period": 48},
         {"indicators.beta_lookback": 3960, "indicators.zscore_period": 30,
          "indicators.correlation_period": 24, "indicators.adf_hurst_period": 96},
+        # Beta long (5280) — moins de signaux, indicateurs plus lisses
         {"indicators.beta_lookback": 5280, "indicators.zscore_period": 36,
          "indicators.correlation_period": 30, "indicators.adf_hurst_period": 144},
+        {"indicators.beta_lookback": 5280, "indicators.zscore_period": 20,
+         "indicators.correlation_period": 20, "indicators.adf_hurst_period": 64},
     ]
 
-    # Edge case categories
+    # 50 exit combos — focus sur les edge cases demandes
     exit_combos = [
-        # Pure zscore (pas de dollar exits)
-        {"zE": 3.0, "zTP": 0.5, "zSL": 99, "dTP": 0, "dSL": 0, "tag": "pure_zscore"},
-        {"zE": 2.5, "zTP": 0.0, "zSL": 4.0, "dTP": 0, "dSL": 0, "tag": "zscore_with_sl"},
-        {"zE": 3.5, "zTP": -1.0, "zSL": 5.0, "dTP": 0, "dSL": 0, "tag": "zscore_neg_tp"},
+        # === PURE ZSCORE (pas de dollar exits) ===
+        {"zE": 3.0, "zTP": 0.5, "zSL": 99, "dTP": 0, "dSL": 0, "tag": "pure_z_05"},
+        {"zE": 2.5, "zTP": 0.0, "zSL": 99, "dTP": 0, "dSL": 0, "tag": "pure_z_00_low"},
+        {"zE": 3.5, "zTP": 1.0, "zSL": 99, "dTP": 0, "dSL": 0, "tag": "pure_z_10"},
+        {"zE": 3.0, "zTP": -1.0, "zSL": 99, "dTP": 0, "dSL": 0, "tag": "pure_z_neg10"},
+        {"zE": 3.0, "zTP": -1.5, "zSL": 99, "dTP": 0, "dSL": 0, "tag": "pure_z_neg15"},
+        {"zE": 2.75, "zTP": 0.25, "zSL": 99, "dTP": 0, "dSL": 0, "tag": "pure_z_025"},
 
-        # Dollar TP only
-        {"zE": 3.0, "zTP": 0.0, "zSL": 99, "dTP": 300, "dSL": 0, "tag": "dtp_only"},
-        {"zE": 3.25, "zTP": 0.5, "zSL": 99, "dTP": 250, "dSL": 0, "tag": "dtp_with_ztp"},
+        # === zSL SERRE — beaucoup de cooldowns ===
+        # zSL tres proche de zE → quasi-systematique cooldown
+        {"zE": 3.0, "zTP": 0.0, "zSL": 3.5, "dTP": 0, "dSL": 0, "tag": "zsl35_ze30"},
+        {"zE": 2.5, "zTP": 0.0, "zSL": 3.5, "dTP": 0, "dSL": 0, "tag": "zsl35_ze25"},
+        {"zE": 3.0, "zTP": 0.5, "zSL": 3.5, "dTP": 0, "dSL": 0, "tag": "zsl35_tp05"},
+        {"zE": 2.5, "zTP": 0.0, "zSL": 3.0, "dTP": 0, "dSL": 0, "tag": "zsl30_ze25"},
+        {"zE": 3.0, "zTP": 0.0, "zSL": 4.0, "dTP": 0, "dSL": 0, "tag": "zsl40_ze30"},
+        {"zE": 2.5, "zTP": 0.0, "zSL": 4.0, "dTP": 0, "dSL": 0, "tag": "zsl40_ze25"},
+        # zSL serre + dollar exits
+        {"zE": 3.0, "zTP": 0.0, "zSL": 3.5, "dTP": 300, "dSL": -500, "tag": "zsl35_dollar"},
+        {"zE": 2.5, "zTP": 0.0, "zSL": 3.5, "dTP": 200, "dSL": -300, "tag": "zsl35_tight_d"},
+        {"zE": 3.0, "zTP": 0.0, "zSL": 3.5, "dTP": 150, "dSL": -300, "tag": "zsl35_dtp150"},
 
-        # Dollar SL only
-        {"zE": 3.0, "zTP": 0.0, "zSL": 99, "dTP": 0, "dSL": -500, "tag": "dsl_only"},
-        {"zE": 2.75, "zTP": 1.0, "zSL": 99, "dTP": 0, "dSL": -300, "tag": "dsl_with_ztp"},
+        # === dTP TRES PETITS — sorties rapides, beaucoup de re-entrees same-bar ===
+        {"zE": 3.0, "zTP": 0.0, "zSL": 99, "dTP": 150, "dSL": 0, "tag": "dtp150"},
+        {"zE": 2.5, "zTP": 0.0, "zSL": 99, "dTP": 150, "dSL": 0, "tag": "dtp150_ze25"},
+        {"zE": 3.0, "zTP": 0.0, "zSL": 99, "dTP": 200, "dSL": 0, "tag": "dtp200"},
+        {"zE": 2.5, "zTP": 0.0, "zSL": 99, "dTP": 200, "dSL": 0, "tag": "dtp200_ze25"},
+        {"zE": 3.0, "zTP": 0.0, "zSL": 99, "dTP": 250, "dSL": 0, "tag": "dtp250"},
+        {"zE": 3.25, "zTP": 0.0, "zSL": 99, "dTP": 250, "dSL": 0, "tag": "dtp250_c6"},
+        # dTP petit + dSL
+        {"zE": 3.0, "zTP": 0.0, "zSL": 99, "dTP": 150, "dSL": -300, "tag": "dtp150_dsl300"},
+        {"zE": 2.5, "zTP": 0.0, "zSL": 99, "dTP": 200, "dSL": -400, "tag": "dtp200_dsl400"},
+        {"zE": 3.0, "zTP": 0.0, "zSL": 99, "dTP": 250, "dSL": -500, "tag": "dtp250_dsl500"},
+        # dTP petit + zSL serre (double stress)
+        {"zE": 2.5, "zTP": 0.0, "zSL": 3.5, "dTP": 150, "dSL": 0, "tag": "dtp150_zsl35"},
+        {"zE": 3.0, "zTP": 0.0, "zSL": 3.5, "dTP": 200, "dSL": -300, "tag": "dtp200_zsl35_d"},
+        {"zE": 2.5, "zTP": 0.0, "zSL": 3.0, "dTP": 150, "dSL": -300, "tag": "dtp150_zsl30_d"},
 
-        # Both dollar exits
-        {"zE": 3.0, "zTP": 0.0, "zSL": 99, "dTP": 300, "dSL": -500, "tag": "both_dollar"},
-        {"zE": 3.25, "zTP": 0.5, "zSL": 4.0, "dTP": 400, "dSL": -600, "tag": "all_exits"},
-        {"zE": 2.5, "zTP": 0.0, "zSL": 3.5, "dTP": 250, "dSL": -300, "tag": "tight_all"},
+        # === dSL SERRE — beaucoup de dollar SL + cooldowns ===
+        {"zE": 3.0, "zTP": 0.0, "zSL": 99, "dTP": 0, "dSL": -300, "tag": "dsl300"},
+        {"zE": 2.5, "zTP": 0.0, "zSL": 99, "dTP": 0, "dSL": -300, "tag": "dsl300_ze25"},
+        {"zE": 3.0, "zTP": 0.5, "zSL": 99, "dTP": 0, "dSL": -400, "tag": "dsl400_tp05"},
+        {"zE": 2.75, "zTP": 1.0, "zSL": 99, "dTP": 0, "dSL": -300, "tag": "dsl300_tp10"},
 
-        # Beaucoup de cooldowns (zE bas + zSL serre)
-        {"zE": 2.5, "zTP": 0.0, "zSL": 3.5, "dTP": 0, "dSL": 0, "tag": "many_cooldowns"},
+        # === BOTH DOLLAR (stress combinatoire) ===
+        {"zE": 3.0, "zTP": 0.0, "zSL": 99, "dTP": 300, "dSL": -500, "tag": "d300_500"},
+        {"zE": 3.0, "zTP": 0.0, "zSL": 99, "dTP": 400, "dSL": -600, "tag": "d400_600"},
+        {"zE": 3.0, "zTP": 0.0, "zSL": 99, "dTP": 500, "dSL": -1000, "tag": "d500_1000"},
+        {"zE": 2.5, "zTP": 0.0, "zSL": 3.5, "dTP": 250, "dSL": -300, "tag": "all_tight"},
+        {"zE": 3.25, "zTP": 0.5, "zSL": 4.0, "dTP": 400, "dSL": -600, "tag": "all_medium"},
 
-        # Dollar exits serrés (beaucoup de reversals)
-        {"zE": 2.5, "zTP": 0.0, "zSL": 99, "dTP": 250, "dSL": -300, "tag": "tight_dollar_reversals"},
+        # === zTP NEGATIF (attend que z depasse l'autre cote) ===
+        {"zE": 3.5, "zTP": -1.0, "zSL": 5.0, "dTP": 0, "dSL": 0, "tag": "neg_tp10_zsl5"},
+        {"zE": 3.0, "zTP": -0.5, "zSL": 99, "dTP": 0, "dSL": 0, "tag": "neg_tp05"},
+        {"zE": 3.5, "zTP": -0.5, "zSL": 4.0, "dTP": 300, "dSL": -500, "tag": "neg_tp05_full"},
+        {"zE": 3.0, "zTP": -1.5, "zSL": 4.0, "dTP": 250, "dSL": -400, "tag": "neg_tp15_d"},
+        {"zE": 2.75, "zTP": -0.5, "zSL": 3.5, "dTP": 200, "dSL": -300, "tag": "neg_tp05_tight"},
 
-        # zTP negatif
-        {"zE": 3.0, "zTP": -1.5, "zSL": 99, "dTP": 0, "dSL": 0, "tag": "neg_ztp_15"},
-        {"zE": 3.5, "zTP": -0.5, "zSL": 4.0, "dTP": 300, "dSL": -500, "tag": "neg_ztp_05_full"},
+        # === HIGH TRADE COUNT CONFIGS (zE bas + dTP petit) ===
+        {"zE": 2.5, "zTP": 0.0, "zSL": 3.5, "dTP": 150, "dSL": -300, "tag": "max_trades_1"},
+        {"zE": 2.5, "zTP": 0.0, "zSL": 3.0, "dTP": 200, "dSL": -400, "tag": "max_trades_2"},
+        {"zE": 2.5, "zTP": 0.0, "zSL": 4.0, "dTP": 250, "dSL": -300, "tag": "max_trades_3"},
 
-        # zSL qui trigger souvent
-        {"zE": 3.0, "zTP": 0.0, "zSL": 3.5, "dTP": 0, "dSL": 0, "tag": "tight_zsl"},
+        # === WIDE DOLLAR (peu d'exits dollar, la plupart zscore/EOD) ===
+        {"zE": 3.0, "zTP": 0.5, "zSL": 99, "dTP": 600, "dSL": -1000, "tag": "wide_d1"},
+        {"zE": 3.5, "zTP": 0.0, "zSL": 99, "dTP": 500, "dSL": -800, "tag": "wide_d2"},
 
-        # Dollar SL large
-        {"zE": 3.0, "zTP": 0.5, "zSL": 99, "dTP": 500, "dSL": -1000, "tag": "wide_dollar"},
-
-        # Config proche de C6
-        {"zE": 3.25, "zTP": 0.0, "zSL": 99, "dTP": 250, "dSL": 0, "tag": "c6_like"},
+        # === C6-LIKE CONFIGS ===
+        {"zE": 3.25, "zTP": 0.0, "zSL": 99, "dTP": 250, "dSL": 0, "tag": "c6_exact"},
+        {"zE": 3.25, "zTP": 0.0, "zSL": 99, "dTP": 300, "dSL": 0, "tag": "c6_dtp300"},
+        {"zE": 3.25, "zTP": 0.25, "zSL": 99, "dTP": 250, "dSL": -500, "tag": "c6_plus_dsl"},
+        {"zE": 3.5, "zTP": 0.0, "zSL": 99, "dTP": 250, "dSL": 0, "tag": "c6_ze35"},
     ]
 
-    # Combiner groupes x exits
+    # Combiner groupes x exits = 6 x 50 = 300 configs
     for ig in indicator_groups:
         for ec in exit_combos:
             configs.append({**ig, **ec})
@@ -339,9 +381,8 @@ def main():
     failed = 0
     skipped = 0
     failures = []
-
-    # Cache des indicateurs par groupe
-    ind_cache = {}
+    total_trades = 0
+    max_trades_config = ("", 0)
 
     for idx, tc in enumerate(test_configs):
         tag = tc.get("tag", "unknown")
@@ -359,6 +400,11 @@ def main():
 
             # Comparer
             ok, msg = compare_trades(ref_trades, fast_trades, tag)
+            n_ref = len(ref_trades)
+            total_trades += n_ref
+
+            if n_ref > max_trades_config[1]:
+                max_trades_config = (f"{tag} ig={ig_key}", n_ref)
 
             if ok:
                 passed += 1
@@ -368,11 +414,10 @@ def main():
                 status = "FAIL"
                 failures.append((tag, ig_key, msg))
 
-            # Afficher progression
-            if (idx + 1) % 10 == 0 or not ok:
-                n_ref = len(ref_trades)
+            # Afficher : toujours les FAIL, sinon tous les 25
+            if not ok or (idx + 1) % 25 == 0:
                 print(f"  [{idx+1:>3}/{len(test_configs)}] {status} {tag:<30s} "
-                      f"ref={n_ref:>3} trades | {msg[:50]}")
+                      f"ref={n_ref:>4} trades | {msg[:50]}")
 
         except Exception as ex:
             skipped += 1
@@ -382,6 +427,8 @@ def main():
     elapsed = time.time() - t0
     print("\n" + "=" * 70)
     print(f"RESULTATS : {passed} PASS / {failed} FAIL / {skipped} SKIP")
+    print(f"Total trades valides : {total_trades:,}")
+    print(f"Config max trades : {max_trades_config[0]} ({max_trades_config[1]} trades)")
     print(f"Temps total : {elapsed:.1f}s")
 
     if failures:

@@ -106,6 +106,7 @@ def run_from_yaml(config_path: str):
         fixed_overrides=cfg.get("fixed_overrides", {}),
         timeframe=exec_cfg.get("timeframe", "1min"),
         title=cfg.get("title", "GRID SEARCH"),
+        exit_mode=exit_mode,
     )
 
     runner.run(
