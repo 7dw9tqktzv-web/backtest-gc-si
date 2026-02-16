@@ -124,6 +124,8 @@ def _resolve_option_chain(ib: IB, symbol: str, exchange: str, opt_exchange: str,
 
     dte = (datetime.strptime(expiry, "%Y%m%d").date() - datetime.now().date()).days
     strikes = sorted(chain.strikes)
+    if not strikes:
+        return {"error": f"Aucun strike disponible pour {symbol}", "expiry": expiry}
     atm_strike = min(strikes, key=lambda s: abs(s - fut_price))
 
     return {
@@ -155,7 +157,11 @@ def _get_atm_iv(ib: IB, symbol: str, exchange: str, opt_exchange: str,
     qualified = ib.qualifyContracts(call, put)
 
     tickers = ib.reqTickers(*qualified)
+    if not tickers:
+        return {"error": f"reqTickers vide pour {symbol}", "expiry": expiry}
     for _ in range(5):
+        if not ib.isConnected():
+            break
         ib.sleep(1)
         if all(t.modelGreeks for t in tickers):
             break
@@ -217,7 +223,11 @@ def _get_risk_reversal(ib: IB, symbol: str, exchange: str, opt_exchange: str,
 
     # Recuperer les Greeks en batch avec polling
     tickers = ib.reqTickers(*qualified)
+    if not tickers:
+        return {"error": f"reqTickers vide pour {symbol}", "strikes_analyzed": len(nearby_strikes)}
     for _ in range(5):
+        if not ib.isConnected():
+            break
         ib.sleep(1)
         if all(t.modelGreeks for t in tickers):
             break
@@ -313,10 +323,11 @@ def get_risk_reversal(target_dte: int = 30) -> dict:
             d.get("market_open", False) for d in [gc_rr, si_rr] if "error" not in d
         )
 
+        server_time = str(ib.reqCurrentTime()) if ib.isConnected() else "N/A"
         return {
             "status": "ok",
             "market_open": has_data,
-            "server_time": str(ib.reqCurrentTime()),
+            "server_time": server_time,
             "GC": gc_rr,
             "SI": si_rr,
         }
@@ -349,10 +360,11 @@ def get_iv_snapshot(target_dte: int = 30) -> dict:
             for r in ["call", "put"]
         )
 
+        server_time = str(ib.reqCurrentTime()) if ib.isConnected() else "N/A"
         return {
             "status": "ok",
             "market_open": has_iv,
-            "server_time": str(ib.reqCurrentTime()),
+            "server_time": server_time,
             "GC": gc_iv,
             "SI": si_iv,
         }
@@ -433,7 +445,8 @@ def backfill_iv_history(duration: str = "2 Y") -> dict:
                 "path": str(path),
             }
 
-        return {"status": "ok", "server_time": str(ib.reqCurrentTime()), **results}
+        server_time = str(ib.reqCurrentTime()) if ib.isConnected() else "N/A"
+        return {"status": "ok", "server_time": server_time, **results}
     except Exception as e:
         return {"status": "error", "message": str(e) or repr(e), "error_type": type(e).__name__}
     finally:

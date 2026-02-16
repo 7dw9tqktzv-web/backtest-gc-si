@@ -293,8 +293,24 @@ def _calc_size(gc_price, si_price, beta, cfg):
     if mode == 2:  # dollar_neutral_beta
         not_gc = gc_price * cfg[CFG_GC_PV]
         not_si = si_price * cfg[CFG_SI_PV]
-        raw = (not_si / not_gc) * beta * si_c
-        gc_c = int(round(raw))
+        gc_raw_1x = (not_si / not_gc) * beta * si_c
+
+        # Multiplicateur optimal micro : teste 1x..Nx, garde le meilleur arrondi
+        if micro_max > 1:
+            best_mult = 1
+            best_err = abs(round(gc_raw_1x) - gc_raw_1x) / max(gc_raw_1x, 1.0)
+            for mult in range(2, micro_max + 1):
+                gc_raw_m = gc_raw_1x * mult
+                err = abs(round(gc_raw_m) - gc_raw_m) / max(gc_raw_m, 1.0)
+                # 2x gagne seulement si ameliore significativement (>1% mieux)
+                if err < best_err - 0.01:
+                    best_err = err
+                    best_mult = mult
+            si_c = si_c * best_mult
+            gc_c = int(round(gc_raw_1x * best_mult))
+        else:
+            gc_c = int(round(gc_raw_1x))
+
         if gc_c < 1:
             gc_c = 1
         if gc_max > 0 and gc_c > gc_max:
@@ -308,12 +324,6 @@ def _calc_size(gc_price, si_price, beta, cfg):
             gc_c = 1
     else:  # fixed
         gc_c = si_c
-
-    if micro_max > 0:
-        if gc_c > micro_max:
-            gc_c = micro_max
-        if si_c > micro_max:
-            si_c = micro_max
 
     return gc_c, si_c
 

@@ -347,7 +347,7 @@ def run_hybrid_backtest(
                 h, m = hours_1min[i], minutes_1min[i]
                 if h > session_end_hour or (h == session_end_hour and m >= session_end_min):
                     should_exit = True
-                    reason = 'END_SESSION'
+                    reason = 'FLAT_EOD'
 
             # Filtre optionnel : bloquer TP_ZSCORE si PnL NET < seuil
             # Config: exit.zscore_tp_min_pnl (defaut: None = desactive)
