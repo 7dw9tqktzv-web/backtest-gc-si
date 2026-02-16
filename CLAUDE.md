@@ -4,21 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v1.5).
+Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v2.0).
 
 **Current status**: Phase D — Fast grid engine merge. Grid search R1 corrige pret a lancer (~20M configs, ~4h). Paper trading SC en cours (C6).
 **Config production standard**: `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0_zSL4.0` (5-min, standard). NON REVALIDEE.
 **Config production micro**: A DETERMINER — grid search R1 corrige avec sizing smart + FLAT_EOD + session 18:00-14:55 CT + slippage 2 ticks.
 **210 tests passing**. See `CHANGELOG.md` for detailed history.
 
-## Config Micro : EN ATTENTE RE-OPTIMISATION
-
-L'ancienne config C6 (`b3960_zp33_cp27_adf144_zE3.25_co45_zTP0.0_dTP250`) a ete invalidee le 2026-02-16 :
-double bug sizing (GC cape a 2) + FLAT_EOD inactif dans tous les grid searches.
-Vrais chiffres C6 avec fixes : 290 trades, $7,959 PnL, PF 1.64, DD -$2,086.
-Grid search R1 a relancer avec moteur corrige. Voir CHANGELOG.md pour details.
-
-SC paper trading tourne avec C6 en l'etat (plugin C++ correct). Les trades paper restent valides pour comparaison.
+SC paper trading tourne avec C6 en l'etat (plugin C++ correct, sera remplacee post-R1).
 
 ### Output Structure
 - Grid searches : `output/grid_searches/r1|r2a|r2b|r2c/`
@@ -217,11 +210,9 @@ Claude Code peut PROPOSER mais ne doit JAMAIS APPLIQUER sans validation explicit
 
 ## Research Conclusions
 
-- **Config production standard**: `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0` (5-min pure Z-Score, no filter). NON REVALIDEE avec sizing corrige.
-- **Config production micro** : A DETERMINER — ancienne C6 invalidee (grid searches avec sizing cap=2 + FLAT_EOD OFF)
+- **Configs production** : voir status en haut du fichier. Details dans `CHANGELOG.md`.
 - **5-min pure Z-Score = dominant mode**, 1min dollar = dead end, regime filters = dead end (none survives OOS)
 - **Known risk**: regime-dependent (2023-2024 losing/flat, 2025-2026 profitable)
-- **Bugs critiques corriges 2026-02-16** : sizing Numba + flat_end_of_session path. Voir CHANGELOG.md.
 - See `CHANGELOG.md` for detailed tables and phase-by-phase results
 
 ## Sierra Chart Integration
