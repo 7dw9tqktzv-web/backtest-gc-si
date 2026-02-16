@@ -42,3 +42,5 @@ fixed_overrides:
   exit.zscore_tp_enabled: true
   costs.slippage_gc_ticks: 2
   costs.slippage_si_ticks: 2
+  session.session_end_time: "14:55"
+  session.entry_start_hour: 18
