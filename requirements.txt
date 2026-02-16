@@ -33,6 +33,10 @@ statsmodels>=0.14.0
 # Acceleration JIT (backtest engine Numba)
 numba>=0.60.0
 
+# MCP Server (IBKR volatility tools)
+fastmcp>=2.14.0
+ib_insync>=0.9.86
+
 # Tests
 pytest>=7.0.0
 pytest-cov>=4.0.0
