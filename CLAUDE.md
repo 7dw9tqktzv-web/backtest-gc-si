@@ -6,19 +6,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v1.5).
 
-**Current status**: Phase D — SC micro deploye, en attente paper trading live.
-**Config production standard**: `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0_zSL4.0` (5-min, standard).
-**Config production micro**: `b3960_zp33_cp27_adf144_zE3.25_co45_zTP0.0_dTP250` (5-min, MGC/SIL).
-**223 tests passing**. See `CHANGELOG.md` for detailed history.
+**Current status**: Phase D — Bugs critiques corriges (sizing + FLAT_EOD). Grid search R1 a relancer. Paper trading en cours sur SC (config C6 en l'etat).
+**Config production standard**: `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0_zSL4.0` (5-min, standard). NON REVALIDEE.
+**Config production micro**: A DETERMINER — grid search R1 a relancer avec sizing + FLAT_EOD corriges.
+**210 tests passing**. See `CHANGELOG.md` for detailed history.
 
-## Config Micro Retenue : C6
+## Config Micro : EN ATTENTE RE-OPTIMISATION
 
-**Config** : `b3960_zp33_cp27_adf144_zE3.25_co45_zTP0.0_dTP250`
-- beta_lookback=3960, zscore_period=33, correlation_period=27, adf_hurst_period=144
-- zscore_long=-3.25, zscore_short=3.25, cointegration_score_min=45, pnl_take_profit=250
-- contracts.mode=micro, fixed x2 SIL, flat_end_of_session=True
-- **Resultats** : 258 trades, $11,803 PnL, PF 2.33, DD -$965, Sharpe 0.26, Calmar 12.23
-- See `CHANGELOG.md` for WF/MC validation details and backup config C9
+L'ancienne config C6 (`b3960_zp33_cp27_adf144_zE3.25_co45_zTP0.0_dTP250`) a ete invalidee le 2026-02-16 :
+double bug sizing (GC cape a 2) + FLAT_EOD inactif dans tous les grid searches.
+Vrais chiffres C6 avec fixes : 290 trades, $7,959 PnL, PF 1.64, DD -$2,086.
+Grid search R1 a relancer avec moteur corrige. Voir CHANGELOG.md pour details.
+
+SC paper trading tourne avec C6 en l'etat (plugin C++ correct). Les trades paper restent valides pour comparaison.
 
 ### Output Structure
 - Grid searches : `output/grid_searches/r1|r2a|r2b|r2c/`
@@ -76,7 +76,7 @@ Architecture "Config Vector" : tous les parametres sont dans un numpy array `cfg
 Pour ajouter un nouveau parametre : ajouter `CFG_xxx` + extraction dans `pack_config()` + utiliser `cfg[CFG_xxx]` dans le kernel + incrementer `CFG_SIZE`.
 
 **Logique** : Indicators on 1-min/5-min bars. 5s bars scanned only for dollar exit detection (SL/TP) when in position. Exit priority : SL_DOLLAR > TP_DOLLAR > SL_ZSCORE > TP_ZSCORE > MAX_HOLD > FLAT_EOD.
-Exit reasons supportes : TP_ZSCORE, SL_ZSCORE, TP_DOLLAR, SL_DOLLAR, STILL_OPEN, FLAT_EOD, MAX_HOLD, END_SESSION.
+Exit reasons supportes : TP_ZSCORE, SL_ZSCORE, TP_DOLLAR, SL_DOLLAR, STILL_OPEN, FLAT_EOD, MAX_HOLD.
 
 **Regles** :
 - Tout nouveau script dans `scripts/` importe depuis `backtest_engine_numba`. JAMAIS depuis hybrid.
@@ -97,7 +97,7 @@ Configurable via `contracts.mode` dans `strategy_params.yaml` :
 | Tick Value | $10 | $1 | $25 | $5 |
 | Ratio vs standard | 1x | 1/10 | 1x | 1/5 |
 
-Mode par defaut : `standard`. Basculer a `micro` pour sizing 0.5x (recommandation C4bis).
+Mode par defaut : `standard`. Mode `micro` : smart multiplier (teste 1x..Nx SIL, garde meilleur arrondi dollar-neutral). GC libre (1-20 contrats typiques).
 Commission: standard $4.00 RT, micro $1.88 RT. Slippage: 1 tick per leg (default in YAML, 2 ticks in grid searches).
 
 ## Position Sizing (position.py)
@@ -111,8 +111,8 @@ GC_contracts = round( (NotionalSI / NotionalGC) * Beta ) , minimum 1
 Beta varies from ~0.03 to ~6.3 on traded bars -> GC contracts range from 1 to 6.
 
 ### Micro Multiplier (micro mode)
-Tests x1 et x2 SIL : si le sizing arrondi donne deja un nombre entier de MGC, x1 suffit (evite les commissions inutiles). Sinon x2 ameliore le ratio dollar-neutral. Config C6 : fixed x2 SIL.
-`FlatEndOfSession`: force exit at 15:25 CT. `MaxHoldingBars`: force exit after N 1-min bars.
+Smart multiplier : teste 1x..micro_multiplier_max SIL, garde le meilleur arrondi (erreur relative <1% d'amelioration pour monter en multiplicateur). GC dynamique (1-20+ contrats selon beta et prix).
+`FlatEndOfSession`: force exit at 15:25 CT (OBLIGATOIRE pour prop firm intraday). `MaxHoldingBars`: force exit after N 1-min bars.
 
 ## DataFrame Columns
 
@@ -173,6 +173,10 @@ Claude Code peut PROPOSER mais ne doit JAMAIS APPLIQUER sans validation explicit
 - **stdout buffering**: use `PYTHONUNBUFFERED=1` or redirect to log file
 - **grid_temp/ grows to 11+ GB**: Delete after grid search to free space
 
+### pack_config() Numba
+- **Toujours verifier la source des parametres** : `ext` = exit, `ses` = session, `siz` = sizing. Le bug flat_end_of_session venait d'une lecture depuis `ext` au lieu de `ses`.
+- **flat_end_of_session est OBLIGATOIRE** pour le prop firm (intraday). Ne jamais le desactiver.
+
 ### Git
 - **Never git add -A**: Risk of committing .env or credentials - add files by name
 
@@ -185,10 +189,11 @@ Claude Code peut PROPOSER mais ne doit JAMAIS APPLIQUER sans validation explicit
 
 ## Research Conclusions
 
-- **Config production standard**: `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0` (5-min pure Z-Score, no filter)
-- **Config production micro** : `b3960_zp33_cp27_adf144_zE3.25_co45_zTP0.0_dTP250` (C6, validated WF+MC)
+- **Config production standard**: `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0` (5-min pure Z-Score, no filter). NON REVALIDEE avec sizing corrige.
+- **Config production micro** : A DETERMINER — ancienne C6 invalidee (grid searches avec sizing cap=2 + FLAT_EOD OFF)
 - **5-min pure Z-Score = dominant mode**, 1min dollar = dead end, regime filters = dead end (none survives OOS)
 - **Known risk**: regime-dependent (2023-2024 losing/flat, 2025-2026 profitable)
+- **Bugs critiques corriges 2026-02-16** : sizing Numba + flat_end_of_session path. Voir CHANGELOG.md.
 - See `CHANGELOG.md` for detailed tables and phase-by-phase results
 
 ## Sierra Chart Integration
@@ -206,13 +211,15 @@ v2.0 = automated spread trading (100% unmanaged orders). Python and SC produce i
 
 ## Roadmap (TODO)
 
-### Phase D -- Sierra Chart Deployment (IN PROGRESS)
-- [x] Grid search micro R1->R2a->R2b->R2c (config C6 retenue)
-- [x] Walk-Forward validation (4/5 fenetres profitables)
-- [x] Monte Carlo bootstrap (i.i.d. + block k=5, GO)
-- [x] Deploy C6 config in Sierra Chart v2.0 (MGC/SIL) — compiled, text box compacted, 1-month replay validated
-- [ ] Paper trading 4-8 weeks (min 30 trades, compare vs Python backtest) — NEXT
-- [ ] Production go-live (if paper trading validates)
+### Phase D -- Re-optimisation + Paper Trading (IN PROGRESS)
+- [x] Grid search micro R1->R2c (INVALIDE — sizing cap=2 + FLAT_EOD OFF)
+- [x] Deploy C6 in Sierra Chart v2.0 micro — plugin C++ correct, paper trading actif
+- [x] Code review + fix sizing smart multiplier + fix flat_end_of_session path
+- [ ] **Grid search R1 micro CORRIGE** (sizing smart + FLAT_EOD=True + slippage 2 ticks) — NEXT
+- [ ] Grid search R2 affinages sur top configs R1
+- [ ] Walk-Forward + Monte Carlo sur config retenue
+- [ ] Paper trading 4-8 weeks (min 30 trades) avec config validee
+- [ ] Production go-live
 
 ### Phase E -- MCP IBKR Volatility / Regime Dashboard (IN PROGRESS)
 Branche: `feature/mcp-ibkr-volatility`. Serveur: `mcp_servers/ibkr_volatility/server.py`.
@@ -249,7 +256,7 @@ Skill: `.claude/skills/ibkr-volatility/SKILL.md`. Data: `data/vol_metrics/`.
 
 ## Testing
 
-223 tests, all passing. Synthetic data (fixtures in `conftest.py`), no dependency on real CSV files.
+210 tests, all passing. Synthetic data (fixtures in `conftest.py`), no dependency on real CSV files.
 
 ## Mandatory Pre-Read Rules
 

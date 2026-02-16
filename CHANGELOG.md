@@ -5,6 +5,57 @@ Historique des optimisations, resultats detailles et ameliorations du backtest G
 ---
 
 
+## [2026-02-16] CRITICAL — Double bug sizing + FLAT_EOD invalide tous les grid searches
+
+### Code Review complete (src/ + MCP + tests)
+Review exhaustive declenchee apres premier trade paper trading. 6 bugs src/, 6 bugs MCP, 4 modules sans tests (2,400 lignes).
+
+### Bug #1 — Micro sizing Numba (CRITIQUE)
+- **Fichier** : `backtest_engine_numba.py:_calc_size()`
+- **Probleme** : `micro_mult_max` utilise comme cap sur GC+SI au lieu de multiplicateur SIL
+- **Impact** : GC cape a 2 contrats au lieu de 10-13. Dollar neutral completement casse.
+- **Fix** : Logique smart multiplier identique a `position.py` — teste 1x..Nx SIL, garde meilleur arrondi
+- **Avant/Apres (sans FLAT_EOD)** : $11,803 / PF 2.33 / DD -$965 → $14,757 / PF 2.32 / DD -$1,794
+
+### Bug #2 — flat_end_of_session jamais actif dans Numba (CRITIQUE)
+- **Fichier** : `backtest_engine_numba.py:pack_config()` ligne 186
+- **Probleme** : `ext.get('flat_end_of_session')` lit `config['exit']`, mais le parametre est dans `config['session']`
+- **Impact** : FLAT_EOD = OFF dans TOUS les grid searches R1-R2c, meme avec override `session.flat_end_of_session: True`
+- **Fix** : `ses.get('flat_end_of_session')` (lit depuis `config['session']`)
+
+### Bug #3 — pack_config ne resolvait pas les contract specs micro/standard
+- **Fix** : auto-resolution `contracts.gc_point_value` etc. depuis `contracts.mode`
+
+### Impact combine (sizing + FLAT_EOD)
+
+| Metrique | Ancien (2 bugs) | Sizing fixe seul | Sizing + FLAT_EOD |
+|----------|-----------------|-------------------|-------------------|
+| Trades   | 258             | 262               | 290               |
+| PnL Net  | $11,803         | $14,757           | $7,959            |
+| PF       | 2.33            | 2.32              | 1.64              |
+| Max DD   | -$965           | -$1,794           | -$2,086           |
+| Costs    | ~$5K            | $7,873            | ~$8.5K            |
+
+### Corrections MCP server (5 fixes)
+- `all([])` → check `len(tickers) > 0` avant continue
+- `ib.isConnected()` check dans boucles polling
+- `ib.reqCurrentTime()` protege par `isConnected()` dans 3 tools
+- `min(strikes)` → check liste vide
+- Hybrid : `END_SESSION` → `FLAT_EOD` (parite Numba)
+
+### Consequences
+- **Grid searches R1-R2c : INVALIDES** — tous tournes avec sizing cap=2 et FLAT_EOD=OFF
+- **Config C6 : NON VALIDEE** — selectionnee sur metriques fausses
+- **SC live : CORRECT** — le plugin C++ fait le bon calcul (sizing libre + FLAT_EOD ON)
+- **Action** : relancer grid search R1 complet avec moteur corrige
+
+### Premier trade paper trading (avant decouverte bugs)
+- 2026-02-16 00:57 CT : ENTRY SHORT 10 MGC @ 5018.30 / 2 SIL @ 76.86, Z=3.26
+- 2026-02-16 01:01 CT : EXIT TP_DOLLAR $257 net ($280 gross - $23 comm), 1 barre
+- Sizing SC coherent avec moteur Numba corrige (10 MGC / 2 SIL)
+
+---
+
 ## [2026-02-16] Fix -- Entry Hour Wrap-around + Optimizer 5min Resample + Cleanup
 
 ### Bugs corriges (commit ddaf96a)
