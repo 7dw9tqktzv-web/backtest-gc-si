@@ -193,6 +193,11 @@ Claude Code peut PROPOSER mais ne doit JAMAIS APPLIQUER sans validation explicit
 - **Benchmark fast engine** : `python scripts/benchmark_fast_engine.py` (13.4x sur 1,792 variants/groupe)
 - **stdout buffering**: use `PYTHONUNBUFFERED=1` or redirect to log file
 - **Session prop firm** : entry_start=18:00 CT, entry_end=14:00 CT, FLAT_EOD=14:55 CT. Ces valeurs sont dans le YAML R1, pas hardcodees dans le moteur.
+- **Lancer hors Claude Code** pour eviter crash si VS Code/Claude ferme :
+  ```powershell
+  Start-Process -NoNewWindow -FilePath ".venv\Scripts\python.exe" -ArgumentList "-u scripts/run_grid_search.py --config <yaml>" -RedirectStandardOutput "output/grid.log" -RedirectStandardError "output/grid_err.log"
+  ```
+  Toujours utiliser `python -u` (unbuffered) sinon stdout PowerShell ne montre rien.
 
 ### pack_config() Numba
 - **Toujours verifier la source des parametres** : `ext` = exit, `ses` = session, `siz` = sizing. Le bug flat_end_of_session venait d'une lecture depuis `ext` au lieu de `ses`.
@@ -206,6 +211,7 @@ Claude Code peut PROPOSER mais ne doit JAMAIS APPLIQUER sans validation explicit
 - **Source**: Sierra Chart CSV exports (GCJ26 Gold futures, SIH26 Silver futures)
 - **Period**: 2023-01-26 to 2026-01-30 (~3 years, 760+ trading days)
 - **1-min bars**: 801,499 synchronized | **5s bars**: 4,604,839 synchronized
+- **5s raw files** : `data/raw/GCJ26_FUT_CME_5secondes.scid_BarData.txt` + `SIH26_FUT_CME_5secondes.scid_BarData.txt` (chemins dans `config/strategy_params.yaml`)
 - **Parquet cache**: `data/processed/` (auto-invalidated by MD5 hash). Indicators are NOT cached.
 
 ## Research Conclusions
@@ -264,7 +270,9 @@ Skill: `.claude/skills/ibkr-volatility/SKILL.md`. Data: `data/vol_metrics/`.
 - [ ] TP dynamique en fonction de la volatilite
 
 ## Known Code Issues
-`run_hybrid_backtest()` dans backtest_engine_hybrid.py = 350+ lines (reference only, le kernel Numba est deja decompose en helpers inlines).
+- `run_hybrid_backtest()` dans backtest_engine_hybrid.py = 350+ lines (reference only, le kernel Numba est deja decompose en helpers inlines).
+- **Bug end_session reference worker** : `_process_indicator_group` dans `grid_search_runner.py` compare a `'END_SESSION'` au lieu de `'FLAT_EOD'`. Le compteur `end_session` est toujours 0 dans les CSV du moteur standard. Pas bloquant (le fast worker est correct).
+- **Calmar calcule en double** : le fast worker met `calmar` dans le dict `m`, puis `_micro_full_result_builder` le recalcule depuis `m["pnl_net"] / abs(m["max_dd"])`. Meme resultat, travail redondant. Ne pas diverger les deux calculs.
 
 ## Claude Code Skills
 - **/backtest-runner** : Lance backtest hybrid + metrics, compare avec run precedent
