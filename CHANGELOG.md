@@ -5,6 +5,76 @@ Historique des optimisations, resultats detailles et ameliorations du backtest G
 ---
 
 
+## [2026-02-16] Fix -- Entry Hour Wrap-around + Optimizer 5min Resample + Cleanup
+
+### Bugs corriges (commit ddaf96a)
+- **Entry hour wrap-around** : `entry_start_h > entry_end_h` (ex: 21h-6h overnight) retournait toujours False. Ajoute gestion overnight dans les 2 moteurs.
+- **Optimizer 5-min resample** : `optimizer.py` calculait sur 1-min quand `period: "5min"` (Z-Score lookback 5x trop court). Fix : appel `resample_to_5min()` dans run_single_config().
+- **Session times mismatch** : grid_search_runner ecrit `session.flat_end_of_session` mais pack_config lit `exit.flat_end_of_session` (non corrige, impact mineur).
+
+### Cleanup tests orphelins
+- Supprime `tests/test_phase_c1.py` et `tests/test_phase_c2.py` (importaient des modules supprimes : phase_c1_walkforward, phase_c2_multifilter_exploration)
+- Tests : 210 passed (vs 223 avant, 13 tests retires)
+
+---
+
+## [2026-02-15] Phase E -- MCP IBKR Volatility Server (IN PROGRESS)
+
+**Branche** : `feature/mcp-ibkr-volatility` | **Serveur** : `mcp_servers/ibkr_volatility/server.py`
+
+### Architecture
+- **Framework** : FastMCP + ib_insync, port TWS 7497, clientId 50
+- **Data** : `data/vol_metrics/*.parquet`
+- **Fix** : nest_asyncio.apply() obligatoire (conflit event loop FastMCP/ib_insync)
+
+### Outils implementes
+1. **ping** -- test connectivite MCP
+2. **connect_tws** -- connexion TWS, retourne compte + heure serveur
+3. **get_iv_snapshot** -- IV ATM pour GC (OG) et SI (SO) via modelGreeks
+4. **backfill_iv_history** -- V30/HV30 2Y daily via ContFuture + Parquet (filtre outliers 5%-100%)
+5. **get_regime_dashboard** -- ratio IV, percentiles, VRP z-scores, signaux couleur
+6. **get_risk_reversal** -- RR25/RR10 via delta matching (code pret, a tester marche ouvert)
+
+### Prochaines etapes
+- [ ] Valider get_iv_snapshot + get_risk_reversal marche ouvert
+- [ ] Signaux skew divergent (RR25 GC vs SI de signe oppose)
+- [ ] Collecte daily automatique -> daily_snapshots.parquet
+- [ ] Merge dans master une fois stabilise
+
+---
+
+## [2026-02-11] Phase D -- Sierra Chart Micro Deployment + Replay Validation
+
+### Deploiement SC v2.0 micro
+- **Instance** : `F:\SierreChart_Backtest_GC_SI_micro\`
+- **Study** : `GC_SI_SpreadMeanReversion_v2.0_micro.cpp` (SCDLLName="GC_SI_SpreadMeanReversion_Micro")
+- **Config** : C6 b3960_zp33_cp27_adf144_zE3.25_co45_zTP0.0_dTP250, fixed x2 SIL
+- **Compilation** : via SC `Analysis > Build Custom Studies DLL`
+- **Paper trading** : Input 16 = Yes + `Trade > Auto Trading Enabled` (Sim1 mode)
+
+### Bug fix : Full Recalc reset (commit 4cf1223)
+- **Symptome** : Position oubliee apres reconnexion data, aucune sortie generee
+- **Cause** : `TradeState = STATE_FLAT` dans `if (sc.Index == 0 || sc.IsFullRecalculation)` -- AutoLoop reprocesse depuis index 0 sur full recalc, resetant l'etat trading
+- **Fix** : PersistentInt(9) `TradingInitialized` flag, init trading seulement si flag==0
+- **Regle** : NE JAMAIS reset l'etat trading sur IsFullRecalculation dans un study AutoLoop
+
+### Bug fix : Indicateurs 5-min + Hurst sub-periods (commit 4cf1223)
+- **Bug 1** : `backtest_engine_hybrid.py` main ignorait `indicators.period: "5min"` -- calculait sur 1-min (20-min lookback au lieu de 100-min). Grid searches corrects (utilisaient resample_to_5min).
+- **Bug 2** : Hurst exigeait 3 sub-periods minimum, mais adf_hurst_period=26 n'en a que 2 (8, 16). SC accepte 2 -- Python retournait NaN -- Coint Score gonfle de +20pts.
+
+### Replay validation (1 mois Jan 2026)
+- **5/5 trades** : entree + sortie identiques SC vs Python
+- **158,241 barres** comparees : Z-Score median delta 0.005 (<0.1%), 85% concordance signaux entree
+- **Limitation cross-symbol** : SC remplit les ordres cross-symbol au prix live, pas au prix replay (SC Support Board #22882). PnL unreliable en replay pour cross-symbol.
+
+### Trades 17:30 CT = artefacts de gap
+- 18/258 trades C6 entrent a 17:30 (premiere barre) -- 16/18 sont des artefacts
+- Z-Score perd ~55% de valeur absolue en 30 min (gap donnees 15:30->17:30)
+- Impact PnL : ~$1,810 / $11,803 (15%) -- PnL reel sans artefacts ~$9,993
+- Pas de fix code : signal visuel ignorable en live
+
+---
+
 ## [2026-02-14] CONFIG MICRO RETENUE -- GO Paper Trading
 
 ### Config retenue : C6
