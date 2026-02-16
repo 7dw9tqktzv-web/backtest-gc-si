@@ -39,17 +39,10 @@ See `scripts/` for all available scripts (grid search, walk-forward, paper tradi
 See `docs/ARCHITECTURE.md` for full data pipeline diagram and module descriptions.
 
 ### Key Entry Points
-- `load_and_prepare_data()` in `data_loader.py` - returns `(df, config, stats)` for 1-min data
-- `resample_to_5min(df)` in `data_loader.py` - resamples 1-min to 5-min with Parquet cache
-- `load_5s_data(config)` in `data_loader.py` - returns df_5s synchronized
-- `calculate_all_indicators(df, config)` in `indicators.py` - returns df with all indicators
-- `calculate_position_size(gc_price, si_price, beta, config)` in `position.py` - returns sizing dict
-- `calculate_trade_pnl(direction, entry_gc, entry_si, exit_gc, exit_si, gc_contracts, si_contracts, config)` in `position.py` - returns PnL dict
-- `run_hybrid_backtest(df_1min, df_5s, config)` in `backtest_engine_numba.py` - returns trades DataFrame
-- `run_metrics()` in `metrics.py` - analyzes backtest results, generates report + equity curve, archives everything
-- `run_optimization(configs_list)` in `optimizer.py` - loads data once, runs N backtests, returns comparison table
-- `apply_overrides(config, overrides)` in `optimizer.py` - applies dotted-key overrides to config dict
-- `archive_manager.py` - CLI with actions: `archive-campaign`, `compare`, `report`, `dashboard`, `list`, `archive-top`, `generate-rankings`
+- `run_hybrid_backtest(df_1min, df_5s, config)` in `backtest_engine_numba.py` — backtest unitaire
+- `scripts/run_grid_search.py --config <yaml>` — grid search massif (auto-detect fast engine)
+- `calculate_all_indicators(df, config)` in `indicators.py` — indicateurs sur df 1-min ou 5-min
+- `pack_config(config)` in `backtest_engine_numba.py` — convertit dict config en numpy array cfg[]
 
 ### Configuration
 All parameters are in `config/strategy_params.yaml`. Never hardcode values.
@@ -119,19 +112,10 @@ Configurable via `contracts.mode` dans `strategy_params.yaml` :
 Mode par defaut : `standard`. Mode `micro` : smart multiplier (teste 1x..Nx SIL, garde meilleur arrondi dollar-neutral). GC libre (1-20 contrats typiques).
 Commission: standard $4.00 RT, micro $1.88 RT. Slippage: 1 tick per leg (default in YAML, 2 ticks in grid searches).
 
-## Position Sizing (position.py)
+## Position Sizing
 
-```
-NotionalGC = GC_price * $100
-NotionalSI = SI_price * $5000
-GC_contracts = round( (NotionalSI / NotionalGC) * Beta ) , minimum 1
-```
-
-Beta varies from ~0.03 to ~6.3 on traded bars -> GC contracts range from 1 to 6.
-
-### Micro Multiplier (micro mode)
-Smart multiplier : teste 1x..micro_multiplier_max SIL, garde le meilleur arrondi (erreur relative <1% d'amelioration pour monter en multiplicateur). GC dynamique (1-20+ contrats selon beta et prix).
-`FlatEndOfSession`: force exit at 15:25 CT (OBLIGATOIRE pour prop firm intraday). `MaxHoldingBars`: force exit after N 1-min bars.
+Voir `docs/STRATEGY.md` pour les formules de sizing (standard et micro smart multiplier).
+`FlatEndOfSession`: force exit at session_end_time CT (OBLIGATOIRE pour prop firm intraday). `MaxHoldingBars`: force exit after N bars.
 
 ## DataFrame Columns
 
