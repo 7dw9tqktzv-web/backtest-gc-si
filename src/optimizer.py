@@ -21,7 +21,7 @@ import pandas as pd
 from pathlib import Path
 from datetime import datetime
 
-from data_loader import load_and_prepare_data, load_5s_data
+from data_loader import load_and_prepare_data, load_5s_data, resample_to_5min
 from indicators import calculate_all_indicators
 from backtest_engine_numba import run_hybrid_backtest
 from backtest_engine_hybrid import export_backtest
@@ -443,8 +443,13 @@ def run_single_config(df_1min, df_5s, config, label="", verbose=True):
     if verbose:
         print(f"\n--- Config: {label} ---")
 
-    # 1. Calculer les indicateurs (fait un .copy() en interne)
-    df_ind = calculate_all_indicators(df_1min, config)
+    # 1. Resampler si period != 1min, puis calculer les indicateurs
+    period = config.get('indicators', {}).get('period', '1min')
+    if period == '5min':
+        df_base = resample_to_5min(df_1min)
+    else:
+        df_base = df_1min
+    df_ind = calculate_all_indicators(df_base, config)
 
     # 2. Lancer le backtest hybride
     trades_df = run_hybrid_backtest(df_ind, df_5s, config)

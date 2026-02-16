@@ -110,8 +110,8 @@ costs:
 # SESSION DE TRADING
 # ----------------------------------------------------------------------------
 session:
-  start_time: "18:00:00"    # Début de session (heure locale Chicago)
-  end_time: "17:00:00"      # Fin de session
+  start_time: "17:00:00"    # Ouverture Globex CME (Chicago Time)
+  end_time: "16:00:00"      # Fermeture Globex CME (break 16:00-17:00 CT)
   flat_end_of_session: false  # Force exit avant 15:25 CT (false = desactive)
   entry_start_hour: 0       # Pas d'entree avant cette heure CT (0 = desactive)
   entry_end_hour: 24        # Pas d'entree apres cette heure CT (24 = desactive)

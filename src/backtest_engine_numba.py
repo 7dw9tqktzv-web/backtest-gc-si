@@ -507,7 +507,11 @@ def _run_kernel(
                         state = _FLAT
 
                     bar_h = hours[i]
-                    if (entry_start_h <= bar_h < entry_end_h
+                    if entry_start_h <= entry_end_h:
+                        in_entry_window = entry_start_h <= bar_h < entry_end_h
+                    else:
+                        in_entry_window = bar_h >= entry_start_h or bar_h < entry_end_h
+                    if (in_entry_window
                         and (state == _FLAT or state == _CD_LONG or state == _CD_SHORT)):
                         if not _regime_blocked(i, rf_hl_on, rf_corr_on,
                                                 hl_ar1_values, corr_daily_values, cfg):
@@ -583,7 +587,11 @@ def _run_kernel(
         # ETAPE 3 : Entrees
         # ================================================================
         bar_h = hours[i]
-        if (entry_start_h <= bar_h < entry_end_h
+        if entry_start_h <= entry_end_h:
+            in_entry_window = entry_start_h <= bar_h < entry_end_h
+        else:
+            in_entry_window = bar_h >= entry_start_h or bar_h < entry_end_h
+        if (in_entry_window
             and (state == _FLAT or state == _CD_LONG or state == _CD_SHORT)):
 
             if _regime_blocked(i, rf_hl_on, rf_corr_on,

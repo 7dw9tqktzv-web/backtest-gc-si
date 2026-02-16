@@ -288,7 +288,10 @@ def run_hybrid_backtest(
 
                     # Reentree sur meme barre (filtre horaire applique aussi)
                     bar_hour_re = hours_1min[i]
-                    hour_ok_re = entry_start_hour <= bar_hour_re < entry_end_hour
+                    if entry_start_hour <= entry_end_hour:
+                        hour_ok_re = entry_start_hour <= bar_hour_re < entry_end_hour
+                    else:
+                        hour_ok_re = bar_hour_re >= entry_start_hour or bar_hour_re < entry_end_hour
 
                     if hour_ok_re and state in (STATE_FLAT, STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT):
                         # Regime filter check (C2b) - reentree aussi filtree
@@ -418,7 +421,10 @@ def run_hybrid_backtest(
         # ---- ETAPE 3 : Verifier les entrees ----
         # Filtre horaire : bloquer les nouvelles entrees hors plage autorisee
         bar_hour = hours_1min[i]
-        hour_ok = entry_start_hour <= bar_hour < entry_end_hour
+        if entry_start_hour <= entry_end_hour:
+            hour_ok = entry_start_hour <= bar_hour < entry_end_hour
+        else:
+            hour_ok = bar_hour >= entry_start_hour or bar_hour < entry_end_hour
 
         if hour_ok and state in (STATE_FLAT, STATE_COOLDOWN_LONG, STATE_COOLDOWN_SHORT):
             # Regime filter check (C2b) - bloquer les entrees en regime defavorable
