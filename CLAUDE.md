@@ -119,12 +119,7 @@ Voir `docs/STRATEGY.md` pour les formules de sizing (standard et micro smart mul
 
 ## DataFrame Columns
 
-After `calculate_all_indicators()`:
-- Prices: `Last_GC`, `Last_SI`, `Log_GC`, `Log_SI`
-- Regression: `Beta`, `Alpha`
-- Spread: `Spread`, `Spread_Mean`, `Spread_Std`, `ZScore`
-- Quality: `Correlation`, `ADF_Statistic`, `Hurst`, `HalfLife`, `Cointegration_Score`
-Signal generation happens inside `backtest_engine_numba.py` and is not stored as separate DataFrame columns.
+Voir `calculate_all_indicators()` dans `indicators.py` pour les colonnes ajoutees au DataFrame. Signal generation dans `backtest_engine_numba.py` (pas de colonnes signal separees).
 
 ## Hardware
 
