@@ -126,7 +126,10 @@ def _process_indicator_group(args):
         else:
             tp_zscore = tp_dollar = sl_zscore = sl_dollar = max_hold = end_session = 0
 
-        # Construire le resultat via le callback
+        # Skip configs sans trades
+        if m["trades"] == 0:
+            continue
+
         result = result_builder(label, ind_ov, ee, m, tp_zscore, tp_dollar, sl_zscore, sl_dollar, max_hold, end_session)
         batch_results.append(result)
 
@@ -382,6 +385,10 @@ def _process_indicator_group_fast(args):
                      "best": 0, "worst": 0, "profit_factor": 0,
                      "max_dd": 0, "sharpe": 0, "sortino": 0, "calmar": 0}
                 tp_zscore = tp_dollar = sl_zscore = sl_dollar = max_hold_cnt = end_session = 0
+
+            # Skip configs sans trades (reduit la taille du CSV)
+            if n_trades == 0:
+                continue
 
             result = result_builder(label, ind_ov, ee, m,
                                     tp_zscore, tp_dollar, sl_zscore, sl_dollar,
