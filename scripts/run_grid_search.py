@@ -89,6 +89,7 @@ def run_from_yaml(config_path: str):
             flat_end_of_session=ee["flat_end_of_session"],
             max_holding_bars=ee["max_holding_bars"],
             micro_multiplier_max=ee["micro_multiplier_max"],
+            entry_start_hour=ee.get("entry_start_hour"),
         )
         label_builder = create_micro_full_label_builder()
         result_builder = create_micro_full_result_builder()

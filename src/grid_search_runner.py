@@ -217,7 +217,7 @@ def _process_indicator_group_fast(args):
         label = label_builder(group_prefix, ee)
         if label in completed_labels:
             continue
-        key = (ee["zE"], ee["co"], ee["mm"])
+        key = (ee["zE"], ee["co"], ee["mm"], ee.get("es"))
         groups[key].append(ee)
 
     # Collecter toutes les valeurs uniques de seuils pour le build_paths_and_thresholds
@@ -258,8 +258,8 @@ def _process_indicator_group_fast(args):
 
     batch_results = []
 
-    for (zE, co, mm), group_variants in groups.items():
-        # Build config pour ce (zE, co, mm) — pour pack_config
+    for (zE, co, mm, es), group_variants in groups.items():
+        # Build config pour ce (zE, co, mm, es) — pour pack_config
         first_ee = group_variants[0]
         merged = {**ind_ov, **first_ee["overrides"], **fixed_overrides}
         config_test = apply_overrides_fast(base_config, merged)
@@ -999,11 +999,17 @@ def create_micro_full_entry_exit_generator(
     flat_end_of_session: List[bool],
     max_holding_bars: List[int],
     micro_multiplier_max: List[int],
+    entry_start_hour: Optional[List[int]] = None,
 ) -> Callable[[], List[Dict]]:
     """
     Generateur pour le mode micro_full : exploration complete de tous les
     parametres entry/exit/session/sizing pour le sizing micro prop firm.
+
+    entry_start_hour est un parametre build (change les entrees scannees).
+    Si None ou [unique valeur], il reste dans fixed_overrides (retro-compatible).
     """
+    es_values = entry_start_hour if entry_start_hour is not None else [None]
+
     def generator():
         variants = []
         for zE in zscore_entry:
@@ -1018,28 +1024,34 @@ def create_micro_full_entry_exit_generator(
                                 for feos in flat_end_of_session:
                                     for mhb in max_holding_bars:
                                         for mm in micro_multiplier_max:
-                                            ov = {
-                                                "entry.zscore_long": -abs(zE),
-                                                "entry.zscore_short": abs(zE),
-                                                "entry.cointegration_score_min": co,
-                                                "exit.zscore_tp_long": -zTP,
-                                                "exit.zscore_tp_short": zTP,
-                                                "exit.zscore_sl_long": -abs(zSL),
-                                                "exit.zscore_sl_short": abs(zSL),
-                                                "exit.pnl_take_profit": dTP if dTP > 0 else 99999,
-                                                "exit.pnl_stop_loss": dSL if dSL < 0 else -99999,
-                                                "exit.max_holding_bars": mhb,
-                                                "session.flat_end_of_session": feos,
-                                                "sizing.micro_multiplier_max": mm,
-                                            }
-                                            variants.append({
-                                                "overrides": ov,
-                                                "zE": zE, "co": co,
-                                                "zTP": zTP, "zSL": zSL,
-                                                "dTP": dTP, "dSL": dSL,
-                                                "feos": feos, "mhb": mhb,
-                                                "mm": mm,
-                                            })
+                                            for es in es_values:
+                                                ov = {
+                                                    "entry.zscore_long": -abs(zE),
+                                                    "entry.zscore_short": abs(zE),
+                                                    "entry.cointegration_score_min": co,
+                                                    "exit.zscore_tp_long": -zTP,
+                                                    "exit.zscore_tp_short": zTP,
+                                                    "exit.zscore_sl_long": -abs(zSL),
+                                                    "exit.zscore_sl_short": abs(zSL),
+                                                    "exit.pnl_take_profit": dTP if dTP > 0 else 99999,
+                                                    "exit.pnl_stop_loss": dSL if dSL < 0 else -99999,
+                                                    "exit.max_holding_bars": mhb,
+                                                    "session.flat_end_of_session": feos,
+                                                    "sizing.micro_multiplier_max": mm,
+                                                }
+                                                if es is not None:
+                                                    ov["session.entry_start_hour"] = es
+                                                variant = {
+                                                    "overrides": ov,
+                                                    "zE": zE, "co": co,
+                                                    "zTP": zTP, "zSL": zSL,
+                                                    "dTP": dTP, "dSL": dSL,
+                                                    "feos": feos, "mhb": mhb,
+                                                    "mm": mm,
+                                                }
+                                                if es is not None:
+                                                    variant["es"] = es
+                                                variants.append(variant)
         return variants
     return generator
 
@@ -1050,9 +1062,10 @@ def _micro_full_label_builder(group_prefix: str, ee: Dict) -> str:
     mhb_tag = f"mhb{ee['mhb']}" if ee["mhb"] > 0 else "nohold"
     dtp_tag = f"dTP{ee['dTP']}" if ee["dTP"] > 0 else "nodTP"
     dsl_tag = f"dSL{abs(ee['dSL'])}" if ee["dSL"] < 0 else "nodSL"
+    es_tag = f"_es{ee['es']}" if "es" in ee else ""
     return (f"{group_prefix}_zE{ee['zE']}_co{ee['co']}"
             f"_zTP{ee['zTP']}_zSL{ee['zSL']}"
-            f"_{dtp_tag}_{dsl_tag}_{feos_tag}_{mhb_tag}_mm{ee['mm']}")
+            f"_{dtp_tag}_{dsl_tag}_{feos_tag}_{mhb_tag}_mm{ee['mm']}{es_tag}")
 
 
 def _micro_full_result_builder(label, ind_ov, ee, m, tp_zscore, tp_dollar, sl_zscore, sl_dollar, max_hold=0, end_session=0):
@@ -1069,6 +1082,7 @@ def _micro_full_result_builder(label, ind_ov, ee, m, tp_zscore, tp_dollar, sl_zs
         "zTP": ee["zTP"], "zSL": ee["zSL"],
         "dTP": ee["dTP"], "dSL": ee["dSL"],
         "feos": ee["feos"], "mhb": ee["mhb"], "mm": ee["mm"],
+        "entry_start": ee.get("es", ""),
         "trades": m["trades"], "long": m["long"], "short": m["short"],
         "win_rate": round(m["win_rate"], 1),
         "pnl_net": round(m["pnl_net"], 0),

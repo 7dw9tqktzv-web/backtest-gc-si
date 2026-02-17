@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v2.0).
 
-**Current status**: Phase D — R1 termine (295M configs, 10h). Analyse 12 profils faite, R2 zoom a lancer. Paper trading SC en cours (C6).
-**Config production standard**: `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0_zSL4.0` (5-min, standard). OBSOLETE — optimisee sans FLAT_EOD ni session prop firm, ne sert plus de reference.
-**Config production micro**: A DETERMINER — noyau R1 : b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.0_dTP250 (164 trades, PF 2.52, DD -$1,543). R2 zoom en cours.
+**Current status**: Phase D — R1 termine (295M configs, 10h), analyse approfondie faite. R2 zoom (R2a + R2b) a lancer. Paper trading SC en cours (C6).
+**Config production standard**: OBSOLETE — optimisee sans FLAT_EOD ni session prop firm, ne sert plus de reference.
+**Config production micro**: A DETERMINER — 4 candidates R1, R2 zoom en preparation.
 **210 tests passing**. See `CHANGELOG.md` for detailed history.
 
 SC paper trading tourne avec C6 en l'etat (plugin C++ correct, sera remplacee post-R1).
@@ -195,10 +195,31 @@ Claude Code peut PROPOSER mais ne doit JAMAIS APPLIQUER sans validation explicit
 
 ## Research Conclusions
 
-- **Configs production** : voir status en haut du fichier. Details dans `CHANGELOG.md`.
 - **5-min pure Z-Score = dominant mode**, 1min dollar = dead end, regime filters = dead end (none survives OOS)
 - **Known risk**: regime-dependent (2023-2024 losing/flat, 2025-2026 profitable)
 - See `CHANGELOG.md` for detailed tables and phase-by-phase results
+
+### R1 Grid Search Findings (295M configs, 200K survivants)
+
+**4 configs retenues** (2 familles) :
+
+| Config | Indicateurs | Trades | WR | PnL | DD | Calmar |
+|--------|------------|--------|-----|------|-----|--------|
+| C1 (reine) | b4620_zp30_cp30_adf64_zE3.75_co20 | 164 | 59.8% | $7,711 | -$1,543 | 5.00 |
+| C2 (PnL max) | b4620_zp30_cp30_adf64_zE3.5_co20 | 329 | 55.6% | $8,009 | -$2,562 | 3.13 |
+| C6 (low DD) | b4620_zp30_cp36_adf64_zE3.75_co20 | 161 | 59.0% | $7,458 | -$1,498 | 4.98 |
+| C9 (outsider) | b2640_zp30_cp12_adf26_zE3.5_co20 | 300 | 56.7% | $7,219 | -$1,706 | 4.23 |
+
+Toutes : dTP=250, dSL=-500 (sauf C2=-600, C9=-1000), zTP=0.0 (sauf C9=-0.5), mm=2, FLAT_EOD ON.
+
+**Key findings** :
+- **TP_DOLLAR = cash machine** : 100% WR, ~$183 net/trade, 2-6 barres
+- **FLAT_EOD = drag** : -$40 a -$52/trade, 30-34% des trades, 85% entrent entre 18h-23h CT
+- **dTP=250 = plafond** : dTP >= 300 ne survit pas les filtres R1
+- **Couts par trade ~$67** : slippage $56 + commissions $11
+- **PnL decay** : C1/C6 inflexion barre 18-19 (90-95 min), C9 barre 5 (25 min). Apres barre 30-36 : 0% positif
+- **Famille A** (b4620, mean reversion lente) domine 5/12 profils de scoring
+- **Meilleures heures** : 2-6h, 7-8h, 10h, 12-13h CT. **Pires** : 9h, 11h, 20-21h CT
 
 ## Sierra Chart Integration
 
@@ -222,7 +243,9 @@ v2.0 = automated spread trading (100% unmanaged orders). Python and SC produce i
 - [x] Fast grid engine (scan 5s factorise, 13.4x speedup, 300/300 parite)
 - [x] Grid search R1 micro CORRIGE (295M configs, 10h, 200K survivants)
 - [x] Analyse 12 profils (scripts/score_r1_profiles.py) — noyau b4620_zp30_zE3.75 domine 5 profils
-- [ ] **Grid search R2 zoom** autour du noyau R1 (beta, zp, cp, adf, zE, co, zTP, dTP fins) — NEXT
+- [x] Analyse approfondie 10 configs + PnL decay 5 configs — 4 candidates retenues (C1/C2/C6/C9)
+- [x] entry_start_hour comme parametre build dans fast engine (grouping key elargi)
+- [ ] **Grid search R2a** (cluster roi ~20M, beta 4620-7920) + **R2b** (outsider C9 ~10M) — NEXT
 - [ ] Walk-Forward + Monte Carlo sur config retenue
 - [ ] Mise a jour plugin SC avec config validee
 - [ ] Paper trading 4-8 weeks (min 30 trades)
