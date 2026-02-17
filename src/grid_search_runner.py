@@ -122,7 +122,7 @@ def _process_indicator_group(args):
             sl_zscore = (trades['Exit_Reason'] == 'SL_ZSCORE').sum()
             sl_dollar = (trades['Exit_Reason'] == 'SL_DOLLAR').sum()
             max_hold = (trades['Exit_Reason'] == 'MAX_HOLD').sum()
-            end_session = (trades['Exit_Reason'] == 'END_SESSION').sum()
+            end_session = (trades['Exit_Reason'] == 'FLAT_EOD').sum()
         else:
             tp_zscore = tp_dollar = sl_zscore = sl_dollar = max_hold = end_session = 0
 

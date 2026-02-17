@@ -127,8 +127,15 @@ def run_hybrid_backtest(
 
     # FlatEndOfSession : force exit avant fin de session (false = desactive)
     flat_end_of_session = config['session'].get('flat_end_of_session', False)
-    session_end_hour = 15   # 15h CT = derniere barre avant cloture
-    session_end_min = 25    # 15:25 CT (5 min avant fin session 15:30)
+    session_end_raw = config['session'].get('session_end_time',
+                                            config['session'].get('end_time', '15:25'))
+    if isinstance(session_end_raw, str) and ':' in str(session_end_raw):
+        parts = str(session_end_raw).split(':')
+        session_end_hour = int(parts[0])
+        session_end_min = int(parts[1])
+    else:
+        session_end_hour = int(session_end_raw)
+        session_end_min = 0
 
     # Regime filter (Phase C2b) - indicateurs daily pre-extraits en numpy
     rf_config = config.get('regime_filter', {})

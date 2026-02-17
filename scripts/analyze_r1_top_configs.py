@@ -213,7 +213,7 @@ def analyze_config(trades, cfg, lines):
 
     # --- E) DUREE DES TRADES ---
     lines.append("")
-    lines.append("  E) DUREE DES TRADES (barres 5-min)")
+    lines.append("  E) DUREE DES TRADES (minutes)")
     lines.append("  " + "-" * 100)
 
     winners = trades[trades["PnL_Net"] > 0]
@@ -224,10 +224,10 @@ def analyze_config(trades, cfg, lines):
     l_avg = losers["Duration"].mean() if len(losers) > 0 else 0
     l_med = losers["Duration"].median() if len(losers) > 0 else 0
 
-    lines.append(f"  Gagnants  : avg={w_avg:.1f} bars ({w_avg*5:.0f} min), "
-                 f"median={w_med:.0f} bars ({w_med*5:.0f} min), n={len(winners)}")
-    lines.append(f"  Perdants  : avg={l_avg:.1f} bars ({l_avg*5:.0f} min), "
-                 f"median={l_med:.0f} bars ({l_med*5:.0f} min), n={len(losers)}")
+    lines.append(f"  Gagnants  : avg={w_avg:.1f} min, "
+                 f"median={w_med:.0f} min, n={len(winners)}")
+    lines.append(f"  Perdants  : avg={l_avg:.1f} min, "
+                 f"median={l_med:.0f} min, n={len(losers)}")
     lines.append("")
 
     # Return summary data
