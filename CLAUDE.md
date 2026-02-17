@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v2.0).
 
-**Current status**: Phase D — Fast grid engine merge. Grid search R1 corrige pret a lancer (~20M configs, ~4h). Paper trading SC en cours (C6).
+**Current status**: Phase D — R1 termine (295M configs, 10h). Analyse 12 profils faite, R2 zoom a lancer. Paper trading SC en cours (C6).
 **Config production standard**: `b2640_zp20_cp30_adf26_zE3.5_co40_zTP-1.0_zSL4.0` (5-min, standard). OBSOLETE — optimisee sans FLAT_EOD ni session prop firm, ne sert plus de reference.
-**Config production micro**: A DETERMINER — grid search R1 corrige avec sizing smart + FLAT_EOD + session 18:00-14:55 CT + slippage 2 ticks.
+**Config production micro**: A DETERMINER — noyau R1 : b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.0_dTP250 (164 trades, PF 2.52, DD -$1,543). R2 zoom en cours.
 **210 tests passing**. See `CHANGELOG.md` for detailed history.
 
 SC paper trading tourne avec C6 en l'etat (plugin C++ correct, sera remplacee post-R1).
@@ -220,10 +220,9 @@ v2.0 = automated spread trading (100% unmanaged orders). Python and SC produce i
 - [x] Deploy C6 in Sierra Chart v2.0 micro — plugin C++ correct, paper trading actif
 - [x] Code review + fix sizing smart multiplier + fix flat_end_of_session path
 - [x] Fast grid engine (scan 5s factorise, 13.4x speedup, 300/300 parite)
-- [ ] **Grid search R1 micro CORRIGE** (~20M configs, ~4h, `configs/experiments/grid_micro_r1_corrected.yaml`) — NEXT
-- [ ] Analyse top configs (4 scorings : PnL, Calmar, Consistency, Balanced)
-- [ ] PnL decay + calibrage max_holding_bars
-- [ ] Grid search R2 affinages sur top configs R1
+- [x] Grid search R1 micro CORRIGE (295M configs, 10h, 200K survivants)
+- [x] Analyse 12 profils (scripts/score_r1_profiles.py) — noyau b4620_zp30_zE3.75 domine 5 profils
+- [ ] **Grid search R2 zoom** autour du noyau R1 (beta, zp, cp, adf, zE, co, zTP, dTP fins) — NEXT
 - [ ] Walk-Forward + Monte Carlo sur config retenue
 - [ ] Mise a jour plugin SC avec config validee
 - [ ] Paper trading 4-8 weeks (min 30 trades)
