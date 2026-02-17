@@ -1,0 +1,154 @@
+========================================================================================================================
+GRID SEARCH R1 CORRIGE -- ANALYSE 12 PROFILS
+Survivants charges : 200,107
+========================================================================================================================
+
+PROFIL  1 -- PnL Brut
+  Configs eligibles : 200,107
+  Top 3 :
+  #1
+  label=b4620_zp30_cp30_adf64_zE3.5_co20_zTP0.0_zSL5.0_dTP250_dSL600_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.5 | co=20 | zTP=0.0 | zSL=5.0 | dTP=250 | dSL=-600 | mhb=0 | mm=2 | trades=329 | long=172 | short=157 | win_rate=55.6% | pnl_net=$8,009 | pnl_avg=$24 | profit_factor=1.560 | max_dd=$-2,562 | sharpe=0.160 | sortino=0.184 | calmar=3.130 | tp_zscore=144 | tp_dollar=73 | sl_zscore=0 | sl_dollar=4 | max_hold=0 | end_session=108
+  #2
+  label=b4620_zp30_cp30_adf64_zE3.5_co20_zTP0.0_zSL99_dTP250_dSL600_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.5 | co=20 | zTP=0.0 | zSL=99.0 | dTP=250 | dSL=-600 | mhb=0 | mm=2 | trades=329 | long=172 | short=157 | win_rate=55.6% | pnl_net=$8,009 | pnl_avg=$24 | profit_factor=1.560 | max_dd=$-2,562 | sharpe=0.160 | sortino=0.184 | calmar=3.130 | tp_zscore=144 | tp_dollar=73 | sl_zscore=0 | sl_dollar=4 | max_hold=0 | end_session=108
+  #3
+  label=b4620_zp30_cp30_adf64_zE3.5_co20_zTP0.0_zSL5.0_dTP250_dSL500_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.5 | co=20 | zTP=0.0 | zSL=5.0 | dTP=250 | dSL=-500 | mhb=0 | mm=2 | trades=329 | long=172 | short=157 | win_rate=55.6% | pnl_net=$7,884 | pnl_avg=$24 | profit_factor=1.550 | max_dd=$-2,462 | sharpe=0.160 | sortino=0.188 | calmar=3.200 | tp_zscore=142 | tp_dollar=73 | sl_zscore=0 | sl_dollar=6 | max_hold=0 | end_session=108
+
+PROFIL  2 -- Calmar
+  Configs eligibles : 200,107
+  Top 3 :
+  #1
+  label=b2640_zp30_cp12_adf144_zE3.75_co20_zTP-1.5_zSL5.0_dTP250_nodSL_feos_nohold_mm2 | beta=2640 | zp=30 | cp=12 | adf=144 | zE=3.75 | co=20 | zTP=-1.5 | zSL=5.0 | dTP=250 | dSL=0 | mhb=0 | mm=2 | trades=155 | long=76 | short=79 | win_rate=53.5% | pnl_net=$4,852 | pnl_avg=$31 | profit_factor=1.620 | max_dd=$-729 | sharpe=0.200 | sortino=0.291 | calmar=6.656 | tp_zscore=47 | tp_dollar=52 | sl_zscore=0 | sl_dollar=0 | max_hold=0 | end_session=56
+  #2
+  label=b2640_zp30_cp12_adf144_zE3.75_co20_zTP-1.5_zSL99_dTP250_nodSL_feos_nohold_mm2 | beta=2640 | zp=30 | cp=12 | adf=144 | zE=3.75 | co=20 | zTP=-1.5 | zSL=99.0 | dTP=250 | dSL=0 | mhb=0 | mm=2 | trades=155 | long=76 | short=79 | win_rate=53.5% | pnl_net=$4,852 | pnl_avg=$31 | profit_factor=1.620 | max_dd=$-729 | sharpe=0.200 | sortino=0.291 | calmar=6.656 | tp_zscore=47 | tp_dollar=52 | sl_zscore=0 | sl_dollar=0 | max_hold=0 | end_session=56
+  #3
+  label=b2640_zp30_cp12_adf96_zE3.75_co20_zTP-1.5_zSL5.0_dTP250_nodSL_feos_nohold_mm2 | beta=2640 | zp=30 | cp=12 | adf=96 | zE=3.75 | co=20 | zTP=-1.5 | zSL=5.0 | dTP=250 | dSL=0 | mhb=0 | mm=2 | trades=155 | long=77 | short=78 | win_rate=53.5% | pnl_net=$5,265 | pnl_avg=$34 | profit_factor=1.700 | max_dd=$-875 | sharpe=0.220 | sortino=0.333 | calmar=6.017 | tp_zscore=46 | tp_dollar=51 | sl_zscore=0 | sl_dollar=0 | max_hold=0 | end_session=58
+
+PROFIL  3 -- Sharpe
+  Configs eligibles : 200,107
+  Top 3 :
+  #1
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.0_zSL5.0_dTP250_dSL500_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=0.0 | zSL=5.0 | dTP=250 | dSL=-500 | mhb=0 | mm=2 | trades=164 | long=92 | short=72 | win_rate=59.8% | pnl_net=$7,711 | pnl_avg=$47 | profit_factor=2.520 | max_dd=$-1,543 | sharpe=0.360 | sortino=0.548 | calmar=5.000 | tp_zscore=57 | tp_dollar=50 | sl_zscore=0 | sl_dollar=1 | max_hold=0 | end_session=56
+  #2
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.0_zSL99_dTP250_dSL500_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=0.0 | zSL=99.0 | dTP=250 | dSL=-500 | mhb=0 | mm=2 | trades=164 | long=92 | short=72 | win_rate=59.8% | pnl_net=$7,711 | pnl_avg=$47 | profit_factor=2.520 | max_dd=$-1,543 | sharpe=0.360 | sortino=0.548 | calmar=5.000 | tp_zscore=57 | tp_dollar=50 | sl_zscore=0 | sl_dollar=1 | max_hold=0 | end_session=56
+  #3
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP-0.5_zSL5.0_dTP250_dSL300_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=-0.5 | zSL=5.0 | dTP=250 | dSL=-300 | mhb=0 | mm=2 | trades=164 | long=92 | short=72 | win_rate=61.0% | pnl_net=$7,605 | pnl_avg=$46 | profit_factor=2.340 | max_dd=$-1,784 | sharpe=0.350 | sortino=0.527 | calmar=4.260 | tp_zscore=50 | tp_dollar=53 | sl_zscore=0 | sl_dollar=4 | max_hold=0 | end_session=57
+
+PROFIL  4 -- Sortino
+  Configs eligibles : 200,107
+  Top 3 :
+  #1
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.5_zSL4.0_dTP250_nodSL_feos_mhb6_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=0.5 | zSL=4.0 | dTP=250 | dSL=0 | mhb=6 | mm=2 | trades=162 | long=90 | short=72 | win_rate=53.1% | pnl_net=$5,154 | pnl_avg=$32 | profit_factor=1.910 | max_dd=$-1,476 | sharpe=0.260 | sortino=0.574 | calmar=3.490 | tp_zscore=9 | tp_dollar=48 | sl_zscore=9 | sl_dollar=0 | max_hold=50 | end_session=46
+  #2
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.5_zSL4.0_dTP250_dSL300_feos_mhb6_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=0.5 | zSL=4.0 | dTP=250 | dSL=-300 | mhb=6 | mm=2 | trades=162 | long=90 | short=72 | win_rate=53.1% | pnl_net=$5,154 | pnl_avg=$32 | profit_factor=1.910 | max_dd=$-1,476 | sharpe=0.260 | sortino=0.574 | calmar=3.490 | tp_zscore=9 | tp_dollar=48 | sl_zscore=9 | sl_dollar=0 | max_hold=50 | end_session=46
+  #3
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.5_zSL4.0_dTP250_dSL400_feos_mhb6_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=0.5 | zSL=4.0 | dTP=250 | dSL=-400 | mhb=6 | mm=2 | trades=162 | long=90 | short=72 | win_rate=53.1% | pnl_net=$5,154 | pnl_avg=$32 | profit_factor=1.910 | max_dd=$-1,476 | sharpe=0.260 | sortino=0.574 | calmar=3.490 | tp_zscore=9 | tp_dollar=48 | sl_zscore=9 | sl_dollar=0 | max_hold=50 | end_session=46
+
+PROFIL  5 -- Consistency
+  Configs eligibles : 200,107
+  Top 3 :
+  #1
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.0_zSL5.0_dTP250_dSL500_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=0.0 | zSL=5.0 | dTP=250 | dSL=-500 | mhb=0 | mm=2 | trades=164 | long=92 | short=72 | win_rate=59.8% | pnl_net=$7,711 | pnl_avg=$47 | profit_factor=2.520 | max_dd=$-1,543 | sharpe=0.360 | sortino=0.548 | calmar=5.000 | tp_zscore=57 | tp_dollar=50 | sl_zscore=0 | sl_dollar=1 | max_hold=0 | end_session=56
+  #2
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.0_zSL99_dTP250_dSL500_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=0.0 | zSL=99.0 | dTP=250 | dSL=-500 | mhb=0 | mm=2 | trades=164 | long=92 | short=72 | win_rate=59.8% | pnl_net=$7,711 | pnl_avg=$47 | profit_factor=2.520 | max_dd=$-1,543 | sharpe=0.360 | sortino=0.548 | calmar=5.000 | tp_zscore=57 | tp_dollar=50 | sl_zscore=0 | sl_dollar=1 | max_hold=0 | end_session=56
+  #3
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.0_zSL5.0_dTP250_dSL600_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=0.0 | zSL=5.0 | dTP=250 | dSL=-600 | mhb=0 | mm=2 | trades=164 | long=92 | short=72 | win_rate=59.8% | pnl_net=$7,611 | pnl_avg=$46 | profit_factor=2.470 | max_dd=$-1,643 | sharpe=0.350 | sortino=0.487 | calmar=4.630 | tp_zscore=57 | tp_dollar=50 | sl_zscore=0 | sl_dollar=1 | max_hold=0 | end_session=56
+
+PROFIL  6 -- Fast Mean Reversion
+  Configs eligibles : 5,525
+  Top 3 :
+  #1
+  label=b4620_zp30_cp30_adf144_zE3.75_co20_zTP0.0_zSL5.0_dTP250_nodSL_feos_mhb12_mm2 | beta=4620 | zp=30 | cp=30 | adf=144 | zE=3.75 | co=20 | zTP=0.0 | zSL=5.0 | dTP=250 | dSL=0 | mhb=12 | mm=2 | trades=166 | long=93 | short=73 | win_rate=55.4% | pnl_net=$6,251 | pnl_avg=$38 | profit_factor=2.070 | max_dd=$-1,891 | sharpe=0.290 | sortino=0.432 | calmar=3.310 | tp_zscore=16 | tp_dollar=52 | sl_zscore=0 | sl_dollar=0 | max_hold=45 | end_session=53
+  #2
+  label=b4620_zp30_cp30_adf144_zE3.75_co20_zTP0.0_zSL5.0_dTP250_dSL400_feos_mhb12_mm2 | beta=4620 | zp=30 | cp=30 | adf=144 | zE=3.75 | co=20 | zTP=0.0 | zSL=5.0 | dTP=250 | dSL=-400 | mhb=12 | mm=2 | trades=166 | long=93 | short=73 | win_rate=55.4% | pnl_net=$6,251 | pnl_avg=$38 | profit_factor=2.070 | max_dd=$-1,891 | sharpe=0.290 | sortino=0.432 | calmar=3.310 | tp_zscore=16 | tp_dollar=52 | sl_zscore=0 | sl_dollar=0 | max_hold=45 | end_session=53
+  #3
+  label=b4620_zp30_cp30_adf144_zE3.75_co20_zTP0.0_zSL5.0_dTP250_dSL500_feos_mhb12_mm2 | beta=4620 | zp=30 | cp=30 | adf=144 | zE=3.75 | co=20 | zTP=0.0 | zSL=5.0 | dTP=250 | dSL=-500 | mhb=12 | mm=2 | trades=166 | long=93 | short=73 | win_rate=55.4% | pnl_net=$6,251 | pnl_avg=$38 | profit_factor=2.070 | max_dd=$-1,891 | sharpe=0.290 | sortino=0.432 | calmar=3.310 | tp_zscore=16 | tp_dollar=52 | sl_zscore=0 | sl_dollar=0 | max_hold=45 | end_session=53
+
+PROFIL  7 -- Dollar Exit Dominant
+  Configs eligibles : 0
+  Top 3 :
+
+PROFIL  8 -- Pure Zscore
+  Configs eligibles : 0
+  Top 3 :
+
+PROFIL  9 -- Low Drawdown
+  Configs eligibles : 11,287
+  Top 3 :
+  #1
+  label=b4620_zp30_cp36_adf64_zE3.75_co20_zTP0.0_zSL5.0_dTP250_dSL500_feos_nohold_mm2 | beta=4620 | zp=30 | cp=36 | adf=64 | zE=3.75 | co=20 | zTP=0.0 | zSL=5.0 | dTP=250 | dSL=-500 | mhb=0 | mm=2 | trades=161 | long=90 | short=71 | win_rate=59.0% | pnl_net=$7,458 | pnl_avg=$46 | profit_factor=2.400 | max_dd=$-1,498 | sharpe=0.340 | sortino=0.438 | calmar=4.980 | tp_zscore=57 | tp_dollar=49 | sl_zscore=0 | sl_dollar=2 | max_hold=0 | end_session=53
+  #2
+  label=b4620_zp30_cp36_adf64_zE3.75_co20_zTP0.0_zSL99_dTP250_dSL500_feos_nohold_mm2 | beta=4620 | zp=30 | cp=36 | adf=64 | zE=3.75 | co=20 | zTP=0.0 | zSL=99.0 | dTP=250 | dSL=-500 | mhb=0 | mm=2 | trades=161 | long=90 | short=71 | win_rate=59.0% | pnl_net=$7,458 | pnl_avg=$46 | profit_factor=2.400 | max_dd=$-1,498 | sharpe=0.340 | sortino=0.438 | calmar=4.980 | tp_zscore=57 | tp_dollar=49 | sl_zscore=0 | sl_dollar=2 | max_hold=0 | end_session=53
+  #3
+  label=b4620_zp30_cp24_adf144_zE3.75_co20_zTP-1.5_zSL4.0_dTP250_nodSL_feos_nohold_mm2 | beta=4620 | zp=30 | cp=24 | adf=144 | zE=3.75 | co=20 | zTP=-1.5 | zSL=4.0 | dTP=250 | dSL=0 | mhb=0 | mm=2 | trades=164 | long=89 | short=75 | win_rate=59.1% | pnl_net=$7,117 | pnl_avg=$43 | profit_factor=2.130 | max_dd=$-1,322 | sharpe=0.300 | sortino=0.415 | calmar=5.380 | tp_zscore=43 | tp_dollar=59 | sl_zscore=7 | sl_dollar=0 | max_hold=0 | end_session=55
+
+PROFIL 10 -- Balanced
+  Configs eligibles : 200,107
+  Top 3 :
+  #1
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.0_zSL5.0_dTP250_dSL500_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=0.0 | zSL=5.0 | dTP=250 | dSL=-500 | mhb=0 | mm=2 | trades=164 | long=92 | short=72 | win_rate=59.8% | pnl_net=$7,711 | pnl_avg=$47 | profit_factor=2.520 | max_dd=$-1,543 | sharpe=0.360 | sortino=0.548 | calmar=5.000 | tp_zscore=57 | tp_dollar=50 | sl_zscore=0 | sl_dollar=1 | max_hold=0 | end_session=56
+  #2
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.0_zSL99_dTP250_dSL500_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=0.0 | zSL=99.0 | dTP=250 | dSL=-500 | mhb=0 | mm=2 | trades=164 | long=92 | short=72 | win_rate=59.8% | pnl_net=$7,711 | pnl_avg=$47 | profit_factor=2.520 | max_dd=$-1,543 | sharpe=0.360 | sortino=0.548 | calmar=5.000 | tp_zscore=57 | tp_dollar=50 | sl_zscore=0 | sl_dollar=1 | max_hold=0 | end_session=56
+  #3
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.0_zSL5.0_dTP250_dSL600_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=0.0 | zSL=5.0 | dTP=250 | dSL=-600 | mhb=0 | mm=2 | trades=164 | long=92 | short=72 | win_rate=59.8% | pnl_net=$7,611 | pnl_avg=$46 | profit_factor=2.470 | max_dd=$-1,643 | sharpe=0.350 | sortino=0.487 | calmar=4.630 | tp_zscore=57 | tp_dollar=50 | sl_zscore=0 | sl_dollar=1 | max_hold=0 | end_session=56
+
+PROFIL 11 -- Profit Efficiency
+  Configs eligibles : 200,107
+  Top 3 :
+  #1
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.0_zSL5.0_dTP250_dSL500_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=0.0 | zSL=5.0 | dTP=250 | dSL=-500 | mhb=0 | mm=2 | trades=164 | long=92 | short=72 | win_rate=59.8% | pnl_net=$7,711 | pnl_avg=$47 | profit_factor=2.520 | max_dd=$-1,543 | sharpe=0.360 | sortino=0.548 | calmar=5.000 | tp_zscore=57 | tp_dollar=50 | sl_zscore=0 | sl_dollar=1 | max_hold=0 | end_session=56
+  #2
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.0_zSL99_dTP250_dSL500_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=0.0 | zSL=99.0 | dTP=250 | dSL=-500 | mhb=0 | mm=2 | trades=164 | long=92 | short=72 | win_rate=59.8% | pnl_net=$7,711 | pnl_avg=$47 | profit_factor=2.520 | max_dd=$-1,543 | sharpe=0.360 | sortino=0.548 | calmar=5.000 | tp_zscore=57 | tp_dollar=50 | sl_zscore=0 | sl_dollar=1 | max_hold=0 | end_session=56
+  #3
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.0_zSL5.0_dTP250_dSL600_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=0.0 | zSL=5.0 | dTP=250 | dSL=-600 | mhb=0 | mm=2 | trades=164 | long=92 | short=72 | win_rate=59.8% | pnl_net=$7,611 | pnl_avg=$46 | profit_factor=2.470 | max_dd=$-1,643 | sharpe=0.350 | sortino=0.487 | calmar=4.630 | tp_zscore=57 | tp_dollar=50 | sl_zscore=0 | sl_dollar=1 | max_hold=0 | end_session=56
+
+PROFIL 12 -- Anti-Fragile
+  Configs eligibles : 160,518
+  Top 3 :
+  #1
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP1.0_zSL4.0_dTP250_nodSL_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=1.0 | zSL=4.0 | dTP=250 | dSL=0 | mhb=0 | mm=2 | trades=162 | long=90 | short=72 | win_rate=54.9% | pnl_net=$6,385 | pnl_avg=$39 | profit_factor=2.280 | max_dd=$-1,512 | sharpe=0.320 | sortino=0.504 | calmar=4.220 | tp_zscore=62 | tp_dollar=47 | sl_zscore=9 | sl_dollar=0 | max_hold=0 | end_session=44
+  #2
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP1.0_zSL4.0_dTP250_nodSL_feos_mhb24_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=1.0 | zSL=4.0 | dTP=250 | dSL=0 | mhb=24 | mm=2 | trades=162 | long=90 | short=72 | win_rate=54.9% | pnl_net=$6,385 | pnl_avg=$39 | profit_factor=2.280 | max_dd=$-1,512 | sharpe=0.320 | sortino=0.504 | calmar=4.220 | tp_zscore=62 | tp_dollar=47 | sl_zscore=9 | sl_dollar=0 | max_hold=0 | end_session=44
+  #3
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP1.0_zSL4.0_dTP250_dSL800_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=1.0 | zSL=4.0 | dTP=250 | dSL=-800 | mhb=0 | mm=2 | trades=162 | long=90 | short=72 | win_rate=54.9% | pnl_net=$6,385 | pnl_avg=$39 | profit_factor=2.280 | max_dd=$-1,512 | sharpe=0.320 | sortino=0.504 | calmar=4.220 | tp_zscore=62 | tp_dollar=47 | sl_zscore=9 | sl_dollar=0 | max_hold=0 | end_session=44
+
+========================================================================================================================
+MATRICE DE CHEVAUCHEMENT
+========================================================================================================================
+  Configs dans 1 profil(s) : 110
+  Configs dans 2 profil(s) : 6
+  Configs dans 3 profil(s) : 12
+  Configs dans 4 profil(s) : 8
+  Configs dans 5 profil(s) : 2
+
+CONFIGS ROBUSTES (4+ profils) : 10
+------------------------------------------------------------------------------------------------------------------------
+  [5 profils: P1, P3, P5, P10, P11]
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.0_zSL5.0_dTP250_dSL500_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=0.0 | zSL=5.0 | dTP=250 | dSL=-500 | mhb=0 | mm=2 | trades=164 | long=92 | short=72 | win_rate=59.8% | pnl_net=$7,711 | pnl_avg=$47 | profit_factor=2.520 | max_dd=$-1,543 | sharpe=0.360 | sortino=0.548 | calmar=5.000 | tp_zscore=57 | tp_dollar=50 | sl_zscore=0 | sl_dollar=1 | max_hold=0 | end_session=56
+
+  [5 profils: P1, P3, P5, P10, P11]
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.0_zSL99_dTP250_dSL500_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=0.0 | zSL=99.0 | dTP=250 | dSL=-500 | mhb=0 | mm=2 | trades=164 | long=92 | short=72 | win_rate=59.8% | pnl_net=$7,711 | pnl_avg=$47 | profit_factor=2.520 | max_dd=$-1,543 | sharpe=0.360 | sortino=0.548 | calmar=5.000 | tp_zscore=57 | tp_dollar=50 | sl_zscore=0 | sl_dollar=1 | max_hold=0 | end_session=56
+
+  [4 profils: P3, P5, P10, P11]
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.0_zSL5.0_dTP250_dSL600_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=0.0 | zSL=5.0 | dTP=250 | dSL=-600 | mhb=0 | mm=2 | trades=164 | long=92 | short=72 | win_rate=59.8% | pnl_net=$7,611 | pnl_avg=$46 | profit_factor=2.470 | max_dd=$-1,643 | sharpe=0.350 | sortino=0.487 | calmar=4.630 | tp_zscore=57 | tp_dollar=50 | sl_zscore=0 | sl_dollar=1 | max_hold=0 | end_session=56
+
+  [4 profils: P3, P5, P10, P11]
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.0_zSL99_dTP250_dSL800_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=0.0 | zSL=99.0 | dTP=250 | dSL=-800 | mhb=0 | mm=2 | trades=164 | long=92 | short=72 | win_rate=59.8% | pnl_net=$7,597 | pnl_avg=$46 | profit_factor=2.460 | max_dd=$-1,657 | sharpe=0.350 | sortino=0.479 | calmar=4.580 | tp_zscore=58 | tp_dollar=50 | sl_zscore=0 | sl_dollar=0 | max_hold=0 | end_session=56
+
+  [4 profils: P3, P5, P10, P11]
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.0_zSL5.0_dTP250_nodSL_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=0.0 | zSL=5.0 | dTP=250 | dSL=0 | mhb=0 | mm=2 | trades=164 | long=92 | short=72 | win_rate=59.8% | pnl_net=$7,597 | pnl_avg=$46 | profit_factor=2.460 | max_dd=$-1,657 | sharpe=0.350 | sortino=0.479 | calmar=4.580 | tp_zscore=58 | tp_dollar=50 | sl_zscore=0 | sl_dollar=0 | max_hold=0 | end_session=56
+
+  [4 profils: P3, P5, P10, P11]
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.0_zSL99_dTP250_dSL1000_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=0.0 | zSL=99.0 | dTP=250 | dSL=-1000 | mhb=0 | mm=2 | trades=164 | long=92 | short=72 | win_rate=59.8% | pnl_net=$7,597 | pnl_avg=$46 | profit_factor=2.460 | max_dd=$-1,657 | sharpe=0.350 | sortino=0.479 | calmar=4.580 | tp_zscore=58 | tp_dollar=50 | sl_zscore=0 | sl_dollar=0 | max_hold=0 | end_session=56
+
+  [4 profils: P3, P5, P10, P11]
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.0_zSL5.0_dTP250_dSL800_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=0.0 | zSL=5.0 | dTP=250 | dSL=-800 | mhb=0 | mm=2 | trades=164 | long=92 | short=72 | win_rate=59.8% | pnl_net=$7,597 | pnl_avg=$46 | profit_factor=2.460 | max_dd=$-1,657 | sharpe=0.350 | sortino=0.479 | calmar=4.580 | tp_zscore=58 | tp_dollar=50 | sl_zscore=0 | sl_dollar=0 | max_hold=0 | end_session=56
+
+  [4 profils: P3, P5, P10, P11]
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.0_zSL99_dTP250_dSL600_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=0.0 | zSL=99.0 | dTP=250 | dSL=-600 | mhb=0 | mm=2 | trades=164 | long=92 | short=72 | win_rate=59.8% | pnl_net=$7,611 | pnl_avg=$46 | profit_factor=2.470 | max_dd=$-1,643 | sharpe=0.350 | sortino=0.487 | calmar=4.630 | tp_zscore=57 | tp_dollar=50 | sl_zscore=0 | sl_dollar=1 | max_hold=0 | end_session=56
+
+  [4 profils: P3, P5, P10, P11]
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.0_zSL99_dTP250_nodSL_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=0.0 | zSL=99.0 | dTP=250 | dSL=0 | mhb=0 | mm=2 | trades=164 | long=92 | short=72 | win_rate=59.8% | pnl_net=$7,597 | pnl_avg=$46 | profit_factor=2.460 | max_dd=$-1,657 | sharpe=0.350 | sortino=0.479 | calmar=4.580 | tp_zscore=58 | tp_dollar=50 | sl_zscore=0 | sl_dollar=0 | max_hold=0 | end_session=56
+
+  [4 profils: P3, P5, P10, P11]
+  label=b4620_zp30_cp30_adf64_zE3.75_co20_zTP0.0_zSL5.0_dTP250_dSL1000_feos_nohold_mm2 | beta=4620 | zp=30 | cp=30 | adf=64 | zE=3.75 | co=20 | zTP=0.0 | zSL=5.0 | dTP=250 | dSL=-1000 | mhb=0 | mm=2 | trades=164 | long=92 | short=72 | win_rate=59.8% | pnl_net=$7,597 | pnl_avg=$46 | profit_factor=2.460 | max_dd=$-1,657 | sharpe=0.350 | sortino=0.479 | calmar=4.580 | tp_zscore=58 | tp_dollar=50 | sl_zscore=0 | sl_dollar=0 | max_hold=0 | end_session=56
+
