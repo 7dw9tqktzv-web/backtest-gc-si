@@ -1,0 +1,705 @@
+========================================================================================================================
+ANALYSE APPROFONDIE R1 -- 10 CONFIGS SELECTIONNEES
+Date : 2026-02-17 12:39
+========================================================================================================================
+========================================================================================================================
+CONFIG: C1_pnl_sharpe_balanced
+  beta=4620 zp=30 cp=30 adf=64 zE=3.75 co=20 zTP=0.0 dTP=250 dSL=-500 mhb=0 mm=2
+  Trades: 164
+========================================================================================================================
+
+  A) BREAKDOWN PAR EXIT REASON
+  ----------------------------------------------------------------------------------------------------
+  Reason        Count    PnL Tot    PnL Avg    PnL Med    WR%    Dur Avg
+  ----------------------------------------------------------------------------------------------------
+  TP_ZSCORE        57     +1,656      +29.1      +22.4  63.2%       95.2
+  TP_DOLLAR        50     +9,111     +182.2     +188.6 100.0%        2.4
+  SL_DOLLAR         1       -585     -584.9     -584.9   0.0%       61.6
+  SL_ZSCORE         0
+  MAX_HOLD          0
+  FLAT_EOD         56     -2,472      -44.1      -37.7  21.4%       14.6
+
+  B) ANALYSE FLAT_EOD
+  ----------------------------------------------------------------------------------------------------
+  Distribution heures entree (FLAT_EOD) :
+    11h CT :   1 trades, PnL avg $-130.8
+    12h CT :   1 trades, PnL avg $-128.2
+    13h CT :   2 trades, PnL avg $-39.0
+    18h CT :   2 trades, PnL avg $-39.1
+    19h CT :  13 trades, PnL avg $-39.9
+    20h CT :  31 trades, PnL avg $-41.8
+    21h CT :   2 trades, PnL avg $-34.5
+    22h CT :   1 trades, PnL avg $-38.6
+    23h CT :   3 trades, PnL avg $-45.1
+  Entree < 12h CT : 1 trades, PnL avg $-130.8
+  Entree >= 12h CT : 55 trades, PnL avg $-42.6
+  FLAT_EOD positifs : 12/56 (21.4%)
+
+  C) ANALYSE TEMPORELLE
+  ----------------------------------------------------------------------------------------------------
+  PnL moyen par heure d'entree :
+     0h CT :  10 trades, PnL avg $   -9.7, WR  50.0% -
+     1h CT :  11 trades, PnL avg $  +49.5, WR  63.6% +++++++++
+     2h CT :   2 trades, PnL avg $  +91.9, WR  50.0% ++++++++++++++++++
+     3h CT :   3 trades, PnL avg $ +192.0, WR 100.0% ++++++++++++++++++++++++++++++++++++++
+     4h CT :   2 trades, PnL avg $ +198.7, WR 100.0% +++++++++++++++++++++++++++++++++++++++
+     5h CT :   3 trades, PnL avg $  +86.2, WR 100.0% +++++++++++++++++
+     6h CT :   5 trades, PnL avg $ +118.0, WR 100.0% +++++++++++++++++++++++
+     7h CT :  34 trades, PnL avg $  +69.7, WR  79.4% +++++++++++++
+     8h CT :   5 trades, PnL avg $ +103.4, WR  80.0% ++++++++++++++++++++
+     9h CT :   5 trades, PnL avg $  +15.6, WR  40.0% +++
+    10h CT :   3 trades, PnL avg $ +172.1, WR 100.0% ++++++++++++++++++++++++++++++++++
+    11h CT :   2 trades, PnL avg $  -84.8, WR   0.0% ----------------
+    12h CT :   4 trades, PnL avg $ +113.4, WR  75.0% ++++++++++++++++++++++
+    13h CT :   4 trades, PnL avg $  +51.3, WR  75.0% ++++++++++
+    18h CT :   4 trades, PnL avg $  +78.7, WR  50.0% +++++++++++++++
+    19h CT :  17 trades, PnL avg $  +15.0, WR  29.4% ++
+    20h CT :  36 trades, PnL avg $  -15.2, WR  38.9% ---
+    21h CT :   2 trades, PnL avg $  -34.5, WR   0.0% ------
+    22h CT :   2 trades, PnL avg $  +75.0, WR  50.0% ++++++++++++++
+    23h CT :  10 trades, PnL avg $ +118.2, WR  80.0% +++++++++++++++++++++++
+  3 meilleures heures : 4h, 3h, 10h
+  3 pires heures      : 11h, 21h, 20h
+
+  D) EQUITY PAR ANNEE
+  ----------------------------------------------------------------------------------------------------
+   Annee Trades        PnL    PnL Avg     Max DD
+  ------------------------------------------------------------
+    2023     47       -621      -13.2     -1,543
+    2024     65     +1,152      +17.7       -444
+    2025     41     +5,228     +127.5       -188
+    2026     11     +1,951     +177.4         +0
+
+  E) DUREE DES TRADES (barres 5-min)
+  ----------------------------------------------------------------------------------------------------
+  Gagnants  : avg=26.5 bars (132 min), median=5 bars (25 min), n=98
+  Perdants  : avg=58.0 bars (290 min), median=5 bars (25 min), n=66
+
+========================================================================================================================
+CONFIG: C2_pnl_brut_top
+  beta=4620 zp=30 cp=30 adf=64 zE=3.5 co=20 zTP=0.0 dTP=250 dSL=-600 mhb=0 mm=2
+  Trades: 329
+========================================================================================================================
+
+  A) BREAKDOWN PAR EXIT REASON
+  ----------------------------------------------------------------------------------------------------
+  Reason        Count    PnL Tot    PnL Avg    PnL Med    WR%    Dur Avg
+  ----------------------------------------------------------------------------------------------------
+  TP_ZSCORE       144     +2,460      +17.1      +32.4  63.2%       96.4
+  TP_DOLLAR        73    +13,218     +181.1     +188.6 100.0%        2.0
+  SL_DOLLAR         4     -2,665     -666.2     -667.3   0.0%      171.1
+  SL_ZSCORE         0
+  MAX_HOLD          0
+  FLAT_EOD        108     -5,004      -46.3      -36.8  17.6%       22.1
+
+  B) ANALYSE FLAT_EOD
+  ----------------------------------------------------------------------------------------------------
+  Distribution heures entree (FLAT_EOD) :
+     0h CT :   1 trades, PnL avg $-517.5
+    11h CT :   2 trades, PnL avg $-155.8
+    12h CT :   2 trades, PnL avg $-123.9
+    13h CT :   3 trades, PnL avg $-81.2
+    18h CT :   6 trades, PnL avg $-21.6
+    19h CT :  25 trades, PnL avg $-23.6
+    20h CT :  49 trades, PnL avg $-42.3
+    21h CT :   7 trades, PnL avg $-23.4
+    22h CT :   3 trades, PnL avg $-17.8
+    23h CT :  10 trades, PnL avg $-67.2
+  Entree < 12h CT : 3 trades, PnL avg $-276.3
+  Entree >= 12h CT : 105 trades, PnL avg $-39.8
+  FLAT_EOD positifs : 19/108 (17.6%)
+
+  C) ANALYSE TEMPORELLE
+  ----------------------------------------------------------------------------------------------------
+  PnL moyen par heure d'entree :
+     0h CT :  24 trades, PnL avg $  -90.6, WR  45.8% ------------------
+     1h CT :  23 trades, PnL avg $  +31.5, WR  69.6% ++++++
+     2h CT :   9 trades, PnL avg $   +6.0, WR  66.7% +
+     3h CT :   9 trades, PnL avg $  +79.0, WR  66.7% +++++++++++++++
+     4h CT :   4 trades, PnL avg $ +130.3, WR  75.0% ++++++++++++++++++++++++++
+     5h CT :   6 trades, PnL avg $  +31.7, WR  66.7% ++++++
+     6h CT :  12 trades, PnL avg $  +67.3, WR  83.3% +++++++++++++
+     7h CT :  64 trades, PnL avg $  +73.1, WR  78.1% ++++++++++++++
+     8h CT :  17 trades, PnL avg $  +85.6, WR  76.5% +++++++++++++++++
+     9h CT :  10 trades, PnL avg $ -104.2, WR  40.0% --------------------
+    10h CT :   5 trades, PnL avg $  +33.3, WR  60.0% ++++++
+    11h CT :   5 trades, PnL avg $  -16.3, WR  40.0% ---
+    12h CT :   5 trades, PnL avg $  +66.8, WR  60.0% +++++++++++++
+    13h CT :   8 trades, PnL avg $  +46.5, WR  75.0% +++++++++
+    18h CT :   8 trades, PnL avg $  +33.0, WR  37.5% ++++++
+    19h CT :  30 trades, PnL avg $  +10.4, WR  26.7% ++
+    20h CT :  57 trades, PnL avg $  -13.3, WR  31.6% --
+    21h CT :   8 trades, PnL avg $   +3.1, WR  37.5% 
+    22h CT :   4 trades, PnL avg $  +33.8, WR  50.0% ++++++
+    23h CT :  21 trades, PnL avg $  +62.7, WR  57.1% ++++++++++++
+  3 meilleures heures : 4h, 8h, 3h
+  3 pires heures      : 9h, 0h, 11h
+
+  D) EQUITY PAR ANNEE
+  ----------------------------------------------------------------------------------------------------
+   Annee Trades        PnL    PnL Avg     Max DD
+  ------------------------------------------------------------
+    2023     96       -859       -8.9     -1,761
+    2024    123       +282       +2.3     -2,160
+    2025     92     +5,506      +59.8       -974
+    2026     18     +3,080     +171.1         +0
+
+  E) DUREE DES TRADES (barres 5-min)
+  ----------------------------------------------------------------------------------------------------
+  Gagnants  : avg=34.3 bars (172 min), median=10 bars (52 min), n=183
+  Perdants  : avg=74.1 bars (370 min), median=5 bars (25 min), n=146
+
+========================================================================================================================
+CONFIG: C3_calmar_top
+  beta=2640 zp=30 cp=12 adf=144 zE=3.75 co=20 zTP=-1.5 dTP=250 dSL=0 mhb=0 mm=2
+  Trades: 146
+========================================================================================================================
+
+  A) BREAKDOWN PAR EXIT REASON
+  ----------------------------------------------------------------------------------------------------
+  Reason        Count    PnL Tot    PnL Avg    PnL Med    WR%    Dur Avg
+  ----------------------------------------------------------------------------------------------------
+  TP_ZSCORE         0
+  TP_DOLLAR        41     +7,463     +182.0     +188.6 100.0%        0.0
+  SL_DOLLAR       105     -4,745      -45.2      -39.5   0.0%        3.6
+  SL_ZSCORE         0
+  MAX_HOLD          0
+  FLAT_EOD          0
+
+  B) ANALYSE FLAT_EOD
+  ----------------------------------------------------------------------------------------------------
+  Aucun trade FLAT_EOD
+
+  C) ANALYSE TEMPORELLE
+  ----------------------------------------------------------------------------------------------------
+  PnL moyen par heure d'entree :
+     0h CT :   7 trades, PnL avg $  -11.3, WR  14.3% --
+     1h CT :  10 trades, PnL avg $   -4.4, WR  20.0% 
+     2h CT :   1 trades, PnL avg $ +188.6, WR 100.0% +++++++++++++++++++++++++++++++++++++
+     3h CT :   5 trades, PnL avg $  +53.6, WR  40.0% ++++++++++
+     4h CT :   1 trades, PnL avg $ +204.6, WR 100.0% ++++++++++++++++++++++++++++++++++++++++
+     5h CT :   4 trades, PnL avg $  -36.2, WR   0.0% -------
+     6h CT :   7 trades, PnL avg $  -11.3, WR  14.3% --
+     7h CT :  35 trades, PnL avg $  +20.8, WR  28.6% ++++
+     8h CT :   6 trades, PnL avg $  +36.5, WR  33.3% +++++++
+     9h CT :   4 trades, PnL avg $  -11.1, WR  25.0% --
+    10h CT :   3 trades, PnL avg $  +98.8, WR  66.7% +++++++++++++++++++
+    11h CT :   1 trades, PnL avg $  -61.4, WR   0.0% ------------
+    12h CT :   1 trades, PnL avg $ +176.8, WR 100.0% +++++++++++++++++++++++++++++++++++
+    13h CT :   4 trades, PnL avg $ +109.5, WR  75.0% +++++++++++++++++++++
+    18h CT :   5 trades, PnL avg $  +58.8, WR  40.0% +++++++++++
+    19h CT :  17 trades, PnL avg $  -13.9, WR  11.8% --
+    20h CT :  26 trades, PnL avg $  +12.4, WR  26.9% ++
+    21h CT :   2 trades, PnL avg $  +46.0, WR  50.0% +++++++++
+    22h CT :   3 trades, PnL avg $  +29.2, WR  33.3% +++++
+    23h CT :   4 trades, PnL avg $  +23.0, WR  25.0% ++++
+  3 meilleures heures : 4h, 2h, 12h
+  3 pires heures      : 11h, 5h, 19h
+
+  D) EQUITY PAR ANNEE
+  ----------------------------------------------------------------------------------------------------
+   Annee Trades        PnL    PnL Avg     Max DD
+  ------------------------------------------------------------
+    2023     48     -1,581      -32.9     -1,850
+    2024     46       +164       +3.6       -704
+    2025     44     +2,919      +66.3       -315
+    2026      8     +1,216     +152.0         +0
+
+  E) DUREE DES TRADES (barres 5-min)
+  ----------------------------------------------------------------------------------------------------
+  Gagnants  : avg=0.0 bars (0 min), median=0 bars (0 min), n=41
+  Perdants  : avg=3.6 bars (18 min), median=4 bars (21 min), n=105
+
+========================================================================================================================
+CONFIG: C4_sortino_mhb6
+  beta=4620 zp=30 cp=30 adf=64 zE=3.75 co=20 zTP=0.5 dTP=250 dSL=0 mhb=6 mm=2
+  Trades: 156
+========================================================================================================================
+
+  A) BREAKDOWN PAR EXIT REASON
+  ----------------------------------------------------------------------------------------------------
+  Reason        Count    PnL Tot    PnL Avg    PnL Med    WR%    Dur Avg
+  ----------------------------------------------------------------------------------------------------
+  TP_ZSCORE         0
+  TP_DOLLAR        45     +8,192     +182.0     +188.6 100.0%        0.0
+  SL_DOLLAR       109     -5,053      -46.4      -39.5   0.0%        3.5
+  SL_ZSCORE         0
+  MAX_HOLD          1        +26      +26.4      +26.4 100.0%       30.0
+  FLAT_EOD          1        +11      +11.4      +11.4 100.0%       10.0
+
+  B) ANALYSE FLAT_EOD
+  ----------------------------------------------------------------------------------------------------
+  Distribution heures entree (FLAT_EOD) :
+    20h CT :   1 trades, PnL avg $+11.4
+  Entree < 12h CT : 0 trades, PnL avg $+0.0
+  Entree >= 12h CT : 1 trades, PnL avg $+11.4
+  FLAT_EOD positifs : 1/1 (100.0%)
+
+  C) ANALYSE TEMPORELLE
+  ----------------------------------------------------------------------------------------------------
+  PnL moyen par heure d'entree :
+     0h CT :  10 trades, PnL avg $  -29.2, WR  10.0% -----
+     1h CT :  11 trades, PnL avg $  +15.3, WR  27.3% +++
+     2h CT :   2 trades, PnL avg $  +80.4, WR  50.0% ++++++++++++++++
+     3h CT :   3 trades, PnL avg $ +108.6, WR  66.7% +++++++++++++++++++++
+     4h CT :   2 trades, PnL avg $ +198.7, WR 100.0% +++++++++++++++++++++++++++++++++++++++
+     5h CT :   3 trades, PnL avg $  -27.8, WR   0.0% -----
+     6h CT :   5 trades, PnL avg $  +65.2, WR  60.0% +++++++++++++
+     7h CT :  34 trades, PnL avg $   -7.1, WR  20.6% -
+     8h CT :   6 trades, PnL avg $   +2.4, WR  16.7% 
+     9h CT :   5 trades, PnL avg $   -3.0, WR  20.0% 
+    10h CT :   3 trades, PnL avg $ +102.8, WR  66.7% ++++++++++++++++++++
+    11h CT :   2 trades, PnL avg $  -27.8, WR   0.0% -----
+    12h CT :   4 trades, PnL avg $ +127.2, WR  75.0% +++++++++++++++++++++++++
+    13h CT :   4 trades, PnL avg $  +33.8, WR  50.0% ++++++
+    18h CT :   4 trades, PnL avg $  +81.5, WR  50.0% ++++++++++++++++
+    19h CT :  16 trades, PnL avg $  +15.4, WR  25.0% +++
+    20h CT :  28 trades, PnL avg $  -10.7, WR  17.9% --
+    21h CT :   2 trades, PnL avg $  -42.5, WR   0.0% --------
+    22h CT :   2 trades, PnL avg $  +77.5, WR  50.0% +++++++++++++++
+    23h CT :  10 trades, PnL avg $ +117.7, WR  70.0% +++++++++++++++++++++++
+  3 meilleures heures : 4h, 12h, 23h
+  3 pires heures      : 21h, 0h, 5h
+
+  D) EQUITY PAR ANNEE
+  ----------------------------------------------------------------------------------------------------
+   Annee Trades        PnL    PnL Avg     Max DD
+  ------------------------------------------------------------
+    2023     45       -900      -20.0     -1,367
+    2024     59       -786      -13.3     -1,101
+    2025     41     +2,911      +71.0       -379
+    2026     11     +1,951     +177.4         +0
+
+  E) DUREE DES TRADES (barres 5-min)
+  ----------------------------------------------------------------------------------------------------
+  Gagnants  : avg=0.9 bars (4 min), median=0 bars (0 min), n=47
+  Perdants  : avg=3.5 bars (17 min), median=4 bars (20 min), n=109
+
+========================================================================================================================
+CONFIG: C5_zero_eod
+  beta=1980 zp=20 cp=20 adf=48 zE=3.25 co=30 zTP=-1.5 dTP=250 dSL=-500 mhb=0 mm=2
+  Trades: 212
+========================================================================================================================
+
+  A) BREAKDOWN PAR EXIT REASON
+  ----------------------------------------------------------------------------------------------------
+  Reason        Count    PnL Tot    PnL Avg    PnL Med    WR%    Dur Avg
+  ----------------------------------------------------------------------------------------------------
+  TP_ZSCORE        90        +32       +0.4      +26.0  54.4%      138.4
+  TP_DOLLAR        56    +10,466     +186.9     +188.6 100.0%        7.5
+  SL_DOLLAR         6     -3,325     -554.1     -555.5   0.0%      254.7
+  SL_ZSCORE         0
+  MAX_HOLD          0
+  FLAT_EOD         60     -3,117      -52.0      -47.0  13.3%       33.4
+
+  B) ANALYSE FLAT_EOD
+  ----------------------------------------------------------------------------------------------------
+  Distribution heures entree (FLAT_EOD) :
+     5h CT :   1 trades, PnL avg $-303.5
+     8h CT :   1 trades, PnL avg $+78.2
+    10h CT :   1 trades, PnL avg $+199.4
+    11h CT :   1 trades, PnL avg $-107.8
+    12h CT :   1 trades, PnL avg $-73.8
+    13h CT :   1 trades, PnL avg $-59.4
+    18h CT :   5 trades, PnL avg $-55.3
+    19h CT :  18 trades, PnL avg $-62.1
+    20h CT :  15 trades, PnL avg $-44.5
+    21h CT :   2 trades, PnL avg $-33.3
+    22h CT :   4 trades, PnL avg $-26.1
+    23h CT :  10 trades, PnL avg $-61.7
+  Entree < 12h CT : 4 trades, PnL avg $-33.4
+  Entree >= 12h CT : 56 trades, PnL avg $-53.3
+  FLAT_EOD positifs : 8/60 (13.3%)
+
+  C) ANALYSE TEMPORELLE
+  ----------------------------------------------------------------------------------------------------
+  PnL moyen par heure d'entree :
+     0h CT :  22 trades, PnL avg $   -9.2, WR  54.5% -
+     1h CT :  12 trades, PnL avg $  +59.1, WR  66.7% +++++++++++
+     2h CT :  11 trades, PnL avg $  +12.7, WR  63.6% ++
+     3h CT :   6 trades, PnL avg $  +28.0, WR  33.3% +++++
+     4h CT :   4 trades, PnL avg $  +13.4, WR  50.0% ++
+     5h CT :   8 trades, PnL avg $  +32.3, WR  62.5% ++++++
+     6h CT :   6 trades, PnL avg $  +51.2, WR  83.3% ++++++++++
+     7h CT :  43 trades, PnL avg $  +35.4, WR  72.1% +++++++
+     8h CT :   9 trades, PnL avg $  +70.1, WR  66.7% ++++++++++++++
+     9h CT :   6 trades, PnL avg $  -16.5, WR  50.0% ---
+    10h CT :   3 trades, PnL avg $ +184.3, WR 100.0% ++++++++++++++++++++++++++++++++++++
+    11h CT :   3 trades, PnL avg $ -103.3, WR  33.3% --------------------
+    12h CT :   4 trades, PnL avg $ +106.0, WR  75.0% +++++++++++++++++++++
+    13h CT :   3 trades, PnL avg $ -151.9, WR  33.3% ------------------------------
+    18h CT :   7 trades, PnL avg $  +16.7, WR  28.6% +++
+    19h CT :  21 trades, PnL avg $  -27.5, WR  14.3% -----
+    20h CT :  20 trades, PnL avg $  +13.6, WR  50.0% ++
+    21h CT :   4 trades, PnL avg $  +68.8, WR  50.0% +++++++++++++
+    22h CT :   5 trades, PnL avg $  +16.8, WR  20.0% +++
+    23h CT :  15 trades, PnL avg $  +12.5, WR  40.0% ++
+  3 meilleures heures : 10h, 12h, 8h
+  3 pires heures      : 13h, 11h, 19h
+
+  D) EQUITY PAR ANNEE
+  ----------------------------------------------------------------------------------------------------
+   Annee Trades        PnL    PnL Avg     Max DD
+  ------------------------------------------------------------
+    2023     61     -1,143      -18.7     -1,322
+    2024     79       -917      -11.6     -1,806
+    2025     59     +3,761      +63.7       -454
+    2026     13     +2,355     +181.1         +0
+
+  E) DUREE DES TRADES (barres 5-min)
+  ----------------------------------------------------------------------------------------------------
+  Gagnants  : avg=52.1 bars (260 min), median=20 bars (100 min), n=113
+  Perdants  : avg=106.3 bars (531 min), median=50 bars (250 min), n=99
+
+========================================================================================================================
+CONFIG: C6_low_dd_cp36
+  beta=4620 zp=30 cp=36 adf=64 zE=3.75 co=20 zTP=0.0 dTP=250 dSL=-500 mhb=0 mm=2
+  Trades: 161
+========================================================================================================================
+
+  A) BREAKDOWN PAR EXIT REASON
+  ----------------------------------------------------------------------------------------------------
+  Reason        Count    PnL Tot    PnL Avg    PnL Med    WR%    Dur Avg
+  ----------------------------------------------------------------------------------------------------
+  TP_ZSCORE        57     +1,703      +29.9      +35.4  63.2%       93.0
+  TP_DOLLAR        49     +9,046     +184.6     +188.6 100.0%        2.5
+  SL_DOLLAR         2     -1,146     -573.2     -573.2   0.0%       70.2
+  SL_ZSCORE         0
+  MAX_HOLD          0
+  FLAT_EOD         53     -2,144      -40.5      -36.5  18.9%        9.3
+
+  B) ANALYSE FLAT_EOD
+  ----------------------------------------------------------------------------------------------------
+  Distribution heures entree (FLAT_EOD) :
+    12h CT :   1 trades, PnL avg $-128.2
+    13h CT :   1 trades, PnL avg $+43.7
+    18h CT :   2 trades, PnL avg $-39.1
+    19h CT :  13 trades, PnL avg $-39.9
+    20h CT :  30 trades, PnL avg $-40.7
+    21h CT :   2 trades, PnL avg $-34.5
+    22h CT :   1 trades, PnL avg $-38.6
+    23h CT :   3 trades, PnL avg $-45.1
+  Entree < 12h CT : 0 trades, PnL avg $+0.0
+  Entree >= 12h CT : 53 trades, PnL avg $-40.5
+  FLAT_EOD positifs : 10/53 (18.9%)
+
+  C) ANALYSE TEMPORELLE
+  ----------------------------------------------------------------------------------------------------
+  PnL moyen par heure d'entree :
+     0h CT :  11 trades, PnL avg $  -17.3, WR  45.5% ---
+     1h CT :   9 trades, PnL avg $  +89.6, WR  77.8% +++++++++++++++++
+     2h CT :   2 trades, PnL avg $  +91.9, WR  50.0% ++++++++++++++++++
+     3h CT :   3 trades, PnL avg $ +192.0, WR 100.0% ++++++++++++++++++++++++++++++++++++++
+     4h CT :   2 trades, PnL avg $ +198.7, WR 100.0% +++++++++++++++++++++++++++++++++++++++
+     5h CT :   3 trades, PnL avg $  +86.2, WR 100.0% +++++++++++++++++
+     6h CT :   6 trades, PnL avg $   +4.8, WR  83.3% 
+     7h CT :  33 trades, PnL avg $  +59.2, WR  75.8% +++++++++++
+     8h CT :   5 trades, PnL avg $ +103.4, WR  80.0% ++++++++++++++++++++
+     9h CT :   5 trades, PnL avg $  +15.6, WR  40.0% +++
+    10h CT :   3 trades, PnL avg $ +172.1, WR 100.0% ++++++++++++++++++++++++++++++++++
+    11h CT :   1 trades, PnL avg $  -38.8, WR   0.0% -------
+    12h CT :   3 trades, PnL avg $  +79.1, WR  66.7% +++++++++++++++
+    13h CT :   4 trades, PnL avg $  +95.0, WR 100.0% +++++++++++++++++++
+    18h CT :   4 trades, PnL avg $  +78.7, WR  50.0% +++++++++++++++
+    19h CT :  18 trades, PnL avg $  +24.6, WR  33.3% ++++
+    20h CT :  35 trades, PnL avg $   -7.7, WR  34.3% -
+    21h CT :   2 trades, PnL avg $  -34.5, WR   0.0% ------
+    22h CT :   2 trades, PnL avg $  +75.0, WR  50.0% ++++++++++++++
+    23h CT :  10 trades, PnL avg $ +118.2, WR  80.0% +++++++++++++++++++++++
+  3 meilleures heures : 4h, 3h, 10h
+  3 pires heures      : 11h, 21h, 0h
+
+  D) EQUITY PAR ANNEE
+  ----------------------------------------------------------------------------------------------------
+   Annee Trades        PnL    PnL Avg     Max DD
+  ------------------------------------------------------------
+    2023     47       -657      -14.0     -1,498
+    2024     63     +1,295      +20.6       -443
+    2025     42     +5,128     +122.1        -45
+    2026      9     +1,692     +188.0         +0
+
+  E) DUREE DES TRADES (barres 5-min)
+  ----------------------------------------------------------------------------------------------------
+  Gagnants  : avg=27.5 bars (138 min), median=5 bars (25 min), n=95
+  Perdants  : avg=52.1 bars (261 min), median=5 bars (25 min), n=66
+
+========================================================================================================================
+CONFIG: C7_high_trades
+  beta=2640 zp=20 cp=12 adf=32 zE=3.25 co=30 zTP=-1.5 dTP=250 dSL=0 mhb=0 mm=2
+  Trades: 203
+========================================================================================================================
+
+  A) BREAKDOWN PAR EXIT REASON
+  ----------------------------------------------------------------------------------------------------
+  Reason        Count    PnL Tot    PnL Avg    PnL Med    WR%    Dur Avg
+  ----------------------------------------------------------------------------------------------------
+  TP_ZSCORE         1       +125     +124.6     +124.6 100.0%       45.0
+  TP_DOLLAR        45     +8,083     +179.6     +188.6 100.0%        0.0
+  SL_DOLLAR       156     -7,497      -48.1      -47.5   0.0%        3.5
+  SL_ZSCORE         0
+  MAX_HOLD          0
+  FLAT_EOD          1        -71      -70.6      -70.6   0.0%        5.0
+
+  B) ANALYSE FLAT_EOD
+  ----------------------------------------------------------------------------------------------------
+  Distribution heures entree (FLAT_EOD) :
+    19h CT :   1 trades, PnL avg $-70.6
+  Entree < 12h CT : 0 trades, PnL avg $+0.0
+  Entree >= 12h CT : 1 trades, PnL avg $-70.6
+  FLAT_EOD positifs : 0/1 (0.0%)
+
+  C) ANALYSE TEMPORELLE
+  ----------------------------------------------------------------------------------------------------
+  PnL moyen par heure d'entree :
+     0h CT :  18 trades, PnL avg $  -41.8, WR   5.6% --------
+     1h CT :   8 trades, PnL avg $  -21.2, WR  12.5% ----
+     2h CT :   5 trades, PnL avg $  +50.6, WR  40.0% ++++++++++
+     3h CT :   9 trades, PnL avg $  +24.1, WR  33.3% ++++
+     4h CT :   5 trades, PnL avg $  +41.0, WR  40.0% ++++++++
+     5h CT :   7 trades, PnL avg $  -43.0, WR   0.0% --------
+     6h CT :   8 trades, PnL avg $  -21.2, WR  12.5% ----
+     7h CT :  35 trades, PnL avg $   -0.1, WR  20.0% 
+     8h CT :  10 trades, PnL avg $  +33.6, WR  30.0% ++++++
+     9h CT :   7 trades, PnL avg $   +2.6, WR  28.6% 
+    10h CT :   5 trades, PnL avg $  +89.1, WR  60.0% +++++++++++++++++
+    11h CT :   3 trades, PnL avg $  +33.1, WR  33.3% ++++++
+    12h CT :   4 trades, PnL avg $ +142.5, WR  75.0% ++++++++++++++++++++++++++++
+    13h CT :   4 trades, PnL avg $ +102.2, WR  75.0% ++++++++++++++++++++
+    18h CT :   7 trades, PnL avg $  +20.2, WR  28.6% ++++
+    19h CT :  20 trades, PnL avg $  -10.3, WR  15.0% --
+    20h CT :  25 trades, PnL avg $  -15.1, WR  16.0% ---
+    21h CT :   5 trades, PnL avg $  -18.5, WR  20.0% ---
+    22h CT :   7 trades, PnL avg $  -11.5, WR  14.3% --
+    23h CT :  11 trades, PnL avg $   +8.9, WR  27.3% +
+  3 meilleures heures : 12h, 13h, 10h
+  3 pires heures      : 5h, 0h, 1h
+
+  D) EQUITY PAR ANNEE
+  ----------------------------------------------------------------------------------------------------
+   Annee Trades        PnL    PnL Avg     Max DD
+  ------------------------------------------------------------
+    2023     67     -2,212      -33.0     -2,178
+    2024     68     -1,254      -18.4     -1,480
+    2025     56     +2,161      +38.6       -547
+    2026     12     +1,943     +161.9         +0
+
+  E) DUREE DES TRADES (barres 5-min)
+  ----------------------------------------------------------------------------------------------------
+  Gagnants  : avg=1.0 bars (5 min), median=0 bars (0 min), n=46
+  Perdants  : avg=3.5 bars (18 min), median=4 bars (21 min), n=157
+
+========================================================================================================================
+CONFIG: C8_anti_fragile
+  beta=4620 zp=30 cp=30 adf=64 zE=3.75 co=20 zTP=1.0 dTP=250 dSL=0 mhb=0 mm=2
+  Trades: 156
+========================================================================================================================
+
+  A) BREAKDOWN PAR EXIT REASON
+  ----------------------------------------------------------------------------------------------------
+  Reason        Count    PnL Tot    PnL Avg    PnL Med    WR%    Dur Avg
+  ----------------------------------------------------------------------------------------------------
+  TP_ZSCORE         2        +43      +21.4      +21.4 100.0%       15.0
+  TP_DOLLAR        45     +8,192     +182.0     +188.6 100.0%        0.0
+  SL_DOLLAR       109     -5,053      -46.4      -39.5   0.0%        3.5
+  SL_ZSCORE         0
+  MAX_HOLD          0
+  FLAT_EOD          0
+
+  B) ANALYSE FLAT_EOD
+  ----------------------------------------------------------------------------------------------------
+  Aucun trade FLAT_EOD
+
+  C) ANALYSE TEMPORELLE
+  ----------------------------------------------------------------------------------------------------
+  PnL moyen par heure d'entree :
+     0h CT :  10 trades, PnL avg $  -29.2, WR  10.0% -----
+     1h CT :  11 trades, PnL avg $  +15.3, WR  27.3% +++
+     2h CT :   2 trades, PnL avg $  +80.4, WR  50.0% ++++++++++++++++
+     3h CT :   3 trades, PnL avg $ +108.6, WR  66.7% +++++++++++++++++++++
+     4h CT :   2 trades, PnL avg $ +198.7, WR 100.0% +++++++++++++++++++++++++++++++++++++++
+     5h CT :   3 trades, PnL avg $  -27.8, WR   0.0% -----
+     6h CT :   5 trades, PnL avg $  +66.2, WR  60.0% +++++++++++++
+     7h CT :  34 trades, PnL avg $   -7.1, WR  20.6% -
+     8h CT :   6 trades, PnL avg $   +2.4, WR  16.7% 
+     9h CT :   5 trades, PnL avg $   -3.0, WR  20.0% 
+    10h CT :   3 trades, PnL avg $ +102.8, WR  66.7% ++++++++++++++++++++
+    11h CT :   2 trades, PnL avg $  -27.8, WR   0.0% -----
+    12h CT :   4 trades, PnL avg $ +127.2, WR  75.0% +++++++++++++++++++++++++
+    13h CT :   4 trades, PnL avg $  +33.8, WR  50.0% ++++++
+    18h CT :   4 trades, PnL avg $  +81.5, WR  50.0% ++++++++++++++++
+    19h CT :  16 trades, PnL avg $  +15.4, WR  25.0% +++
+    20h CT :  28 trades, PnL avg $  -10.7, WR  17.9% --
+    21h CT :   2 trades, PnL avg $  -42.5, WR   0.0% --------
+    22h CT :   2 trades, PnL avg $  +77.5, WR  50.0% +++++++++++++++
+    23h CT :  10 trades, PnL avg $ +117.7, WR  70.0% +++++++++++++++++++++++
+  3 meilleures heures : 4h, 12h, 23h
+  3 pires heures      : 21h, 0h, 5h
+
+  D) EQUITY PAR ANNEE
+  ----------------------------------------------------------------------------------------------------
+   Annee Trades        PnL    PnL Avg     Max DD
+  ------------------------------------------------------------
+    2023     45       -895      -19.9     -1,362
+    2024     59       -786      -13.3     -1,101
+    2025     41     +2,911      +71.0       -379
+    2026     11     +1,951     +177.4         +0
+
+  E) DUREE DES TRADES (barres 5-min)
+  ----------------------------------------------------------------------------------------------------
+  Gagnants  : avg=0.7 bars (3 min), median=0 bars (0 min), n=47
+  Perdants  : avg=3.5 bars (17 min), median=4 bars (20 min), n=109
+
+========================================================================================================================
+CONFIG: C9_alt_indicators
+  beta=2640 zp=30 cp=12 adf=26 zE=3.5 co=20 zTP=-0.5 dTP=250 dSL=-1000 mhb=0 mm=2
+  Trades: 300
+========================================================================================================================
+
+  A) BREAKDOWN PAR EXIT REASON
+  ----------------------------------------------------------------------------------------------------
+  Reason        Count    PnL Tot    PnL Avg    PnL Med    WR%    Dur Avg
+  ----------------------------------------------------------------------------------------------------
+  TP_ZSCORE       130     -2,803      -21.6      +19.4  60.8%      127.6
+  TP_DOLLAR        75    +13,981     +186.4     +188.6 100.0%        6.6
+  SL_DOLLAR         0
+  SL_ZSCORE         0
+  MAX_HOLD          0
+  FLAT_EOD         95     -3,958      -41.7      -34.8  16.8%        9.6
+
+  B) ANALYSE FLAT_EOD
+  ----------------------------------------------------------------------------------------------------
+  Distribution heures entree (FLAT_EOD) :
+    11h CT :   1 trades, PnL avg $-369.4
+    12h CT :   1 trades, PnL avg $-72.4
+    13h CT :   1 trades, PnL avg $-55.4
+    18h CT :   5 trades, PnL avg $-50.5
+    19h CT :  21 trades, PnL avg $-51.5
+    20h CT :  47 trades, PnL avg $-34.8
+    21h CT :   6 trades, PnL avg $-13.6
+    22h CT :   3 trades, PnL avg $-14.9
+    23h CT :  10 trades, PnL avg $-36.5
+  Entree < 12h CT : 1 trades, PnL avg $-369.4
+  Entree >= 12h CT : 94 trades, PnL avg $-38.2
+  FLAT_EOD positifs : 16/95 (16.8%)
+
+  C) ANALYSE TEMPORELLE
+  ----------------------------------------------------------------------------------------------------
+  PnL moyen par heure d'entree :
+     0h CT :  20 trades, PnL avg $  +16.8, WR  70.0% +++
+     1h CT :  25 trades, PnL avg $   +7.3, WR  64.0% +
+     2h CT :   4 trades, PnL avg $ +128.0, WR 100.0% +++++++++++++++++++++++++
+     3h CT :   9 trades, PnL avg $   -4.7, WR  55.6% 
+     4h CT :   5 trades, PnL avg $ +165.5, WR 100.0% +++++++++++++++++++++++++++++++++
+     5h CT :   7 trades, PnL avg $  -50.1, WR  42.9% ----------
+     6h CT :  18 trades, PnL avg $  +24.7, WR  66.7% ++++
+     7h CT :  59 trades, PnL avg $  +55.8, WR  79.7% +++++++++++
+     8h CT :  15 trades, PnL avg $  +61.6, WR  66.7% ++++++++++++
+     9h CT :  11 trades, PnL avg $  -30.8, WR  63.6% ------
+    10h CT :   5 trades, PnL avg $ +175.9, WR 100.0% +++++++++++++++++++++++++++++++++++
+    11h CT :   3 trades, PnL avg $  -70.9, WR  33.3% --------------
+    12h CT :   3 trades, PnL avg $  +85.9, WR  66.7% +++++++++++++++++
+    13h CT :   6 trades, PnL avg $ +111.4, WR  83.3% ++++++++++++++++++++++
+    18h CT :   7 trades, PnL avg $  +21.8, WR  28.6% ++++
+    19h CT :  25 trades, PnL avg $  -15.8, WR  16.0% ---
+    20h CT :  53 trades, PnL avg $  -10.6, WR  34.0% --
+    21h CT :   6 trades, PnL avg $  -13.6, WR  33.3% --
+    22h CT :   5 trades, PnL avg $  +66.5, WR  60.0% +++++++++++++
+    23h CT :  14 trades, PnL avg $  +28.3, WR  35.7% +++++
+  3 meilleures heures : 10h, 4h, 2h
+  3 pires heures      : 11h, 5h, 9h
+
+  D) EQUITY PAR ANNEE
+  ----------------------------------------------------------------------------------------------------
+   Annee Trades        PnL    PnL Avg     Max DD
+  ------------------------------------------------------------
+    2023     90       -482       -5.4       -859
+    2024    103        +27       +0.3     -1,051
+    2025     93     +5,384      +57.9     -1,156
+    2026     14     +2,290     +163.5         +0
+
+  E) DUREE DES TRADES (barres 5-min)
+  ----------------------------------------------------------------------------------------------------
+  Gagnants  : avg=41.9 bars (209 min), median=15 bars (73 min), n=170
+  Perdants  : avg=83.7 bars (418 min), median=5 bars (25 min), n=130
+
+========================================================================================================================
+CONFIG: C10_alt_mhb6
+  beta=3960 zp=24 cp=30 adf=144 zE=3.5 co=30 zTP=1.0 dTP=250 dSL=0 mhb=6 mm=2
+  Trades: 150
+========================================================================================================================
+
+  A) BREAKDOWN PAR EXIT REASON
+  ----------------------------------------------------------------------------------------------------
+  Reason        Count    PnL Tot    PnL Avg    PnL Med    WR%    Dur Avg
+  ----------------------------------------------------------------------------------------------------
+  TP_ZSCORE         0
+  TP_DOLLAR        47     +8,503     +180.9     +188.6 100.0%        0.0
+  SL_DOLLAR       101     -4,847      -48.0      -39.5   0.0%        3.6
+  SL_ZSCORE         0
+  MAX_HOLD          0
+  FLAT_EOD          2        -57      -28.4      -28.4   0.0%        5.0
+
+  B) ANALYSE FLAT_EOD
+  ----------------------------------------------------------------------------------------------------
+  Distribution heures entree (FLAT_EOD) :
+    20h CT :   2 trades, PnL avg $-28.4
+  Entree < 12h CT : 0 trades, PnL avg $+0.0
+  Entree >= 12h CT : 2 trades, PnL avg $-28.4
+  FLAT_EOD positifs : 0/2 (0.0%)
+
+  C) ANALYSE TEMPORELLE
+  ----------------------------------------------------------------------------------------------------
+  PnL moyen par heure d'entree :
+     0h CT :  17 trades, PnL avg $  -19.6, WR  11.8% ---
+     1h CT :  10 trades, PnL avg $  +58.4, WR  50.0% +++++++++++
+     2h CT :   4 trades, PnL avg $ +134.5, WR  75.0% ++++++++++++++++++++++++++
+     3h CT :   2 trades, PnL avg $  +63.6, WR  50.0% ++++++++++++
+     4h CT :   3 trades, PnL avg $  +38.5, WR  33.3% +++++++
+     5h CT :   1 trades, PnL avg $  -27.8, WR   0.0% -----
+     6h CT :  10 trades, PnL avg $  +26.1, WR  30.0% +++++
+     7h CT :  27 trades, PnL avg $  +17.3, WR  33.3% +++
+     8h CT :   5 trades, PnL avg $   +2.9, WR  20.0% 
+     9h CT :   3 trades, PnL avg $  +89.6, WR  66.7% +++++++++++++++++
+    10h CT :   3 trades, PnL avg $  +28.7, WR  33.3% +++++
+    11h CT :   3 trades, PnL avg $  +44.4, WR  33.3% ++++++++
+    12h CT :   3 trades, PnL avg $  +49.7, WR  33.3% +++++++++
+    13h CT :   3 trades, PnL avg $  +89.6, WR  66.7% +++++++++++++++++
+    18h CT :   4 trades, PnL avg $  +81.5, WR  50.0% ++++++++++++++++
+    19h CT :  12 trades, PnL avg $   -8.8, WR  16.7% -
+    20h CT :  23 trades, PnL avg $  -25.0, WR   8.7% -----
+    21h CT :   3 trades, PnL avg $  +18.0, WR  33.3% +++
+    22h CT :   3 trades, PnL avg $  +42.4, WR  33.3% ++++++++
+    23h CT :  11 trades, PnL avg $ +102.0, WR  63.6% ++++++++++++++++++++
+  3 meilleures heures : 2h, 23h, 9h
+  3 pires heures      : 5h, 20h, 0h
+
+  D) EQUITY PAR ANNEE
+  ----------------------------------------------------------------------------------------------------
+   Annee Trades        PnL    PnL Avg     Max DD
+  ------------------------------------------------------------
+    2023     43     -1,525      -35.5     -1,740
+    2024     52     -1,037      -19.9     -1,192
+    2025     42     +3,882      +92.4       -156
+    2026     13     +2,280     +175.4         +0
+
+  E) DUREE DES TRADES (barres 5-min)
+  ----------------------------------------------------------------------------------------------------
+  Gagnants  : avg=0.0 bars (0 min), median=0 bars (0 min), n=47
+  Perdants  : avg=3.6 bars (18 min), median=4 bars (20 min), n=103
+
+
+========================================================================================================================
+SYNTHESE COMPARATIVE
+========================================================================================================================
+Config                    Trades   WR%       PnL    MaxDD    Cal  EOD  EOD%  EOD avg   Best Hours  Worst Hours   Dur W   Dur L
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+C1_pnl_sharpe_balanced       164 59.8%    +7,711   -1,543   5.00   56 34.1%    -44.1  4h, 3h, 10h 11h, 21h, 20h    26.5    58.0
+C2_pnl_brut_top              329 55.6%    +8,009   -2,562   3.13  108 32.8%    -46.3   4h, 8h, 3h  9h, 0h, 11h    34.3    74.1
+C3_calmar_top                146 28.1%    +2,718   -1,850   1.47    0  0.0%     +0.0  4h, 2h, 12h 11h, 5h, 19h     0.0     3.6
+C4_sortino_mhb6              156 30.1%    +3,177   -1,738   1.83    1  0.6%    +11.4 4h, 12h, 23h  21h, 0h, 5h     0.9     3.5
+C5_zero_eod                  212 53.3%    +4,056   -2,376   1.71   60 28.3%    -52.0 10h, 12h, 8h 13h, 11h, 19h    52.1   106.3
+C6_low_dd_cp36               161 59.0%    +7,458   -1,498   4.98   53 32.9%    -40.5  4h, 3h, 10h 11h, 21h, 0h    27.5    52.1
+C7_high_trades               203 22.7%      +639   -3,598   0.18    1  0.5%    -70.6 12h, 13h, 10h   5h, 0h, 1h     1.0     3.5
+C8_anti_fragile              156 30.1%    +3,182   -1,733   1.84    0  0.0%     +0.0 4h, 12h, 23h  21h, 0h, 5h     0.7     3.5
+C9_alt_indicators            300 56.7%    +7,219   -1,706   4.23   95 31.7%    -41.7  10h, 4h, 2h  11h, 5h, 9h    41.9    83.7
+C10_alt_mhb6                 150 31.3%    +3,600   -2,690   1.34    2  1.3%    -28.4  2h, 23h, 9h  5h, 20h, 0h     0.0     3.6
