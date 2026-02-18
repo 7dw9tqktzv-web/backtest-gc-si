@@ -256,11 +256,6 @@ Skill: `.claude/skills/ibkr-volatility/SKILL.md`. Data: `data/vol_metrics/`.
 - [ ] Focus sessions US uniquement
 - [ ] TP dynamique en fonction de la volatilite
 
-## Known Code Issues
-- `run_hybrid_backtest()` dans backtest_engine_hybrid.py = 350+ lines (reference only, le kernel Numba est deja decompose en helpers inlines).
-- **Bug end_session reference worker** : `_process_indicator_group` dans `grid_search_runner.py` compare a `'END_SESSION'` au lieu de `'FLAT_EOD'`. Le compteur `end_session` est toujours 0 dans les CSV du moteur standard. Pas bloquant (le fast worker est correct).
-- **Calmar calcule en double** : le fast worker met `calmar` dans le dict `m`, puis `_micro_full_result_builder` le recalcule depuis `m["pnl_net"] / abs(m["max_dd"])`. Meme resultat, travail redondant. Ne pas diverger les deux calculs.
-
 ## Claude Code Skills
 - **/backtest-runner** : Lance backtest hybrid + metrics, compare avec run precedent
 - **/optimize** : Teste parametres via langage naturel FR, syntaxe "/" pour grid (ex: "teste beta 1320/2640")

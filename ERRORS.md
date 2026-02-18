@@ -65,3 +65,7 @@ Reverte par 4b944df. Ne pas reproduire.
 - micro_mult_max etait utilise comme cap sur GC+SI au lieu de multiplicateur SIL
 - GC cape a 2 contrats au lieu de 10-13
 - FIX : logique smart multiplier identique a position.py
+
+### 7. Calmar calcule en double dans fast grid engine (MINEUR)
+- Le fast worker met `calmar` dans le dict `m`, puis `_micro_full_result_builder` le recalcule
+- Meme resultat, travail redondant. Ne pas diverger les deux calculs.
