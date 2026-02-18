@@ -25,8 +25,9 @@ Config backup : C01
 SC paper trading tourne avec C6 en l'etat (plugin C++ a mettre a jour avec C09).
 
 ### Output Structure
-- Grid searches : `output/grid_searches/r1_corrected/`
+- Grid searches : `output/grid_searches/r1_corrected/` (micro, seul valide)
 - Reports : `output/reports/` (wf_phase1, wf_phase2_mc, phase3_deep_analysis)
+- Production : `output/production/` (paper trading SC)
 - Logs : `output/logs/`
 
 ## Commands
@@ -250,6 +251,15 @@ Skill: `.claude/skills/ibkr-volatility/SKILL.md`. Data: `data/vol_metrics/`.
 - [ ] Ajouter signaux skew divergent (RR25 GC vs SI de signe oppose) dans dashboard
 - [ ] Collecte daily automatique RR25/RR10 -> daily_snapshots.parquet
 - [ ] Merge branche dans master une fois stabilise
+
+### Phase F -- Config Standard (revalidation)
+- [ ] Revalider config standard (GC/SI) avec nouvelle methode (WF + MC + Deep Analysis)
+- [ ] Config production standard obsolete (optimisee sans FLAT_EOD ni session prop firm)
+
+### Phase G -- Nouveaux actifs correles
+- [ ] Adapter le framework a d'autres spreads : CL/HO (Crude/Heating Oil), CL/RB (Crude/RBOB Gasoline)
+- [ ] Evaluer cointegration sur ces paires (ADF, Hurst, rolling correlation)
+- [ ] Data Sierra Chart : exports CSV + 5s pour chaque paire
 
 ### Future Tests (apres paper trading)
 - [ ] Validation sur timeframes plus longs (15min, 1h)
