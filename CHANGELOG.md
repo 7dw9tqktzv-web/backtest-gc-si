@@ -5,7 +5,42 @@ Historique des optimisations, resultats detailles et ameliorations du backtest G
 ---
 
 
-## [2026-02-18] Phase D — Walk-Forward + Monte Carlo validation (10 configs micro)
+## [2026-02-18] Walk-Forward + Monte Carlo -- Validation finale
+
+### Bug critique corrige
+- Override keys mismatch dans les scripts WF/MC (run_wf_phase1.py, run_wf_phase2_mc.py, run_phase2b_yearly_mc.py)
+- 6 cles d'override ne correspondaient pas aux cles lues par pack_config()
+- Consequence : backtests en mode pure Z-Score sans dollar exits, resultats invalides
+- Fix : wf_configs.py (source unique) + warning dans apply_overrides() + ERRORS.md
+
+### Walk-Forward Phase 1 (10 configs x 5 OOS)
+- 10/10 PASS (apres correction des cles)
+- 3 configs 5/5 : C03 (b7920), C07 (b2640), C09 (b2640)
+- OOS1 (H1 2023) reste le point faible pour b4620
+
+### Monte Carlo Phase 2 (1000 resamplings)
+- 9/10 PASS (C10 FAIL, PnL P5 = -$68)
+- Tier 1 (Sharpe >0.38) : C01, C03, C04, C05
+- Tier 2 (Volume) : C06, C07, C08, C09
+
+### Phase 3 Deep Analysis -- C01, C03, C09
+- C01 (b4620_zE3.6_dTP225_es22) : 152 tr, $8,750, DD -$1,175, Sh 0.394, PF 2.65, 2023 negatif
+- C03 (b7920_zE3.45_dTP175_mhb18_es22) : 200 tr, $8,038, DD -$710, Cal 11.3, 35% MAX_HOLD
+- C09 (b2640_zE3.4_dTP200_es0) : 238 tr, $8,101, DD -$908, Sh 0.222, 5/5 OOS, 0% MAX_HOLD, 2% EOD
+
+### Decision finale
+- Config principale : C09 (b2640_zp28_cp12_adf64_zE3.4_co20_zTP-0.5_dTP200_dSL-500_nohold_es0)
+- Config backup : C01 (b4620_zp28_cp30_adf64_zE3.6_co20_zTP-0.25_dTP225_dSL-500_nohold_es22)
+- C03 ecartee (35% MAX_HOLD = bruit en live)
+
+### Next steps
+- Implementer C09 dans le plugin Sierra Chart ACSIL micro
+- Paper trading C09
+- Delta test backtest Sierra vs Python
+
+---
+
+## [2026-02-18] Phase D — Walk-Forward + Monte Carlo validation (10 configs micro) [INVALIDE]
 
 ### Contexte
 Selection de 10 configs candidates depuis R2a+R2b (30M configs). Filtres : trades>=200, PnL>=7000, DD>=-2500.

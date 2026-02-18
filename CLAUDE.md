@@ -6,12 +6,23 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v2.0).
 
-**Current status**: Phase D — R1 termine (295M configs, 10h), analyse approfondie faite. R2 zoom (R2a + R2b) a lancer. Paper trading SC en cours (C6).
+**Current status**: Phase D — Validation terminee. Config C09 selectionnee, a implementer dans SC micro.
 **Config production standard**: OBSOLETE — optimisee sans FLAT_EOD ni session prop firm, ne sert plus de reference.
-**Config production micro**: A DETERMINER — 4 candidates R1, R2 zoom en preparation.
+
+### Config production (micro prop firm)
+Config principale : C09
+- b2640_zp28_cp12_adf64_zE3.4_co20_zTP-0.5_dTP200_dSL-500_nohold_mm2_es0
+- 238 trades (3 ans), $8,101 PnL, DD -$908, Sharpe 0.222, WR 74%, EOD 2%
+- Walk-forward 5/5 OOS, Monte Carlo PnL P5 +$1,727
+
+Config backup : C01
+- b4620_zp28_cp30_adf64_zE3.6_co20_zTP-0.25_dTP225_dSL-500_nohold_mm2_es22
+- 152 trades, $8,750 PnL, DD -$1,175, Sharpe 0.394, WR 73%, EOD 7%
+- Walk-forward 4/5 OOS, Monte Carlo PnL P5 +$5,436
+
 **210 tests passing**. See `CHANGELOG.md` for detailed history.
 
-SC paper trading tourne avec C6 en l'etat (plugin C++ correct, sera remplacee post-R1).
+SC paper trading tourne avec C6 en l'etat (plugin C++ a mettre a jour avec C09).
 
 ### Output Structure
 - Grid searches : `output/grid_searches/r1|r2a|r2b|r2c/`
