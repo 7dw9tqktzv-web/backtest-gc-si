@@ -365,7 +365,7 @@ def _get_risk_reversal(ib: IB, symbol: str, exchange: str, opt_exchange: str,
 
         call_gap = abs(best_call["delta"] - target_delta) if best_call else 999
         put_gap = abs(abs(best_put["delta"]) - target_delta) if best_put else 999
-        max_gap = max(call_gap, put_gap)
+
 
         if (best_call and best_put
                 and call_gap <= DELTA_TOLERANCE
@@ -475,7 +475,7 @@ def get_skew_signal(target_dte: int = 30) -> dict:
         gc_rr10 = gc_rr.get("rr10") if "error" not in gc_rr else None
         si_rr10 = si_rr.get("rr10") if "error" not in si_rr else None
 
-        # Confidence : basee sur les delta gaps des deux legs
+        # Confidence : basee sur le bid-ask IV spread des legs RR25
         gc_conf = gc_rr.get("rr25_confidence", "N/A") if "error" not in gc_rr else "N/A"
         si_conf = si_rr.get("rr25_confidence", "N/A") if "error" not in si_rr else "N/A"
         # Confidence globale = la pire des deux
@@ -487,8 +487,8 @@ def get_skew_signal(target_dte: int = 30) -> dict:
             divergent = (gc_rr25 > 0) != (si_rr25 > 0)
             signal = "SKEW_DIVERGENT" if divergent else "SKEW_ALIGNED"
             signal_color = "ORANGE" if divergent else "GREEN"
-            # Degrader si low confidence
-            if overall_conf == "LOW":
+            # Degrader si low confidence ou N/A (bidGreeks manquants)
+            if overall_conf in ("LOW", "N/A"):
                 signal = f"{signal} (LOW_CONF)"
                 signal_color = "GRAY"
         else:
