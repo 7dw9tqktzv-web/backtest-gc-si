@@ -1012,7 +1012,12 @@ def _fetch_vol_history(ib: IB, symbol: str, duration: str = "2 Y") -> pd.DataFra
 
     # Filtre outliers ContFuture : V30 doit etre entre 5% et 100% (HV30 peut depasser 100% legitimement)
     raw_len = len(df)
-    df = df[(df["v30"] >= 0.05) & (df["v30"] <= 1.0)].reset_index(drop=True)
+    df = pd.DataFrame(df[(df["v30"] >= 0.05) & (df["v30"] <= 1.0)]).reset_index(drop=True)
+    # Drop lignes en fin de serie ou HV30 manque (jour en cours pas encore calcule par IBKR)
+    hv30_col = df["hv30"]
+    while len(df) > 0 and bool(pd.Series(hv30_col).isna().iloc[-1]):
+        df = pd.DataFrame(df.iloc[:-1]).reset_index(drop=True)
+        hv30_col = df["hv30"]
     df["vrp"] = df["v30"] - df["hv30"]
     df.attrs["rows_filtered"] = raw_len - len(df)
     return df
