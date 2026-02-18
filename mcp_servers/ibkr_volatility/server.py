@@ -738,6 +738,9 @@ def _compute_signals_summary(row: dict, history_df: pd.DataFrame | None) -> dict
             vrp_now = float(vrp_60.iloc[-1])
             z = (vrp_now - float(vrp_60.mean())) / float(vrp_60.std()) if vrp_60.std() > 0 else 0.0
             z = round(z, 2)
+            if pd.isna(z):
+                signals[sig_name] = {"color": "GRAY", "detail": "VRP z=NaN (donnees manquantes)"}
+                continue
             if abs(z) > 2.0:
                 color = "RED"
             elif abs(z) > 1.5:
@@ -1013,11 +1016,11 @@ def _fetch_vol_history(ib: IB, symbol: str, duration: str = "2 Y") -> pd.DataFra
     # Filtre outliers ContFuture : V30 doit etre entre 5% et 100% (HV30 peut depasser 100% legitimement)
     raw_len = len(df)
     df = pd.DataFrame(df[(df["v30"] >= 0.05) & (df["v30"] <= 1.0)]).reset_index(drop=True)
-    # Drop lignes en fin de serie ou HV30 manque (jour en cours pas encore calcule par IBKR)
-    hv30_col = df["hv30"]
-    while len(df) > 0 and bool(pd.Series(hv30_col).isna().iloc[-1]):
-        df = pd.DataFrame(df.iloc[:-1]).reset_index(drop=True)
-        hv30_col = df["hv30"]
+    # Drop trailing rows where HV30 is NaN (intraday: IBKR hasn't computed HV30 yet)
+    hv30_notna = df["hv30"].notna()
+    if bool(hv30_notna.any()):
+        last_valid_pos: int = int(hv30_notna[hv30_notna].index[-1])  # type: ignore[index]
+        df = pd.DataFrame(df.iloc[: last_valid_pos + 1]).reset_index(drop=True)
     df["vrp"] = df["v30"] - df["hv30"]
     df.attrs["rows_filtered"] = raw_len - len(df)
     return df
