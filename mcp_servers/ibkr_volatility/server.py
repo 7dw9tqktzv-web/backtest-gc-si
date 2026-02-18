@@ -8,7 +8,8 @@ Usage : configure dans .mcp.json
 import nest_asyncio
 nest_asyncio.apply()
 
-from datetime import datetime
+import shutil
+from datetime import datetime, date as date_type
 from pathlib import Path
 
 import pandas as pd
@@ -575,6 +576,409 @@ def get_iv_snapshot(target_dte: int = 30) -> dict:
     finally:
         if ib.isConnected():
             ib.disconnect()
+
+
+def _collect_symbol_metrics(ib: IB, symbol: str, exchange: str, opt_exchange: str,
+                            opt_symbol: str, target_dte: int = 30,
+                            iv_spread_threshold: float = 4.0) -> dict:
+    """Collecte IV ATM + RR25/RR10 pour un symbole avec UNE seule resolution de chaine.
+    Retourne un dict avec toutes les metriques pour le daily snapshot."""
+    info = _resolve_option_chain(ib, symbol, exchange, opt_exchange, opt_symbol, target_dte)
+    if "error" in info:
+        return {"error": info["error"], "symbol": symbol}
+
+    fut_price = info["fut_price"]
+    expiry = info["expiry"]
+    dte = info["dte"]
+    atm_strike = info["atm_strike"]
+    strikes = info["strikes"]
+    tc = info.get("tradingClass", opt_symbol)
+
+    # --- IV ATM (call + put ATM) ---
+    call = FuturesOption(symbol=symbol, lastTradeDateOrContractMonth=expiry,
+                         strike=atm_strike, right="C", exchange=opt_exchange,
+                         tradingClass=tc)
+    put = FuturesOption(symbol=symbol, lastTradeDateOrContractMonth=expiry,
+                        strike=atm_strike, right="P", exchange=opt_exchange,
+                        tradingClass=tc)
+    qualified_atm = [q for q in ib.qualifyContracts(call, put) if q.conId > 0]
+
+    model_iv_call = model_iv_put = market_iv_call = market_iv_put = None
+    if qualified_atm:
+        atm_tickers = ib.reqTickers(*qualified_atm)
+        for _ in range(5):
+            if not ib.isConnected():
+                break
+            ib.sleep(1)
+            if all(t.modelGreeks for t in atm_tickers):
+                break
+        for t, right in zip(atm_tickers, ["call", "put"]):
+            g = t.modelGreeks
+            if g and g.impliedVol is not None:
+                if right == "call":
+                    model_iv_call = round(float(g.impliedVol) * 100, 2)
+                else:
+                    model_iv_put = round(float(g.impliedVol) * 100, 2)
+            bid_iv = float(t.bidGreeks.impliedVol) * 100 if (t.bidGreeks and t.bidGreeks.impliedVol is not None) else None
+            ask_iv = float(t.askGreeks.impliedVol) * 100 if (t.askGreeks and t.askGreeks.impliedVol is not None) else None
+            mid_iv = round((bid_iv + ask_iv) / 2, 2) if (bid_iv is not None and ask_iv is not None) else (
+                round(bid_iv, 2) if bid_iv is not None else (round(ask_iv, 2) if ask_iv is not None else None))
+            if right == "call":
+                market_iv_call = mid_iv
+            else:
+                market_iv_put = mid_iv
+
+    # Moyenne call/put
+    model_iv_atm = round((model_iv_call + model_iv_put) / 2, 2) if (model_iv_call is not None and model_iv_put is not None) else (model_iv_call or model_iv_put)
+    market_iv_atm = round((market_iv_call + market_iv_put) / 2, 2) if (market_iv_call is not None and market_iv_put is not None) else (market_iv_call or market_iv_put)
+
+    # --- RR25/RR10 (reutilise les memes strikes de la chaine) ---
+    lo = fut_price * 0.80
+    hi = fut_price * 1.20
+    nearby_strikes = [s for s in strikes if lo <= s <= hi]
+
+    rr25 = rr10 = rr25_confidence = None
+    rr25_iv_spread = None
+    rr_data = {}
+
+    if nearby_strikes:
+        options = []
+        for s in nearby_strikes:
+            options.append(FuturesOption(symbol=symbol, lastTradeDateOrContractMonth=expiry,
+                                        strike=s, right="C", exchange=opt_exchange, tradingClass=tc))
+            options.append(FuturesOption(symbol=symbol, lastTradeDateOrContractMonth=expiry,
+                                        strike=s, right="P", exchange=opt_exchange, tradingClass=tc))
+        qualified_rr = [q for q in ib.qualifyContracts(*options) if q is not None]
+        if qualified_rr:
+            rr_tickers = ib.reqTickers(*qualified_rr)
+            for _ in range(5):
+                if not ib.isConnected():
+                    break
+                ib.sleep(1)
+                if all(t.modelGreeks for t in rr_tickers):
+                    break
+
+            rows = []
+            for t in rr_tickers:
+                g = t.modelGreeks
+                if g and g.delta is not None and g.impliedVol is not None:
+                    bid_iv = float(t.bidGreeks.impliedVol) * 100 if (t.bidGreeks and t.bidGreeks.impliedVol is not None) else None
+                    ask_iv = float(t.askGreeks.impliedVol) * 100 if (t.askGreeks and t.askGreeks.impliedVol is not None) else None
+                    iv_sp = round(ask_iv - bid_iv, 2) if (bid_iv is not None and ask_iv is not None) else None
+                    rows.append({"strike": t.contract.strike, "right": t.contract.right,
+                                 "delta": float(g.delta), "iv": float(g.impliedVol) * 100, "iv_spread": iv_sp})
+
+            calls_rr = [r for r in rows if r["right"] == "C"]
+            puts_rr = [r for r in rows if r["right"] == "P"]
+            DELTA_TOL = 0.05
+
+            for label, target_d in [("rr25", 0.25), ("rr10", 0.10)]:
+                bc = min(calls_rr, key=lambda r: abs(r["delta"] - target_d)) if calls_rr else None
+                bp = min(puts_rr, key=lambda r: abs(abs(r["delta"]) - target_d)) if puts_rr else None
+                cg = abs(bc["delta"] - target_d) if bc else 999
+                pg = abs(abs(bp["delta"]) - target_d) if bp else 999
+                if bc and bp and cg <= DELTA_TOL and pg <= DELTA_TOL:
+                    rr_val = round(bc["iv"] - bp["iv"], 2)
+                    c_ivs = bc.get("iv_spread")
+                    p_ivs = bp.get("iv_spread")
+                    max_ivs = max(c_ivs or 0, p_ivs or 0)
+                    if c_ivs is None or p_ivs is None:
+                        conf = "N/A"
+                    elif max_ivs <= iv_spread_threshold * 0.5:
+                        conf = "HIGH"
+                    elif max_ivs <= iv_spread_threshold:
+                        conf = "MEDIUM"
+                    else:
+                        conf = "LOW"
+                    rr_data[label] = rr_val
+                    rr_data[f"{label}_confidence"] = conf
+                    rr_data[f"{label}_iv_spread"] = round(max_ivs, 2) if max_ivs else None
+
+    return {
+        "symbol": symbol,
+        "future_price": fut_price,
+        "expiry": expiry,
+        "dte": dte,
+        "model_iv_atm": model_iv_atm,
+        "market_iv_atm": market_iv_atm,
+        "rr25": rr_data.get("rr25"),
+        "rr25_confidence": rr_data.get("rr25_confidence"),
+        "rr25_iv_spread": rr_data.get("rr25_iv_spread"),
+        "rr10": rr_data.get("rr10"),
+    }
+
+
+def _compute_signals_summary(row: dict, history_df: pd.DataFrame | None) -> dict:
+    """Calcule les 5 signaux du daily snapshot avec code couleur."""
+    signals = {}
+
+    # --- REGIME : ratio_iv z-score 60d ---
+    if history_df is not None and len(history_df) >= 60 and row.get("ratio_iv") is not None:
+        ratio_60 = history_df["ratio_iv"].iloc[-60:]
+        z = (row["ratio_iv"] - float(ratio_60.mean())) / float(ratio_60.std()) if ratio_60.std() > 0 else 0.0
+        z = round(z, 2)
+        if abs(z) > 2.0:
+            color = "RED"
+        elif abs(z) > 1.5:
+            color = "ORANGE"
+        elif abs(z) > 1.0:
+            color = "YELLOW"
+        else:
+            color = "GREEN"
+        signals["REGIME"] = {"color": color, "detail": f"ratio_iv z={z}"}
+    else:
+        signals["REGIME"] = {"color": "GRAY", "detail": "N/A, pas d'historique"}
+
+    # --- VRP_GC et VRP_SI : z-score 60d ---
+    for sym in ["GC", "SI"]:
+        col = f"vrp_{sym.lower()}"
+        sig_name = f"VRP_{sym}"
+        if history_df is not None and len(history_df) >= 60 and col in history_df.columns:
+            vrp_60 = history_df[col].iloc[-60:]
+            vrp_now = float(vrp_60.iloc[-1])
+            z = (vrp_now - float(vrp_60.mean())) / float(vrp_60.std()) if vrp_60.std() > 0 else 0.0
+            z = round(z, 2)
+            if abs(z) > 2.0:
+                color = "RED"
+            elif abs(z) > 1.5:
+                color = "ORANGE"
+            elif abs(z) > 1.0:
+                color = "YELLOW"
+            else:
+                color = "GREEN"
+            signals[sig_name] = {"color": color, "detail": f"VRP z={z}"}
+        else:
+            signals[sig_name] = {"color": "GRAY", "detail": "N/A, pas d'historique"}
+
+    # --- SKEW : RR25 GC vs SI sign + confidence ---
+    gc_rr25 = row.get("gc_rr25")
+    si_rr25 = row.get("si_rr25")
+    gc_conf = row.get("gc_rr25_confidence", "N/A")
+    si_conf = row.get("si_rr25_confidence", "N/A")
+    conf_rank = {"HIGH": 3, "MEDIUM": 2, "LOW": 1, "N/A": 0}
+    worst_conf = min([gc_conf, si_conf], key=lambda c: conf_rank.get(c, 0))
+
+    if gc_rr25 is not None and si_rr25 is not None:
+        divergent = (gc_rr25 > 0) != (si_rr25 > 0)
+        if divergent and worst_conf == "HIGH":
+            color = "RED"
+        elif divergent or worst_conf in ("LOW", "N/A"):
+            color = "ORANGE"
+        elif worst_conf == "MEDIUM":
+            color = "YELLOW"
+        else:
+            color = "GREEN"
+        label = "DIVERGENT" if divergent else "ALIGNED"
+        signals["SKEW"] = {"color": color, "detail": f"SKEW_{label}, worst_conf={worst_conf}"}
+    else:
+        signals["SKEW"] = {"color": "GRAY", "detail": "N/A, RR25 manquant"}
+
+    # --- DATA : qualite de la collecte ---
+    dq = row.get("data_quality", "OK")
+    if dq == "OK":
+        signals["DATA"] = {"color": "GREEN", "detail": "all metrics collected"}
+    elif dq == "PARTIAL":
+        signals["DATA"] = {"color": "YELLOW", "detail": "some metrics missing"}
+    else:
+        signals["DATA"] = {"color": "ORANGE", "detail": f"data_quality={dq}"}
+
+    return signals
+
+
+@mcp.tool
+def collect_daily_snapshot(target_dte: int = 30) -> dict:
+    """Collecte quotidienne IV ATM + RR25/RR10 + V30 pour GC et SI. Sauvegarde en Parquet."""
+    ib = IB()
+    try:
+        ib.connect(TWS_HOST, TWS_PORT, clientId=CLIENT_ID, timeout=10)
+        VOL_METRICS_DIR.mkdir(parents=True, exist_ok=True)
+        collection_time = datetime.now(tz=__import__('datetime').timezone.utc)
+        today = collection_time.date()
+
+        # --- Collecte live via shared chain (1 resolve par symbole) ---
+        gc = _collect_symbol_metrics(ib, symbol="GC", exchange="COMEX",
+                                     opt_exchange="COMEX", opt_symbol="OG",
+                                     target_dte=target_dte, iv_spread_threshold=4.0)
+        si = _collect_symbol_metrics(ib, symbol="SI", exchange="COMEX",
+                                     opt_exchange="COMEX", opt_symbol="SO",
+                                     target_dte=target_dte, iv_spread_threshold=8.0)
+
+        server_time = str(ib.reqCurrentTime()) if ib.isConnected() else "N/A"
+
+    except Exception as e:
+        return {"status": "error", "message": str(e) or repr(e), "error_type": type(e).__name__}
+    finally:
+        if ib.isConnected():
+            ib.disconnect()
+
+    # Verifier qu'on a au moins des donnees de prix
+    if "error" in gc and "error" in si:
+        return {"status": "error", "message": f"GC: {gc['error']}, SI: {si['error']}"}
+
+    # --- V30 depuis parquets existants ---
+    gc_v30 = si_v30 = ratio_iv = None
+    v30_date = None
+    v30_stale = False
+    gc_path = VOL_METRICS_DIR / "iv_history_GC.parquet"
+    si_path = VOL_METRICS_DIR / "iv_history_SI.parquet"
+    history_df = None
+
+    if gc_path.exists() and si_path.exists():
+        try:
+            df_gc = pd.read_parquet(gc_path)
+            df_si = pd.read_parquet(si_path)
+            if not df_gc.empty and not df_si.empty:
+                gc_v30 = round(float(df_gc["v30"].iloc[-1]) * 100, 2)
+                si_v30 = round(float(df_si["v30"].iloc[-1]) * 100, 2)
+                v30_date_raw = df_gc["date"].iloc[-1]
+                v30_date = v30_date_raw.date() if hasattr(v30_date_raw, "date") else v30_date_raw
+                # Check V30 staleness (> 5 jours)
+                if hasattr(v30_date, "toordinal"):
+                    v30_stale = (today - v30_date).days > 5
+                if gc_v30 and si_v30 and si_v30 > 0:
+                    ratio_iv = round(gc_v30 / si_v30, 4)
+                # Construire history_df pour signaux
+                history_df = df_gc[["date", "v30", "hv30", "vrp"]].merge(
+                    df_si[["date", "v30", "hv30", "vrp"]],
+                    on="date", suffixes=("_gc", "_si"),
+                ).sort_values("date").reset_index(drop=True)
+                history_df["ratio_iv"] = history_df["v30_gc"] / history_df["v30_si"]
+        except Exception:
+            pass  # V30 non dispo, on continue sans
+
+    # --- Construire la row ---
+    row = {
+        "date": today,
+        "collection_time": collection_time,
+        "gc_future_price": gc.get("future_price") if "error" not in gc else None,
+        "si_future_price": si.get("future_price") if "error" not in si else None,
+        "gc_model_iv_atm": gc.get("model_iv_atm") if "error" not in gc else None,
+        "si_model_iv_atm": si.get("model_iv_atm") if "error" not in si else None,
+        "gc_market_iv_atm": gc.get("market_iv_atm") if "error" not in gc else None,
+        "si_market_iv_atm": si.get("market_iv_atm") if "error" not in si else None,
+        "gc_iv_expiry": gc.get("expiry") if "error" not in gc else None,
+        "si_iv_expiry": si.get("expiry") if "error" not in si else None,
+        "gc_dte": gc.get("dte") if "error" not in gc else None,
+        "si_dte": si.get("dte") if "error" not in si else None,
+        "gc_rr25": gc.get("rr25") if "error" not in gc else None,
+        "si_rr25": si.get("rr25") if "error" not in si else None,
+        "gc_rr25_confidence": gc.get("rr25_confidence") if "error" not in gc else None,
+        "si_rr25_confidence": si.get("rr25_confidence") if "error" not in si else None,
+        "gc_rr25_iv_spread": gc.get("rr25_iv_spread") if "error" not in gc else None,
+        "si_rr25_iv_spread": si.get("rr25_iv_spread") if "error" not in si else None,
+        "gc_rr10": gc.get("rr10") if "error" not in gc else None,
+        "si_rr10": si.get("rr10") if "error" not in si else None,
+        "gc_v30": gc_v30,
+        "si_v30": si_v30,
+        "ratio_iv": ratio_iv,
+    }
+
+    # --- Skew signal ---
+    gc_rr25 = row["gc_rr25"]
+    si_rr25 = row["si_rr25"]
+    if gc_rr25 is not None and si_rr25 is not None:
+        divergent = (gc_rr25 > 0) != (si_rr25 > 0)
+        row["skew_signal"] = "SKEW_DIVERGENT" if divergent else "SKEW_ALIGNED"
+    else:
+        row["skew_signal"] = "N/A"
+
+    # --- Data quality ---
+    data_quality = "OK"
+    # Check IV outliers
+    for iv_col in ["gc_model_iv_atm", "si_model_iv_atm"]:
+        v = row.get(iv_col)
+        if v is not None and (v < 0 or v > 200):
+            data_quality = "OUTLIER"
+    # Check RR25 outliers
+    for rr_col in ["gc_rr25", "si_rr25"]:
+        v = row.get(rr_col)
+        if v is not None and abs(v) > 15:
+            data_quality = "OUTLIER"
+    # Check partial data
+    if data_quality == "OK":
+        partial_checks = [
+            row["gc_future_price"] is None,
+            row["si_future_price"] is None,
+            row["gc_rr25_confidence"] in (None, "N/A"),
+            row["si_rr25_confidence"] in (None, "N/A"),
+            v30_stale,
+        ]
+        if any(partial_checks):
+            data_quality = "PARTIAL"
+    row["data_quality"] = data_quality
+
+    # --- Signaux summary ---
+    signals = _compute_signals_summary(row, history_df)
+
+    # --- Sauvegarde parquet ---
+    snapshot_path = VOL_METRICS_DIR / "daily_snapshots.parquet"
+    new_df = pd.DataFrame([row])
+
+    if snapshot_path.exists():
+        # Backup
+        shutil.copy2(snapshot_path, VOL_METRICS_DIR / "daily_snapshots.bak.parquet")
+        existing = pd.read_parquet(snapshot_path)
+        # Upsert sur date : garder meilleure qualite
+        dq_rank = {"OK": 3, "PARTIAL": 2, "OUTLIER": 1}
+        existing_today = existing[existing["date"] == today]
+        if not existing_today.empty:
+            old_dq = existing_today.iloc[0].get("data_quality", "OUTLIER")
+            if dq_rank.get(data_quality, 0) >= dq_rank.get(old_dq, 0):
+                existing = existing[existing["date"] != today]
+            else:
+                # Ancienne row est meilleure, on ne remplace pas
+                return {
+                    "status": "ok",
+                    "action": "skipped",
+                    "reason": f"Existing row has better quality ({old_dq} vs {data_quality})",
+                    "server_time": server_time,
+                }
+        final_df = pd.concat([existing, new_df], ignore_index=True).sort_values("date").reset_index(drop=True)
+    else:
+        final_df = new_df
+
+    final_df.to_parquet(snapshot_path, index=False)
+
+    # --- Summary lines ---
+    gc_price = f"${row['gc_future_price']:,.0f}" if row["gc_future_price"] else "N/A"
+    si_price = f"${row['si_future_price']:.2f}" if row["si_future_price"] else "N/A"
+    gc_iv = f"{row['gc_model_iv_atm']:.1f}%" if row["gc_model_iv_atm"] else "N/A"
+    si_iv = f"{row['si_model_iv_atm']:.1f}%" if row["si_model_iv_atm"] else "N/A"
+    gc_rr_str = f"{row['gc_rr25']:+.2f}%({row['gc_rr25_confidence']})" if row["gc_rr25"] is not None else "N/A"
+    si_rr_str = f"{row['si_rr25']:+.2f}%({row['si_rr25_confidence']})" if row["si_rr25"] is not None else "N/A"
+
+    sig_line = " | ".join(f"{k} {v['color']}" for k, v in signals.items())
+    summary_line = f"{today} {collection_time.strftime('%H:%M')} UTC | {sig_line}"
+    detail_line = f"GC: {gc_price} IV={gc_iv} RR25={gc_rr_str} | SI: {si_price} IV={si_iv} RR25={si_rr_str}"
+
+    # Interpretation
+    colors = [v["color"] for v in signals.values()]
+    if all(c == "GREEN" for c in colors):
+        interpretation = "Environnement FAVORABLE, tous les signaux au vert"
+    elif any(c == "RED" for c in colors):
+        red_sigs = [k for k, v in signals.items() if v["color"] == "RED"]
+        interpretation = f"ATTENTION: {', '.join(red_sigs)} en zone rouge"
+    elif any(c == "ORANGE" for c in colors):
+        orange_sigs = [k for k, v in signals.items() if v["color"] == "ORANGE"]
+        interpretation = f"PRUDENCE: {', '.join(orange_sigs)} en zone orange"
+    elif any(c == "GRAY" for c in colors):
+        interpretation = "Donnees incompletes, signaux partiels"
+    else:
+        interpretation = "Conditions normales, pas de signal extreme"
+
+    return {
+        "status": "ok",
+        "summary_line": summary_line,
+        "detail_line": detail_line,
+        "interpretation": interpretation,
+        "signals": signals,
+        "row": {k: (str(v) if isinstance(v, (datetime, date_type)) else v) for k, v in row.items()},
+        "parquet_path": str(snapshot_path),
+        "total_rows": len(final_df),
+        "server_time": server_time,
+        "v30_date": str(v30_date) if v30_date else None,
+        "v30_stale": v30_stale,
+    }
 
 
 def _fetch_vol_history(ib: IB, symbol: str, duration: str = "2 Y") -> pd.DataFrame:
