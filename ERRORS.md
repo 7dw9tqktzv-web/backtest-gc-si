@@ -29,20 +29,14 @@ FIX : warnings.warn() ajoute pour cles inconnues.
 Si un backtest donne des resultats inattendus (trades 2-3x differents du grid),
 verifier les cles d'override EN PREMIER.
 
-### 3. Signes zTP/zSL : reproduire EXACTEMENT le grid search (CORRIGE 2026-02-18)
-NE PAS utiliser abs() sur zTP ! Le grid search fait :
-- zscore_tp_long = -zTP (PAS -abs(zTP))
-- zscore_tp_short = +zTP (PAS +abs(zTP))
+### 3. Signes zTP/zSL : convention LONG = negatif, SHORT = positif
+- zscore_tp_long = +abs(zTP) (retour vers 0, ex: zTP=0.25 -> zscore_tp_long = +0.25)
+- zscore_tp_short = -abs(zTP)
 - zscore_sl_long = -abs(zSL)
 - zscore_sl_short = +abs(zSL)
-- zscore_long = -abs(zE)
-- zscore_short = +abs(zE)
-
-abs(zTP) donne des signes inverses pour zTP positif, ce qui change le niveau
-de sortie TP_ZSCORE et impacte le PnL (ex: $8K -> $5.7K pour C09).
-Reference : grid_search_runner.py L1028-1035, wf_configs.py _make_overrides()
-
-REGLE : toujours copier la formule EXACTE du grid search, ne jamais "simplifier" les signes.
+- zscore_long = -abs(zE) (entree LONG quand Z < -zE)
+- zscore_short = +abs(zE) (entree SHORT quand Z > +zE)
+Reference : grid_search_runner.py L1029-1035, wf_configs.py _make_overrides()
 
 ### 4. flat_end_of_session : lire depuis session, pas exit (CORRIGE 2026-02-16)
 - pack_config() lisait `config['exit']['flat_end_of_session']` au lieu de `config['session']['flat_end_of_session']`
