@@ -60,7 +60,22 @@ def apply_overrides(config, overrides):
         keys = dotted_key.split('.')
         target = cfg
         for k in keys[:-1]:
+            if k not in target:
+                import warnings
+                warnings.warn(
+                    f"apply_overrides: section '{k}' n'existe pas dans config "
+                    f"(cle: '{dotted_key}'). Verifier strategy_params.yaml.",
+                    stacklevel=2,
+                )
+                target[k] = {}
             target = target[k]
+        if keys[-1] not in target:
+            import warnings
+            warnings.warn(
+                f"apply_overrides: cle '{dotted_key}' n'existe pas dans config. "
+                f"Verifier pack_config() et strategy_params.yaml.",
+                stacklevel=2,
+            )
         target[keys[-1]] = value
     return cfg
 

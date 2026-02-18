@@ -152,6 +152,10 @@ Ne JAMAIS modifier autonomement :
 
 Claude Code peut PROPOSER mais ne doit JAMAIS APPLIQUER sans validation explicite.
 
+## Reference erreurs
+Avant d'ecrire du code, lire `ERRORS.md` pour les pieges connus du projet.
+Apres chaque bug corrige, ajouter une entree dans `ERRORS.md` (bug, cause, comment eviter).
+
 ## Gotchas
 
 ### Terminal Windows

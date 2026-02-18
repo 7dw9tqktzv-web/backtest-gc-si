@@ -24,53 +24,10 @@ from backtest_engine_numba import run_hybrid_backtest
 from optimizer import apply_overrides, compute_metrics
 
 
-CONFIGS = [
-    {
-        "label": "C03_b7920_zE3.45_dTP175_mhb18_es22",
-        "overrides": {
-            "indicators.beta_lookback": 7920, "indicators.zscore_period": 26,
-            "indicators.correlation_period": 30, "indicators.adf_hurst_period": 48,
-            "entry.zscore_entry": 3.45, "entry.cointegration_min": 20,
-            "exit.zscore_tp": -1.0, "exit.zscore_sl": 99,
-            "exit.dollar_tp": 175, "exit.dollar_sl": -500,
-            "exit.max_holding_bars": 18, "session.entry_start_hour": 22,
-        },
-    },
-    {
-        "label": "C05_b4620_zE3.6_dTP250_mhb18_es22",
-        "overrides": {
-            "indicators.beta_lookback": 4620, "indicators.zscore_period": 28,
-            "indicators.correlation_period": 30, "indicators.adf_hurst_period": 64,
-            "entry.zscore_entry": 3.6, "entry.cointegration_min": 20,
-            "exit.zscore_tp": -0.5, "exit.zscore_sl": 99,
-            "exit.dollar_tp": 250, "exit.dollar_sl": -500,
-            "exit.max_holding_bars": 18, "session.entry_start_hour": 22,
-        },
-    },
-    {
-        "label": "C09_b2640_zE3.4_dTP200_nohold_es0",
-        "overrides": {
-            "indicators.beta_lookback": 2640, "indicators.zscore_period": 28,
-            "indicators.correlation_period": 12, "indicators.adf_hurst_period": 64,
-            "entry.zscore_entry": 3.4, "entry.cointegration_min": 20,
-            "exit.zscore_tp": -0.5, "exit.zscore_sl": 99,
-            "exit.dollar_tp": 200, "exit.dollar_sl": -500,
-            "exit.max_holding_bars": 0, "session.entry_start_hour": 0,
-        },
-    },
-]
+from wf_configs import CONFIGS, FIXED
 
-FIXED = {
-    "contracts.mode": "micro",
-    "indicators.period": "5min",
-    "exit.zscore_tp_enabled": True,
-    "session.flat_end_of_session": True,
-    "session.entry_end_hour": 14,
-    "session.session_end_time": "14:55",
-    "costs.slippage_gc_ticks": 2,
-    "costs.slippage_si_ticks": 2,
-    "sizing.micro_multiplier_max": 2,
-}
+# Phase 2b only tests C03, C05, C09
+CONFIGS = [c for c in CONFIGS if c["label"].startswith(("C03_", "C05_", "C09_"))]
 
 N_SIMULATIONS = 1000
 PERCENTILES = [5, 25, 50, 75, 95]
