@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v2.0).
 
-**Current status**: Phase D — Validation terminee. Config C09 selectionnee, a implementer dans SC micro.
+**Current status**: Phase D — Plugin SC C09 micro implemente et valide. Paper trading a lancer.
 **Config production standard**: OBSOLETE — optimisee sans FLAT_EOD ni session prop firm, ne sert plus de reference.
 
 ### Config production (micro prop firm)
@@ -22,7 +22,7 @@ Config backup : C01
 
 **210 tests passing**. See `CHANGELOG.md` for detailed history.
 
-SC paper trading tourne avec C6 en l'etat (plugin C++ a mettre a jour avec C09).
+SC plugin micro mis a jour avec C09 (compile, indicateurs valides vs Python sur 163K barres).
 
 ### Output Structure
 - Grid searches : `output/grid_searches/r1_corrected/` (micro, seul valide)
@@ -216,9 +216,9 @@ Apres chaque bug corrige, ajouter une entree dans `ERRORS.md` (bug, cause, comme
 
 ## Sierra Chart Integration
 
-v2.0 = automated spread trading (100% unmanaged orders). Python and SC produce identical indicator values (< 0.01% difference). 5/5 trades validated via replay.
+v2.0 = automated spread trading (100% unmanaged orders). SC vs Python indicator comparison on 163K bars: Z-Score corr=0.943, Beta rel_med=0.3%, Correlation corr=0.968.
 - **Standard**: `F:\SierreChart_Backtest_2\ACS_Source\GC_SI_SpreadMeanReversion_v2.0.cpp` (GC/SI)
-- **Micro**: `F:\SierreChart_Backtest_GC_SI_micro\ACS_Source\GC_SI_SpreadMeanReversion_v2.0_micro.cpp` (MGC/SIL, SCDLLName="GC_SI_SpreadMeanReversion_Micro", a mettre a jour avec C09)
+- **Micro**: `F:\SierreChart_Backtest_GC_SI_micro\ACS_Source\GC_SI_SpreadMeanReversion_v2.0_micro.cpp` (MGC/SIL, SCDLLName="GC_SI_SpreadMeanReversion_Micro", C09 implemente)
 - **SC Instance micro**: `F:\SierreChart_Backtest_GC_SI_micro\` — MGC chart + SIL chart, continuous contracts, volume rollover, back adjusted
 - **Compilation**: via SC `Analysis > Build Custom Studies DLL` (pas le .bat)
 - **Skill**: `.claude/skills/sierra-acsil/SKILL.md` — read FIRST for any ACSIL work
@@ -233,9 +233,9 @@ v2.0 = automated spread trading (100% unmanaged orders). Python and SC produce i
 - [x] Grid search R1 (295M configs) → R2a (20M) + R2b (10M) — termine
 - [x] Walk-Forward 10/10 PASS, Monte Carlo 9/10 PASS, Phase 3 deep analysis
 - [x] Config C09 selectionnee (principale), C01 (backup)
-- [ ] **Implementer C09 dans plugin SC ACSIL micro** — NEXT
-- [ ] Delta test backtest Sierra vs Python (C09)
-- [ ] Paper trading C09, 4-8 weeks (min 30 trades)
+- [x] Implementer C09 dans plugin SC ACSIL micro (3 inputs ajoutes: EntryStartHour, EntryEndHour, FlatEODTime)
+- [x] Delta test indicateurs SC vs Python (163K barres, Z corr=0.943, Beta rel=0.3%)
+- [ ] **Paper trading C09, 4-8 weeks (min 30 trades)** — NEXT
 - [ ] Production go-live
 
 ### Phase E -- MCP IBKR Volatility / Regime Dashboard (IN PROGRESS)

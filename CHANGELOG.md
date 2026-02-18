@@ -5,6 +5,42 @@ Historique des optimisations, resultats detailles et ameliorations du backtest G
 ---
 
 
+## [2026-02-18] Phase D — Plugin SC C09 micro + Delta test indicateurs
+
+### Plugin SC ACSIL micro mis a jour avec C09
+- Tous les defaults mis a jour (Beta 3960->2640, ZP 33->28, CP 27->12, ADF 144->64, zE 3.25->3.4, CointMin 45->20, zTP 0.0->0.5/-0.5, dTP 250->200, dSL 0->-500, Commission 4.0->1.88)
+- 3 nouveaux inputs: Input 30 EntryStartHour (0=midnight CT), Input 31 EntryEndHour (14), Input 32 FlatEODTime (14:55)
+- Exit priority corrigee: SL_DOLLAR > TP_DOLLAR > SL_ZSCORE > TP_ZSCORE > MAX_HOLD
+- FLAT_EOD overnight-safe (ne se declenche pas en session du soir 17:30-23:59)
+- Sizing: SIL=2 fixe (mm=2), MGC dynamique via Beta
+
+### Delta test indicateurs SC vs Python (163,302 barres, ~3 ans)
+
+| Indicateur | Diff mediane | Diff P95 | Correlation | Diff relative |
+|-----------|-------------|---------|------------|--------------|
+| Z-Score | 0.103 | 0.866 | 0.943 | 11.0% |
+| Correlation | 0.020 | 0.152 | 0.968 | 2.7% |
+| ADF | 0.098 | 0.885 | 0.873 | 6.3% |
+| Hurst | 0.004 | 0.084 | 0.850 | 0.4% |
+| Beta | 0.004 | 0.971 | 0.878 | 0.3% |
+
+- Ecarts normaux (float32 SC vs float64 Python, accumulation rolling windows)
+- Z-Score centre sur 0 (mean diff = -0.004), pas de biais systematique
+- Dates de trades (dec 2025-jan 2026): Z diff < 0.07, Beta diff < 0.005
+- Divergences de trades en replay dues au sizing (mm dynamique Python vs fixe SC), pas aux indicateurs
+
+### Replay 12 trades (2025-12-18 a 2026-02-18)
+- 12 trades SC vs 12 trades Python — meme nombre
+- Trade 1 match parfait (direction, prix, exit type)
+- Trades 2+ divergent a cause du sizing dynamique (Python 1x/2x SIL, SC fixe 2x)
+- Cross-symbol replay limitation confirmee (SIL fills at live price, SC Board #22882)
+
+### Slippage test
+- 1 tick: 238 trades, $13,007 PnL (+$4,906 vs 2 ticks)
+- 2 ticks (production): 238 trades, $8,101 PnL — delta $20.61/trade
+
+---
+
 ## [2026-02-18] Walk-Forward + Monte Carlo -- Validation finale
 
 ### Bug critique corrige
