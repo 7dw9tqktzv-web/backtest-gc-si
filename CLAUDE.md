@@ -251,6 +251,9 @@ Serveur: `mcp_servers/ibkr_volatility/server.py`. Data: `data/vol_metrics/`.
 - [x] Valide marche ouvert (18 fev 2026) — prix, IV, RR25 coherents
 - [x] Fix Option->FuturesOption, symbol/tradingClass split, regular chains priority (iv_spread 100pts->2.6pts)
 - [x] Branche feature mergee dans master et supprimee
+- [x] Fix trailing NaN HV30 dans backfill + guard NaN VRP dans signaux
+- [ ] Collecte daily 60 jours pour historique RR25 → enrichir dashboard avec percentiles skew
+- [ ] Paper trading C09 en parallele
 
 ### Phase F -- Config Standard (revalidation)
 - [ ] Revalider config standard (GC/SI) avec nouvelle methode (WF + MC + Deep Analysis)

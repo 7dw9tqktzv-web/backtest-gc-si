@@ -5,6 +5,36 @@ Historique des optimisations, resultats detailles et ameliorations du backtest G
 ---
 
 
+## [2026-02-18] Phase E — MCP IBKR Volatility (8 outils valides live)
+
+Etapes 1 + 2 + 3 terminees en une session. Branche `feature/mcp-ibkr-volatility` mergee dans master et supprimee.
+
+### Fixes critiques
+- **Option -> FuturesOption** : options sur futures utilisent `FuturesOption` (pas `Option` equity), avec `symbol=underlying` + `tradingClass=opt_symbol`
+- **min_dte filter** : skip options quasi-expirees (< 5j ou target_dte/3)
+- **Priorisation chaines regulieres OG/SO** : iv_spread passe de 100pts a 2.6pts sur SI en evitant les weeklies
+- **Trailing NaN HV30** : IBKR ne publie pas HV30 intraday, `_fetch_vol_history` drop les lignes trailing NaN
+- **Guard NaN dans `_compute_signals_summary`** : affiche GRAY au lieu de faux GREEN si VRP z-score NaN
+
+### Nouveaux outils MCP
+- **get_skew_signal** : signal SKEW_DIVERGENT/ALIGNED basé sur RR25 GC vs SI, confidence par symbole
+- **collect_daily_snapshot** : 25 colonnes, shared chain optimization (~30s), 5 signaux couleur (REGIME/VRP_GC/VRP_SI/SKEW/DATA), upsert parquet par qualite, backup .bak
+
+### Ameliorations
+- **iv_spread confidence** : HIGH/MEDIUM/LOW basee sur bid-ask IV spread (seuils 4pt OG, 8pt SO)
+- **IV model + market** : `get_iv_snapshot` retourne model_iv (modelGreeks) et market_iv (bid/ask mid)
+- **N/A degrade le signal skew** : worst_conf LOW ou N/A → signal GRAY
+
+### 8 outils MCP operationnels
+ping, connect_tws, get_iv_snapshot, get_risk_reversal, get_skew_signal, collect_daily_snapshot, backfill_iv_history, get_regime_dashboard
+
+### Prochaines etapes
+- Lancer `collect_daily_snapshot` quotidiennement pendant 60 jours pour construire l'historique RR25
+- Enrichir `get_regime_dashboard` avec percentiles skew
+- Paper trading C09 a demarrer en parallele
+
+---
+
 ## [2026-02-18] Phase D — Plugin SC C09 micro + Delta test indicateurs
 
 ### Plugin SC ACSIL micro mis a jour avec C09
