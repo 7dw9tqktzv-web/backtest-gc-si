@@ -25,11 +25,9 @@ Config backup : C01
 SC paper trading tourne avec C6 en l'etat (plugin C++ a mettre a jour avec C09).
 
 ### Output Structure
-- Grid searches : `output/grid_searches/r1|r2a|r2b|r2c/`
-- Reports : `output/reports/` (PNL_DECAY, WALKFORWARD, MONTE_CARLO, R2B/R2C deep analysis)
-- Plots : `output/plots/pnl_decay|monte_carlo/`
+- Grid searches : `output/grid_searches/r1_corrected/`
+- Reports : `output/reports/` (wf_phase1, wf_phase2_mc, phase3_deep_analysis)
 - Logs : `output/logs/`
-- Legacy (standard pipeline) : `output/legacy/`
 
 ## Commands
 
@@ -211,36 +209,15 @@ Apres chaque bug corrige, ajouter une entree dans `ERRORS.md` (bug, cause, comme
 ## Research Conclusions
 
 - **5-min pure Z-Score = dominant mode**, 1min dollar = dead end, regime filters = dead end (none survives OOS)
-- **Known risk**: regime-dependent (2023-2024 losing/flat, 2025-2026 profitable)
+- **Known risk**: regime-dependent (2023 flat/losing, 2024 moderate, 2025-2026 profitable)
+- R1 (295M configs) → R2a+R2b (30M configs) → 10 candidates → WF 10/10 → MC 9/10 → Deep analysis → C09/C01
 - See `CHANGELOG.md` for detailed tables and phase-by-phase results
-
-### R1 Grid Search Findings (295M configs, 200K survivants)
-
-**4 configs retenues** (2 familles) :
-
-| Config | Indicateurs | Trades | WR | PnL | DD | Calmar |
-|--------|------------|--------|-----|------|-----|--------|
-| C1 (reine) | b4620_zp30_cp30_adf64_zE3.75_co20 | 164 | 59.8% | $7,711 | -$1,543 | 5.00 |
-| C2 (PnL max) | b4620_zp30_cp30_adf64_zE3.5_co20 | 329 | 55.6% | $8,009 | -$2,562 | 3.13 |
-| C6 (low DD) | b4620_zp30_cp36_adf64_zE3.75_co20 | 161 | 59.0% | $7,458 | -$1,498 | 4.98 |
-| C9 (outsider) | b2640_zp30_cp12_adf26_zE3.5_co20 | 300 | 56.7% | $7,219 | -$1,706 | 4.23 |
-
-Toutes : dTP=250, dSL=-500 (sauf C2=-600, C9=-1000), zTP=0.0 (sauf C9=-0.5), mm=2, FLAT_EOD ON.
-
-**Key findings** :
-- **TP_DOLLAR = cash machine** : 100% WR, ~$183 net/trade, 2-6 barres
-- **FLAT_EOD = drag** : -$40 a -$52/trade, 30-34% des trades, 85% entrent entre 18h-23h CT
-- **dTP=250 = plafond** : dTP >= 300 ne survit pas les filtres R1
-- **Couts par trade ~$67** : slippage $56 + commissions $11
-- **PnL decay** : C1/C6 inflexion barre 18-19 (90-95 min), C9 barre 5 (25 min). Apres barre 30-36 : 0% positif
-- **Famille A** (b4620, mean reversion lente) domine 5/12 profils de scoring
-- **Meilleures heures** : 2-6h, 7-8h, 10h, 12-13h CT. **Pires** : 9h, 11h, 20-21h CT
 
 ## Sierra Chart Integration
 
 v2.0 = automated spread trading (100% unmanaged orders). Python and SC produce identical indicator values (< 0.01% difference). 5/5 trades validated via replay.
 - **Standard**: `F:\SierreChart_Backtest_2\ACS_Source\GC_SI_SpreadMeanReversion_v2.0.cpp` (GC/SI)
-- **Micro**: `F:\SierreChart_Backtest_GC_SI_micro\ACS_Source\GC_SI_SpreadMeanReversion_v2.0_micro.cpp` (MGC/SIL, SCDLLName="GC_SI_SpreadMeanReversion_Micro", config C6, fixed x2 SIL)
+- **Micro**: `F:\SierreChart_Backtest_GC_SI_micro\ACS_Source\GC_SI_SpreadMeanReversion_v2.0_micro.cpp` (MGC/SIL, SCDLLName="GC_SI_SpreadMeanReversion_Micro", a mettre a jour avec C09)
 - **SC Instance micro**: `F:\SierreChart_Backtest_GC_SI_micro\` — MGC chart + SIL chart, continuous contracts, volume rollover, back adjusted
 - **Compilation**: via SC `Analysis > Build Custom Studies DLL` (pas le .bat)
 - **Skill**: `.claude/skills/sierra-acsil/SKILL.md` — read FIRST for any ACSIL work
@@ -252,18 +229,12 @@ v2.0 = automated spread trading (100% unmanaged orders). Python and SC produce i
 ## Roadmap (TODO)
 
 ### Phase D -- Re-optimisation + Paper Trading (IN PROGRESS)
-- [x] Grid search micro R1->R2c (INVALIDE — sizing cap=2 + FLAT_EOD OFF)
-- [x] Deploy C6 in Sierra Chart v2.0 micro — plugin C++ correct, paper trading actif
-- [x] Code review + fix sizing smart multiplier + fix flat_end_of_session path
-- [x] Fast grid engine (scan 5s factorise, 13.4x speedup, 300/300 parite)
-- [x] Grid search R1 micro CORRIGE (295M configs, 10h, 200K survivants)
-- [x] Analyse 12 profils (scripts/score_r1_profiles.py) — noyau b4620_zp30_zE3.75 domine 5 profils
-- [x] Analyse approfondie 10 configs + PnL decay 5 configs — 4 candidates retenues (C1/C2/C6/C9)
-- [x] entry_start_hour comme parametre build dans fast engine (grouping key elargi)
-- [ ] **Grid search R2a** (cluster roi ~20M, beta 4620-7920) + **R2b** (outsider C9 ~10M) — NEXT
-- [ ] Walk-Forward + Monte Carlo sur config retenue
-- [ ] Mise a jour plugin SC avec config validee
-- [ ] Paper trading 4-8 weeks (min 30 trades)
+- [x] Grid search R1 (295M configs) → R2a (20M) + R2b (10M) — termine
+- [x] Walk-Forward 10/10 PASS, Monte Carlo 9/10 PASS, Phase 3 deep analysis
+- [x] Config C09 selectionnee (principale), C01 (backup)
+- [ ] **Implementer C09 dans plugin SC ACSIL micro** — NEXT
+- [ ] Delta test backtest Sierra vs Python (C09)
+- [ ] Paper trading C09, 4-8 weeks (min 30 trades)
 - [ ] Production go-live
 
 ### Phase E -- MCP IBKR Volatility / Regime Dashboard (IN PROGRESS)
