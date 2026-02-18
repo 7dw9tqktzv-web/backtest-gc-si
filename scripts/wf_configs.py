@@ -2,15 +2,22 @@
 Configs candidates pour walk-forward / Monte Carlo.
 Cles d'override alignees sur grid_search_runner.py (_generate_micro_full_combos).
 
-Convention signes (comme le grid search) :
+Convention signes (identique au grid search L1028-1035) :
   - zscore_long = -abs(zE), zscore_short = +abs(zE)
-  - zscore_tp_long = +abs(zTP), zscore_tp_short = -abs(zTP)  (retour vers 0)
-  - zscore_sl_long = -abs(zSL), zscore_sl_short = +abs(zSL)  (extension)
+  - zscore_tp_long = -zTP, zscore_tp_short = +zTP  (PAS de abs!)
+  - zscore_sl_long = -abs(zSL), zscore_sl_short = +abs(zSL)
   - pnl_stop_loss = valeur negative
+
+Les valeurs zTP passees ici doivent etre POSITIVES (comme dans le grid YAML).
+Le grid search fait -zTP pour long, +zTP pour short.
 """
 
 def _make_overrides(beta, zp, cp, adf, zE, co, zTP, zSL, dTP, dSL, mhb, es, mm=2):
-    """Genere les overrides avec les BONNES cles (matching grid_search_runner)."""
+    """Genere les overrides avec les BONNES cles (matching grid_search_runner).
+
+    zTP : valeur positive du grid (ex: 0.25, 0.5, 1.0).
+          Applique comme -zTP pour long, +zTP pour short.
+    """
     return {
         "indicators.beta_lookback": beta,
         "indicators.zscore_period": zp,
@@ -19,8 +26,8 @@ def _make_overrides(beta, zp, cp, adf, zE, co, zTP, zSL, dTP, dSL, mhb, es, mm=2
         "entry.zscore_long": -abs(zE),
         "entry.zscore_short": abs(zE),
         "entry.cointegration_score_min": co,
-        "exit.zscore_tp_long": abs(zTP),
-        "exit.zscore_tp_short": -abs(zTP),
+        "exit.zscore_tp_long": -zTP,
+        "exit.zscore_tp_short": zTP,
         "exit.zscore_sl_long": -abs(zSL),
         "exit.zscore_sl_short": abs(zSL),
         "exit.pnl_take_profit": dTP,
