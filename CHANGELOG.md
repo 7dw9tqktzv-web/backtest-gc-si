@@ -5,6 +5,79 @@ Historique des optimisations, resultats detailles et ameliorations du backtest G
 ---
 
 
+## [2026-02-18] Phase D — Walk-Forward + Monte Carlo validation (10 configs micro)
+
+### Contexte
+Selection de 10 configs candidates depuis R2a+R2b (30M configs). Filtres : trades>=200, PnL>=7000, DD>=-2500.
+8 configs choisies manuellement par l'utilisateur + 2 suggestions Claude (C09, C10).
+
+### 10 Configs testees
+
+| # | Config | Trades (grid) | PnL (grid) | DD (grid) |
+|---|--------|---------------|------------|-----------|
+| C01 | b4620_zE3.6_dTP225_nohold_es22 | 152 | $8,750 | -$1,175 |
+| C02 | b4620_zE3.55_dTP250_mhb18_es18 | 248 | $9,645 | -$2,408 |
+| C03 | b7920_zE3.45_dTP175_mhb18_es22 | 200 | $8,038 | -$710 |
+| C04 | b4620_zE3.6_dTP250_nohold_es22 | 151 | $9,119 | -$1,100 |
+| C05 | b4620_zE3.6_dTP250_mhb18_es22 | 151 | $8,711 | -$1,030 |
+| C06 | b2640_zE3.4_dTP225_nohold_es22 | 217 | $9,167 | -$1,274 |
+| C07 | b2640_zE3.4_dTP200_nohold_es22 | 219 | $8,575 | -$765 |
+| C08 | b2640_zE3.5_dTP225_mhb18_es0 | 170 | $7,899 | -$1,085 |
+| C09 | b2640_zE3.4_dTP200_nohold_es0 | 238 | $8,101 | -$908 |
+| C10 | b2640_zE3.3_dTP200_nohold_es0 | 260 | $7,949 | -$1,290 |
+
+Toutes en micro, 5-min, session prop firm (es->14h, FLAT_EOD 14:55), slippage 2 ticks, mm_max=2.
+
+### Phase 1 — Walk-Forward individuel (script: `scripts/run_wf_phase1.py`)
+- Rolling cumulatif : train W1..N, test W(N+1). 6 fenetres de ~6 mois, 5 tests OOS.
+- Critere : PnL OOS positif sur >= 3/5 fenetres.
+
+| Config | OOS1 | OOS2 | OOS3 | OOS4 | OOS5 | POS | Verdict |
+|--------|------|------|------|------|------|-----|---------|
+| C01 | -$2,904 | -$62 | -$193 | -$1,110 | -$9,061 | 0/5 | FAIL |
+| C02 | -$1,650 | -$1,365 | +$32 | -$207 | -$460 | 1/5 | FAIL |
+| **C03** | -$774 | +$1,223 | +$1,554 | +$215 | -$6,153 | **3/5** | **PASS** |
+| C04 | -$2,904 | -$62 | -$193 | -$1,110 | -$9,061 | 0/5 | FAIL |
+| C05 | -$1,385 | -$248 | +$124 | -$137 | +$3,077 | 2/5 | FAIL |
+| C06 | -$868 | +$559 | -$235 | +$220 | -$3,629 | 2/5 | FAIL |
+| C07 | -$868 | +$559 | -$235 | +$220 | -$3,629 | 2/5 | FAIL |
+| C08 | -$2,454 | -$17 | -$535 | -$652 | +$4,527 | 1/5 | FAIL |
+| **C09** | -$1,869 | +$465 | +$329 | -$1,094 | +$4,039 | **3/5** | **PASS** |
+| C10 | -$1,020 | +$669 | -$337 | -$163 | -$3,390 | 1/5 | FAIL |
+
+**Survivants Phase 1 : 2/10** (C03, C09). C05 repris pour Phase 2 (PnL OOS total positif +$1,430).
+
+### Phase 2 — Monte Carlo OOS (script: `scripts/run_wf_phase2_mc.py`)
+- 1000 resamplings bootstrap sur trades OOS concatenes.
+- Criteres : PnL P5 >= $0 ET DD P95 >= -$3,000.
+
+| Config | Trades OOS | PnL P5 | PnL P50 | DD P95 | Verdict |
+|--------|-----------|--------|---------|--------|---------|
+| C03 | 77 | -$10,160 | -$3,756 | -$1,918 | FAIL (PnL) |
+| C05 | 80 | -$5,421 | +$1,259 | -$1,469 | FAIL (PnL) |
+| C09 | 88 | -$5,726 | +$1,491 | -$1,706 | FAIL (PnL) |
+
+**Survivants Phase 2 : 0/3.** DD OK pour les 3, mais PnL P5 negatif (pas assez d'edge avec ~80 trades).
+
+### Phase 2b — Analyse par annee + MC in-sample (script: `scripts/run_phase2b_yearly_mc.py`)
+
+**Anomalie detectee** : le moteur standalone Numba produit 84-92 trades vs 200-260 dans le grid search pour les memes configs. Ecart ~2x non explique — investigation en cours.
+
+| Config | 2023 | 2024 | 2025 | 2026 (1 mois) | TOTAL | MC IS PnL P5 |
+|--------|------|------|------|---------------|-------|-------------|
+| C03 | -$723 (24tr) | +$1,778 (27tr) | -$1,788 (30tr) | -$2,501 (7tr) | **-$3,234** (88tr) | -$10,068 FAIL |
+| C05 | -$1,275 (31tr) | -$409 (33tr) | -$932 (24tr) | +$3,871 (4tr) | **+$1,255** (92tr) | -$5,907 FAIL |
+| C09 | -$1,544 (29tr) | +$797 (25tr) | +$577 (28tr) | +$3,187 (2tr) | **+$3,018** (84tr) | -$4,447 FAIL |
+
+Exit reasons : C03/C05 dominees par MAX_HOLD (62-64%), C09 dominee par TP_ZSCORE (89%).
+
+### Conclusions provisoires
+- **Ecart trades grid vs standalone** : probleme majeur a investiguer (mismatch config propagation probable)
+- **C09 meilleur candidat structurel** : 3/4 annees positives, 89% TP_ZSCORE, PnL median MC +$2,934
+- **MC trop strict pour ~85 trades** : avg PnL +$14-36/trade insuffisant pour passer P5 > $0
+
+---
+
 ## [2026-02-16] CRITICAL — Double bug sizing + FLAT_EOD invalide tous les grid searches
 
 ### Code Review complete (src/ + MCP + tests)
