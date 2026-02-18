@@ -26,9 +26,6 @@ from datetime import date
 
 from wf_configs import CONFIGS, FIXED
 
-# Phase 2 only tests C03, C05, C09
-CONFIGS = [c for c in CONFIGS if c["label"].startswith(("C03_", "C05_", "C09_"))]
-
 WINDOW_BOUNDARIES = [
     date(2023, 1, 26),
     date(2023, 7, 26),
