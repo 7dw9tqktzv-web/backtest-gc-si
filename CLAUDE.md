@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Python backtesting system for a Gold/Silver (GC/SI) spread trading strategy based on cointegration and mean reversion. The strategy replicates a Sierra Chart ACSIL indicator (v2.0).
 
-**Current status**: Phase D — Plugin SC C09 micro implemente et valide. Paper trading a lancer.
+**Current status**: Phase D/E — Plugin SC C09 valide. MCP IBKR Volatility operationnel (8 outils). Paper trading a lancer.
 **Config production standard**: OBSOLETE — optimisee sans FLAT_EOD ni session prop firm, ne sert plus de reference.
 
 ### Config production (micro prop firm)
@@ -238,19 +238,19 @@ v2.0 = automated spread trading (100% unmanaged orders). SC vs Python indicator 
 - [ ] **Paper trading C09, 4-8 weeks (min 30 trades)** — NEXT
 - [ ] Production go-live
 
-### Phase E -- MCP IBKR Volatility / Regime Dashboard (IN PROGRESS)
-Branche: `feature/mcp-ibkr-volatility`. Serveur: `mcp_servers/ibkr_volatility/server.py`.
-Skill: `.claude/skills/ibkr-volatility/SKILL.md`. Data: `data/vol_metrics/`.
+### Phase E -- MCP IBKR Volatility / Regime Dashboard (DONE)
+Serveur: `mcp_servers/ibkr_volatility/server.py`. Data: `data/vol_metrics/`.
+8 outils MCP : ping, connect_tws, get_iv_snapshot, get_risk_reversal, get_skew_signal, collect_daily_snapshot, backfill_iv_history, get_regime_dashboard.
 - [x] MCP server minimal (ping, connect_tws) — chaine Claude Code -> TWS validee
-- [x] get_iv_snapshot — IV ATM pour GC (OG) et SI (SO) via modelGreeks
+- [x] get_iv_snapshot — IV ATM model + market (bid/ask mid) pour GC et SI
 - [x] backfill_iv_history — V30/HV30 2Y daily via ContFuture + Parquet
 - [x] get_regime_dashboard — ratio IV, percentiles, deltas abs+pct, VRP z-scores, signaux
-- [x] Filtre outliers V30 ContFuture (5%-100%), flag data_quality: filtered_contfuture
-- [x] get_risk_reversal — RR25/RR10 via delta matching (code pret, a tester lundi)
-- [ ] Valider get_iv_snapshot + get_risk_reversal marche ouvert — NEXT
-- [ ] Ajouter signaux skew divergent (RR25 GC vs SI de signe oppose) dans dashboard
-- [ ] Collecte daily automatique RR25/RR10 -> daily_snapshots.parquet
-- [ ] Merge branche dans master une fois stabilise
+- [x] get_risk_reversal — RR25/RR10 via delta matching + iv_spread confidence (seuil 4pt OG, 8pt SO)
+- [x] get_skew_signal — divergence RR25 GC vs SI, confidence basee sur bid-ask IV spread
+- [x] collect_daily_snapshot — 25 colonnes, 5 signaux (REGIME/VRP_GC/VRP_SI/SKEW/DATA), upsert parquet
+- [x] Valide marche ouvert (18 fev 2026) — prix, IV, RR25 coherents
+- [x] Fix Option->FuturesOption, symbol/tradingClass split, regular chains priority (iv_spread 100pts->2.6pts)
+- [x] Branche feature mergee dans master et supprimee
 
 ### Phase F -- Config Standard (revalidation)
 - [ ] Revalider config standard (GC/SI) avec nouvelle methode (WF + MC + Deep Analysis)
