@@ -29,14 +29,27 @@ FIX : warnings.warn() ajoute pour cles inconnues.
 Si un backtest donne des resultats inattendus (trades 2-3x differents du grid),
 verifier les cles d'override EN PREMIER.
 
-### 3. Signes zTP/zSL : convention LONG = negatif, SHORT = positif
-- zscore_tp_long = +abs(zTP) (retour vers 0, ex: zTP=0.25 -> zscore_tp_long = +0.25)
+### 3. Signes zTP/zSL : TOUJOURS utiliser abs() dans wf_configs
+Le grid YAML utilise des valeurs NEGATIVES pour zTP (ex: -0.25, -0.5).
+Le grid search fait -zTP → -(-0.25) = +0.25 pour zscore_tp_long. Correct.
+
+Mais wf_configs.py passe zTP en POSITIF (0.25). Donc :
+- abs(0.25) = +0.25  ← CORRECT (c'est ce qu'on veut)
+- -(0.25)  = -0.25   ← FAUX (signe inverse, TP premature)
+
+REGLE : wf_configs utilise des valeurs POSITIVES + abs(). Ne JAMAIS remplacer
+abs() par -zTP sauf si on passe aussi des valeurs negatives.
+Convention wf_configs._make_overrides() :
+- zscore_tp_long = +abs(zTP) (retour vers 0)
 - zscore_tp_short = -abs(zTP)
 - zscore_sl_long = -abs(zSL)
 - zscore_sl_short = +abs(zSL)
-- zscore_long = -abs(zE) (entree LONG quand Z < -zE)
-- zscore_short = +abs(zE) (entree SHORT quand Z > +zE)
+- zscore_long = -abs(zE)
+- zscore_short = +abs(zE)
 Reference : grid_search_runner.py L1029-1035, wf_configs.py _make_overrides()
+
+ERREUR COMMISE : commit eb3c933 a remplace abs() par -zTP, cassant les signes.
+Reverte par 4b944df. Ne pas reproduire.
 
 ### 4. flat_end_of_session : lire depuis session, pas exit (CORRIGE 2026-02-16)
 - pack_config() lisait `config['exit']['flat_end_of_session']` au lieu de `config['session']['flat_end_of_session']`
