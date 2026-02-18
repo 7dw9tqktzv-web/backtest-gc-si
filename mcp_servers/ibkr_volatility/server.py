@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pandas as pd
 from fastmcp import FastMCP
-from ib_insync import IB, ContFuture, Future, Option
+from ib_insync import IB, ContFuture, Future, FuturesOption
 
 mcp = FastMCP("IBKR Volatility")
 
@@ -63,10 +63,11 @@ def _find_nearest_expiry(expirations: list[str], target_dte: int = 30) -> str:
     today = datetime.now().date()
     best = None
     best_diff = float("inf")
+    min_dte = max(5, target_dte // 3)  # Au moins 5 jours, evite options quasi-expirees
     for exp_str in expirations:
         exp_date = datetime.strptime(exp_str, "%Y%m%d").date()
         dte = (exp_date - today).days
-        if dte < 1:
+        if dte < min_dte:
             continue
         diff = abs(dte - target_dte)
         if diff < best_diff:
@@ -76,8 +77,9 @@ def _find_nearest_expiry(expirations: list[str], target_dte: int = 30) -> str:
 
 
 def _resolve_option_chain(ib: IB, symbol: str, exchange: str, opt_exchange: str,
-                          target_dte: int = 30) -> dict:
+                          opt_symbol: str = "", target_dte: int = 30) -> dict:
     """Trouve le future, son prix, et la chaine d'options la plus proche de target_dte.
+    opt_symbol: tradingClass regulier (ex: 'OG', 'SO') — priorise sur les weeklies.
 
     Retourne dict avec keys: fut_contract, fut_price, chain, expiry, dte, strikes, atm_strike.
     Ou dict avec key 'error' si echec.
@@ -91,17 +93,46 @@ def _resolve_option_chain(ib: IB, symbol: str, exchange: str, opt_exchange: str,
 
     fut_contract = None
     chains = []
+    min_dte = max(5, target_dte // 3)
+    today = datetime.now().date()
+
     for cd in sorted_contracts:
         candidate = cd.contract
         ib.qualifyContracts(candidate)
-        chains = ib.reqSecDefOptParams(candidate.symbol, candidate.exchange,
-                                       candidate.secType, candidate.conId)
-        if chains:
+        candidate_chains = ib.reqSecDefOptParams(candidate.symbol, candidate.exchange,
+                                                  candidate.secType, candidate.conId)
+        if not candidate_chains:
+            continue
+        # Merger toutes les expirations des chaines du bon exchange
+        comex_chains = [ch for ch in candidate_chains if ch.exchange == opt_exchange]
+        if not comex_chains:
+            comex_chains = candidate_chains
+        all_expirations = set()
+        for ch in comex_chains:
+            all_expirations.update(ch.expirations)
+        has_valid = any(
+            (datetime.strptime(exp_str, "%Y%m%d").date() - today).days >= min_dte
+            for exp_str in all_expirations
+        )
+        if has_valid:
+            chains = comex_chains
             fut_contract = candidate
             break
 
     if fut_contract is None:
-        return {"error": f"Aucun future avec options trouve pour {symbol}"}
+        diag = []
+        for cd in sorted_contracts[:4]:
+            c = cd.contract
+            ib.qualifyContracts(c)
+            ch = ib.reqSecDefOptParams(c.symbol, c.exchange, c.secType, c.conId)
+            exps = {}
+            for x in ch:
+                key = f"{x.exchange}/{x.tradingClass}"
+                exps[key] = sorted(list(x.expirations))[:5]
+            diag.append({"future": c.localSymbol, "expiry": c.lastTradeDateOrContractMonth,
+                         "opt_chains": exps})
+        return {"error": f"Aucun future avec options valides (min_dte={min_dte}) pour {symbol}",
+                "diagnostic": diag}
 
     [ticker] = ib.reqTickers(fut_contract)
     fut_price = ticker.marketPrice()
@@ -110,20 +141,46 @@ def _resolve_option_chain(ib: IB, symbol: str, exchange: str, opt_exchange: str,
     if fut_price != fut_price:
         return {"error": f"Pas de prix pour {symbol}", "contract": fut_contract.localSymbol}
 
-    chain = None
-    for c in chains:
-        if c.exchange == opt_exchange:
-            chain = c
-            break
-    if chain is None:
-        chain = chains[0]
+    # Prioriser la chaine reguliere (tradingClass == opt_symbol, ex: "OG", "SO")
+    # Plus liquide que les weeklies. Fallback sur toutes les chaines si pas d'expiration valide.
+    regular_chains = [ch for ch in chains if ch.tradingClass == opt_symbol]
+    expiry = None
+    best_chain = None
 
-    expiry = _find_nearest_expiry(list(chain.expirations), target_dte)
+    # Essai 1 : chaine reguliere
+    if regular_chains:
+        reg_expirations = set()
+        for ch in regular_chains:
+            reg_expirations.update(ch.expirations)
+        expiry = _find_nearest_expiry(list(reg_expirations), target_dte)
+        if expiry is not None:
+            for ch in regular_chains:
+                if expiry in ch.expirations:
+                    best_chain = ch
+                    break
+
+    # Essai 2 : fallback toutes les chaines COMEX
     if expiry is None:
-        return {"error": "Aucune expiration valide trouvee", "expirations": list(chain.expirations)}
+        all_expirations = set()
+        for ch in chains:
+            all_expirations.update(ch.expirations)
+        expiry = _find_nearest_expiry(list(all_expirations), target_dte)
+        if expiry is not None:
+            for ch in chains:
+                if expiry in ch.expirations:
+                    best_chain = ch
+                    break
+
+    if expiry is None or best_chain is None:
+        all_exps = set()
+        for ch in chains:
+            all_exps.update(ch.expirations)
+        return {"error": "Aucune expiration valide trouvee",
+                "all_expirations": sorted(list(all_exps)),
+                "chains": [{"tradingClass": ch.tradingClass, "expirations": sorted(list(ch.expirations))[:5]} for ch in chains]}
 
     dte = (datetime.strptime(expiry, "%Y%m%d").date() - datetime.now().date()).days
-    strikes = sorted(chain.strikes)
+    strikes = sorted(best_chain.strikes)
     if not strikes:
         return {"error": f"Aucun strike disponible pour {symbol}", "expiry": expiry}
     atm_strike = min(strikes, key=lambda s: abs(s - fut_price))
@@ -135,13 +192,14 @@ def _resolve_option_chain(ib: IB, symbol: str, exchange: str, opt_exchange: str,
         "dte": dte,
         "strikes": strikes,
         "atm_strike": atm_strike,
+        "tradingClass": best_chain.tradingClass,
     }
 
 
 def _get_atm_iv(ib: IB, symbol: str, exchange: str, opt_exchange: str,
                 opt_symbol: str, target_dte: int = 30) -> dict:
     """Recupere l'IV ATM pour un future : prix future, strike ATM, IV call+put."""
-    info = _resolve_option_chain(ib, symbol, exchange, opt_exchange, target_dte)
+    info = _resolve_option_chain(ib, symbol, exchange, opt_exchange, opt_symbol, target_dte)
     if "error" in info:
         return info
 
@@ -149,12 +207,20 @@ def _get_atm_iv(ib: IB, symbol: str, exchange: str, opt_exchange: str,
     expiry = info["expiry"]
     dte = info["dte"]
     atm_strike = info["atm_strike"]
+    tc = info.get("tradingClass", opt_symbol)
 
-    call = Option(symbol=opt_symbol, lastTradeDateOrContractMonth=expiry,
-                  strike=atm_strike, right="C", exchange=opt_exchange)
-    put = Option(symbol=opt_symbol, lastTradeDateOrContractMonth=expiry,
-                 strike=atm_strike, right="P", exchange=opt_exchange)
+    call = FuturesOption(symbol=symbol, lastTradeDateOrContractMonth=expiry,
+                  strike=atm_strike, right="C", exchange=opt_exchange,
+                  tradingClass=tc)
+    put = FuturesOption(symbol=symbol, lastTradeDateOrContractMonth=expiry,
+                 strike=atm_strike, right="P", exchange=opt_exchange,
+                 tradingClass=tc)
     qualified = ib.qualifyContracts(call, put)
+    qualified = [q for q in qualified if q.conId > 0]
+
+    if not qualified:
+        return {"error": f"qualifyContracts vide pour {symbol} (strike={atm_strike}, expiry={expiry})",
+                "expiry": expiry, "atm_strike": atm_strike}
 
     tickers = ib.reqTickers(*qualified)
     if not tickers:
@@ -175,21 +241,38 @@ def _get_atm_iv(ib: IB, symbol: str, exchange: str, opt_exchange: str,
     }
 
     for t, right in zip(tickers, ["call", "put"]):
+        # Model IV (TWS proprietary model)
         greeks = t.modelGreeks
         if greeks and greeks.impliedVol is not None and greeks.delta is not None:
-            result[f"iv_{right}"] = round(float(greeks.impliedVol) * 100, 2)
+            result[f"model_iv_{right}"] = round(float(greeks.impliedVol) * 100, 2)
             result[f"delta_{right}"] = round(float(greeks.delta), 4)
         else:
-            result[f"iv_{right}"] = None
+            result[f"model_iv_{right}"] = None
             result[f"delta_{right}"] = None
+        # Market IV (mid bid/ask greeks)
+        bid_iv = ask_iv = None
+        if t.bidGreeks and t.bidGreeks.impliedVol is not None:
+            bid_iv = float(t.bidGreeks.impliedVol) * 100
+        if t.askGreeks and t.askGreeks.impliedVol is not None:
+            ask_iv = float(t.askGreeks.impliedVol) * 100
+        if bid_iv is not None and ask_iv is not None:
+            result[f"market_iv_{right}"] = round((bid_iv + ask_iv) / 2, 2)
+        elif bid_iv is not None:
+            result[f"market_iv_{right}"] = round(bid_iv, 2)
+        elif ask_iv is not None:
+            result[f"market_iv_{right}"] = round(ask_iv, 2)
+        else:
+            result[f"market_iv_{right}"] = None
 
     return result
 
 
 def _get_risk_reversal(ib: IB, symbol: str, exchange: str, opt_exchange: str,
-                       opt_symbol: str, target_dte: int = 30) -> dict:
-    """Calcule RR25 et RR10 pour un symbole via IV par delta."""
-    info = _resolve_option_chain(ib, symbol, exchange, opt_exchange, target_dte)
+                       opt_symbol: str, target_dte: int = 30,
+                       iv_spread_threshold: float = 4.0) -> dict:
+    """Calcule RR25 et RR10 pour un symbole via IV par delta.
+    iv_spread_threshold: seuil bid-ask IV spread pour confidence (4 pour OG, 8 pour SO)."""
+    info = _resolve_option_chain(ib, symbol, exchange, opt_exchange, opt_symbol, target_dte)
     if "error" in info:
         return info
 
@@ -198,6 +281,7 @@ def _get_risk_reversal(ib: IB, symbol: str, exchange: str, opt_exchange: str,
     dte = info["dte"]
     strikes = info["strikes"]
     atm_strike = info["atm_strike"]
+    tc = info.get("tradingClass", opt_symbol)
 
     # Filtrer strikes dans +-20% autour du prix ATM
     lo = fut_price * 0.80
@@ -210,10 +294,12 @@ def _get_risk_reversal(ib: IB, symbol: str, exchange: str, opt_exchange: str,
     # Qualifier calls et puts en batch
     options = []
     for s in nearby_strikes:
-        options.append(Option(symbol=opt_symbol, lastTradeDateOrContractMonth=expiry,
-                              strike=s, right="C", exchange=opt_exchange))
-        options.append(Option(symbol=opt_symbol, lastTradeDateOrContractMonth=expiry,
-                              strike=s, right="P", exchange=opt_exchange))
+        options.append(FuturesOption(symbol=symbol, lastTradeDateOrContractMonth=expiry,
+                              strike=s, right="C", exchange=opt_exchange,
+                              tradingClass=tc))
+        options.append(FuturesOption(symbol=symbol, lastTradeDateOrContractMonth=expiry,
+                              strike=s, right="P", exchange=opt_exchange,
+                              tradingClass=tc))
 
     qualified = ib.qualifyContracts(*options)
     qualified = [q for q in qualified if q is not None]
@@ -232,16 +318,20 @@ def _get_risk_reversal(ib: IB, symbol: str, exchange: str, opt_exchange: str,
         if all(t.modelGreeks for t in tickers):
             break
 
-    # Construire la table strike/right/delta/iv
+    # Construire la table strike/right/delta/iv + bid/ask IV spread
     rows = []
     for t in tickers:
         g = t.modelGreeks
         if g and g.delta is not None and g.impliedVol is not None:
+            bid_iv = float(t.bidGreeks.impliedVol) * 100 if (t.bidGreeks and t.bidGreeks.impliedVol is not None) else None
+            ask_iv = float(t.askGreeks.impliedVol) * 100 if (t.askGreeks and t.askGreeks.impliedVol is not None) else None
+            iv_spread = round(ask_iv - bid_iv, 2) if (bid_iv is not None and ask_iv is not None) else None
             rows.append({
                 "strike": t.contract.strike,
                 "right": t.contract.right,
                 "delta": float(g.delta),
                 "iv": float(g.impliedVol) * 100,
+                "iv_spread": iv_spread,
             })
 
     market_open = len(rows) > 0
@@ -273,21 +363,41 @@ def _get_risk_reversal(ib: IB, symbol: str, exchange: str, opt_exchange: str,
         # Put : delta le plus proche de -target_delta (comparer en valeur absolue)
         best_put = min(puts, key=lambda r: abs(abs(r["delta"]) - target_delta)) if puts else None
 
+        call_gap = abs(best_call["delta"] - target_delta) if best_call else 999
+        put_gap = abs(abs(best_put["delta"]) - target_delta) if best_put else 999
+        max_gap = max(call_gap, put_gap)
+
         if (best_call and best_put
-                and abs(best_call["delta"] - target_delta) <= DELTA_TOLERANCE
-                and abs(abs(best_put["delta"]) - target_delta) <= DELTA_TOLERANCE):
+                and call_gap <= DELTA_TOLERANCE
+                and put_gap <= DELTA_TOLERANCE):
             rr_val = round(best_call["iv"] - best_put["iv"], 2)
             result[label] = rr_val
+            call_ivs = best_call.get("iv_spread")
+            put_ivs = best_put.get("iv_spread")
+            max_ivs = max(call_ivs or 0, put_ivs or 0)
             result[f"{label}_call"] = {
                 "strike": best_call["strike"],
                 "delta": round(best_call["delta"], 4),
                 "iv": round(best_call["iv"], 2),
+                "delta_gap": round(call_gap, 4),
+                "iv_spread": call_ivs,
             }
             result[f"{label}_put"] = {
                 "strike": best_put["strike"],
                 "delta": round(best_put["delta"], 4),
                 "iv": round(best_put["iv"], 2),
+                "delta_gap": round(put_gap, 4),
+                "iv_spread": put_ivs,
             }
+            # Confidence basee sur le bid-ask IV spread (cause directe d'instabilite)
+            if call_ivs is None or put_ivs is None:
+                result[f"{label}_confidence"] = "N/A"
+            elif max_ivs <= iv_spread_threshold * 0.5:
+                result[f"{label}_confidence"] = "HIGH"
+            elif max_ivs <= iv_spread_threshold:
+                result[f"{label}_confidence"] = "MEDIUM"
+            else:
+                result[f"{label}_confidence"] = "LOW"
         else:
             result[label] = None
             result[f"{label}_reliable"] = False
@@ -315,9 +425,11 @@ def get_risk_reversal(target_dte: int = 30) -> dict:
         ib.connect(TWS_HOST, TWS_PORT, clientId=CLIENT_ID, timeout=10)
 
         gc_rr = _get_risk_reversal(ib, symbol="GC", exchange="COMEX",
-                                   opt_exchange="COMEX", opt_symbol="OG", target_dte=target_dte)
+                                   opt_exchange="COMEX", opt_symbol="OG",
+                                   target_dte=target_dte, iv_spread_threshold=4.0)
         si_rr = _get_risk_reversal(ib, symbol="SI", exchange="COMEX",
-                                   opt_exchange="COMEX", opt_symbol="SO", target_dte=target_dte)
+                                   opt_exchange="COMEX", opt_symbol="SO",
+                                   target_dte=target_dte, iv_spread_threshold=8.0)
 
         has_data = any(
             d.get("market_open", False) for d in [gc_rr, si_rr] if "error" not in d
@@ -343,6 +455,92 @@ def get_risk_reversal(target_dte: int = 30) -> dict:
 
 
 @mcp.tool
+def get_skew_signal(target_dte: int = 30) -> dict:
+    """Signal de divergence skew GC vs SI. Compare RR25 des deux metaux. Necessite TWS + marche ouvert."""
+    ib = IB()
+    try:
+        ib.connect(TWS_HOST, TWS_PORT, clientId=CLIENT_ID, timeout=10)
+
+        gc_rr = _get_risk_reversal(ib, symbol="GC", exchange="COMEX",
+                                   opt_exchange="COMEX", opt_symbol="OG",
+                                   target_dte=target_dte, iv_spread_threshold=4.0)
+        si_rr = _get_risk_reversal(ib, symbol="SI", exchange="COMEX",
+                                   opt_exchange="COMEX", opt_symbol="SO",
+                                   target_dte=target_dte, iv_spread_threshold=8.0)
+
+        server_time = str(ib.reqCurrentTime()) if ib.isConnected() else "N/A"
+
+        gc_rr25 = gc_rr.get("rr25") if "error" not in gc_rr else None
+        si_rr25 = si_rr.get("rr25") if "error" not in si_rr else None
+        gc_rr10 = gc_rr.get("rr10") if "error" not in gc_rr else None
+        si_rr10 = si_rr.get("rr10") if "error" not in si_rr else None
+
+        # Confidence : basee sur les delta gaps des deux legs
+        gc_conf = gc_rr.get("rr25_confidence", "N/A") if "error" not in gc_rr else "N/A"
+        si_conf = si_rr.get("rr25_confidence", "N/A") if "error" not in si_rr else "N/A"
+        # Confidence globale = la pire des deux
+        conf_rank = {"HIGH": 3, "MEDIUM": 2, "LOW": 1, "N/A": 0}
+        overall_conf = min([gc_conf, si_conf], key=lambda c: conf_rank.get(c, 0))
+
+        # Signal divergence : signes opposes sur RR25
+        if gc_rr25 is not None and si_rr25 is not None:
+            divergent = (gc_rr25 > 0) != (si_rr25 > 0)
+            signal = "SKEW_DIVERGENT" if divergent else "SKEW_ALIGNED"
+            signal_color = "ORANGE" if divergent else "GREEN"
+            # Degrader si low confidence
+            if overall_conf == "LOW":
+                signal = f"{signal} (LOW_CONF)"
+                signal_color = "GRAY"
+        else:
+            divergent = None
+            signal = "N/A"
+            signal_color = "GRAY"
+
+        return {
+            "status": "ok",
+            "server_time": server_time,
+            "target_dte": target_dte,
+            "skew": {
+                "gc_rr25": gc_rr25,
+                "si_rr25": si_rr25,
+                "gc_rr10": gc_rr10,
+                "si_rr10": si_rr10,
+                "divergent": divergent,
+                "signal": signal,
+                "signal_color": signal_color,
+                "confidence": overall_conf,
+                "gc_confidence": gc_conf,
+                "si_confidence": si_conf,
+            },
+            "details": {
+                "GC": {
+                    "expiry": gc_rr.get("expiry"),
+                    "dte": gc_rr.get("dte"),
+                    "future_price": gc_rr.get("future_price"),
+                    "rr25_call": gc_rr.get("rr25_call"),
+                    "rr25_put": gc_rr.get("rr25_put"),
+                } if "error" not in gc_rr else {"error": gc_rr.get("error")},
+                "SI": {
+                    "expiry": si_rr.get("expiry"),
+                    "dte": si_rr.get("dte"),
+                    "future_price": si_rr.get("future_price"),
+                    "rr25_call": si_rr.get("rr25_call"),
+                    "rr25_put": si_rr.get("rr25_put"),
+                } if "error" not in si_rr else {"error": si_rr.get("error")},
+            },
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e) or repr(e),
+            "error_type": type(e).__name__,
+        }
+    finally:
+        if ib.isConnected():
+            ib.disconnect()
+
+
+@mcp.tool
 def get_iv_snapshot(target_dte: int = 30) -> dict:
     """Snapshot IV ATM pour GC (Gold) et SI (Silver), expiration ~target_dte jours."""
     ib = IB()
@@ -355,7 +553,7 @@ def get_iv_snapshot(target_dte: int = 30) -> dict:
                             opt_exchange="COMEX", opt_symbol="SO", target_dte=target_dte)
 
         has_iv = any(
-            d.get(f"iv_{r}") is not None
+            d.get(f"model_iv_{r}") is not None
             for d in [gc_iv, si_iv] if "error" not in d
             for r in ["call", "put"]
         )
