@@ -37,10 +37,11 @@ def connect_tws() -> dict:
     try:
         ib.connect(TWS_HOST, TWS_PORT, clientId=CLIENT_ID, timeout=10)
         account = ib.managedAccounts()[0] if ib.managedAccounts() else "unknown"
+        account_masked = f"***{account[-4:]}" if len(account) > 4 else account
         server_time = str(ib.reqCurrentTime())
         result = {
             "status": "connected",
-            "account": account,
+            "account": account_masked,
             "server_time": server_time,
             "host": TWS_HOST,
             "port": TWS_PORT,

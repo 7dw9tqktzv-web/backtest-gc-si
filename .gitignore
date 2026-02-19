@@ -20,6 +20,9 @@ DOC SIERRA/
 # Sessions Claude Code
 .claude/
 
+# MCP configuration (peut contenir des credentials)
+.mcp.json
+
 # Notebooks exploratoires
 notebooks/
 

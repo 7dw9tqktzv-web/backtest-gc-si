@@ -259,11 +259,6 @@ Serveur: `mcp_servers/ibkr_volatility/server.py`. Data: `data/vol_metrics/`.
 - [ ] Revalider config standard (GC/SI) avec nouvelle methode (WF + MC + Deep Analysis)
 - [ ] Config production standard obsolete (optimisee sans FLAT_EOD ni session prop firm)
 
-### Phase G -- Nouveaux actifs correles
-- [ ] Adapter le framework a d'autres spreads : CL/HO (Crude/Heating Oil), CL/RB (Crude/RBOB Gasoline)
-- [ ] Evaluer cointegration sur ces paires (ADF, Hurst, rolling correlation)
-- [ ] Data Sierra Chart : exports CSV + 5s pour chaque paire
-
 ### Future Tests (apres paper trading)
 - [ ] Validation sur timeframes plus longs (15min, 1h)
 - [ ] Focus sessions US uniquement

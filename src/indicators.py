@@ -585,7 +585,6 @@ def calculate_halflife_ar1(
         x = window[:-1]  # spread(t-1)
 
         # Regression avec intercept : y = a + b*x
-        n_pts = len(x)
         mean_x = np.mean(x)
         mean_y = np.mean(y)
         ss_xx = np.sum((x - mean_x) ** 2)

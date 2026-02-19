@@ -221,12 +221,13 @@ def compute_session_analysis(trades):
         minute = dt.minute
         time_val = hour * 60 + minute  # en minutes depuis minuit
 
-        # Asia: 17:30 (1050) -> 02:00 (120) -- traverse minuit
-        # Europe: 02:00 (120) -> 08:30 (510)
-        # US: 08:30 (510) -> 15:00 (900)
-        if time_val >= 1050 or time_val < 120:
+        # Limites de session en minutes depuis minuit (CT)
+        ASIA_START = 17 * 60 + 30   # 17:30 CT (1050)
+        EUROPE_START = 2 * 60       # 02:00 CT (120)
+        US_START = 8 * 60 + 30      # 08:30 CT (510)
+        if time_val >= ASIA_START or time_val < EUROPE_START:
             session = 'Asia'
-        elif 120 <= time_val < 510:
+        elif EUROPE_START <= time_val < US_START:
             session = 'Europe'
         else:
             session = 'US'
