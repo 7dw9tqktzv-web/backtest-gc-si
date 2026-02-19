@@ -42,7 +42,12 @@ class TestStateConstants:
         assert STATE_COOLDOWN_SHORT == -2
 
     def test_state_parity_with_numba_engine(self):
-        """Verifie que les constantes common.py == backtest_engine_numba.py."""
+        """Verifie que les constantes common.py == backtest_engine_numba.py.
+
+        Note: seuls _FLAT, _LONG, _SHORT sont dupliques dans le Numba engine.
+        Les cooldowns (STATE_COOLDOWN_LONG/SHORT) sont importes directement
+        depuis common.py par le Numba engine, donc pas de risque de desync.
+        """
         from backtest_engine_numba import _FLAT, _LONG, _SHORT
         assert _FLAT == STATE_FLAT, f"_FLAT={_FLAT} != STATE_FLAT={STATE_FLAT}"
         assert _LONG == STATE_LONG, f"_LONG={_LONG} != STATE_LONG={STATE_LONG}"

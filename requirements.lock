@@ -1,3 +1,5 @@
+# pip freeze -- Windows 11, Python 3.12, AMD Ryzen 9 7900X
+# Contient des packages platform-specific (pywin32, pywinpty)
 annotated-doc==0.0.4
 annotated-types==0.7.0
 anyio==4.12.1

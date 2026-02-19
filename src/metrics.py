@@ -207,7 +207,7 @@ def compute_session_analysis(trades):
     """Analyse par session de trading (heures Chicago Time).
     Asia  : 17:30 - 02:00 CT
     Europe: 02:00 - 08:30 CT
-    US    : 08:30 - 15:00 CT
+    US    : 08:30 - 17:30 CT (inclut break 15:00-17:30, aucun trade C09 dans cette plage)
     """
     sessions = {
         'Asia': {'trades': 0, 'wins': 0, 'pnl': 0},
@@ -215,16 +215,17 @@ def compute_session_analysis(trades):
         'US': {'trades': 0, 'wins': 0, 'pnl': 0},
     }
 
+    # Limites de session en minutes depuis minuit (CT)
+    ASIA_START = 17 * 60 + 30   # 17:30 CT (1050)
+    EUROPE_START = 2 * 60       # 02:00 CT (120)
+    US_START = 8 * 60 + 30      # 08:30 CT (510)
+
     for t in trades:
         dt = datetime.strptime(t['Entry_DateTime'], '%Y-%m-%d %H:%M:%S')
         hour = dt.hour
         minute = dt.minute
         time_val = hour * 60 + minute  # en minutes depuis minuit
 
-        # Limites de session en minutes depuis minuit (CT)
-        ASIA_START = 17 * 60 + 30   # 17:30 CT (1050)
-        EUROPE_START = 2 * 60       # 02:00 CT (120)
-        US_START = 8 * 60 + 30      # 08:30 CT (510)
         if time_val >= ASIA_START or time_val < EUROPE_START:
             session = 'Asia'
         elif EUROPE_START <= time_val < US_START:
