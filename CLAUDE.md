@@ -211,6 +211,7 @@ Apres chaque bug corrige, ajouter une entree dans `ERRORS.md` (bug, cause, comme
 
 - **5-min pure Z-Score = dominant mode**, 1min dollar = dead end, regime filters = dead end (none survives OOS)
 - **Known risk**: regime-dependent (2023 flat/losing, 2024 moderate, 2025-2026 profitable)
+- **Equity indices (NQ/ES/RTY/YM) = NO-GO**: 6 pairs screened, 0/6 cointegrated (Hurst=0.99, ADF<20%, half-life=INF). Co-trending, not mean reverting.
 - R1 (295M configs) → R2a+R2b (30M configs) → 10 candidates → WF 10/10 → MC 9/10 → Deep analysis → C09/C01
 - See `CHANGELOG.md` for detailed tables and phase-by-phase results
 
