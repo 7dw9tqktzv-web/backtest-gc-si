@@ -5,6 +5,20 @@ Mis a jour a chaque `collect_daily_snapshot`.
 
 ---
 
+## 2026-02-25 (mercredi) — 05:48 CT
+GC $5,191 | IV=31.9% HV=41.0% VRP=-12.7 (z=-1.14 YELLOW) | RR25=+1.51 (HIGH)
+SI $90.76  | IV=82.4% HV=112.7% VRP=-49.9 (z=-2.42 RED)   | RR25=+8.29 (HIGH)
+Ratio IV=0.451 (P95/20j, P85/60j, z=0.93) | Skew ALIGNED | DTE=29j (exp 26 mars)
+- GC +$120 vs 20 fev (+2.4%), SI +$9.22 (+11.3%) — Silver surperforme massivement
+- IV Silver bondit de 11pts (71.4->82.4%), IV Gold +2.2pts (29.7->31.9%)
+- RR25 SI accelere : 5.08->8.29 (+3.21pts) = biais call tres agressif
+- RR25 GC stable : 1.38->1.51 (+0.13pt)
+- VRP SI toujours RED extreme (z=-2.42), HV30 quasi double de V30
+- VRP GC stable en YELLOW (z=-1.14)
+- Ratio IV au P95/20j = convergence IV Gold/Silver inhabituelle
+- V30 stale (18 fev) — backfill recommande
+- Conditions mitigees : regime GREEN mais VRP Silver en zone de danger
+
 ## 2026-02-20 (jeudi) — 08:33 CT
 GC $5,071 | IV=29.7% HV=41.0% VRP=-12.7 (z=-1.14 YELLOW) | RR25=+1.38 (HIGH)
 SI $81.54  | IV=71.4% HV=112.7% VRP=-49.9 (z=-2.42 RED)   | RR25=+5.08 (HIGH)
@@ -35,10 +49,11 @@ Ratio IV=0.440 | Skew ALIGNED | DTE=36j (exp 26 mars)
 
 ---
 
-## Tendances observees (3 jours)
-- **Prix** : GC +$47 (+0.9%), SI +$3.43 (+4.4%) — Silver surperforme
-- **IV ATM** : GC 28.3->29.7 (+1.4pt), SI 68.1->71.4 (+3.3pt) — IV monte avec les prix
-- **RR25 GC** : 0.42 -> 0.90 -> 1.38 — biais call en acceleration
-- **RR25 SI** : 3.88 -> 3.93 -> 5.08 — saut jour 3
+## Tendances observees (4 snapshots, 18-25 fev)
+- **Prix** : GC $5,023->$5,191 (+3.3%), SI $78.11->$90.76 (+16.2%) — Silver rally massif
+- **IV ATM** : GC 28.3->31.9 (+3.6pt), SI 68.1->82.4 (+14.3pt) — IV Silver explose avec le prix
+- **RR25 GC** : 0.42 -> 0.90 -> 1.38 -> 1.51 — biais call en construction progressive
+- **RR25 SI** : 3.88 -> 3.93 -> 5.08 -> 8.29 — acceleration forte, biais call agressif
 - **Skew** : toujours ALIGNED — pas de divergence GC/SI
-- **VRP** : seul jour 3 a les donnees. VRP SI extreme (RED), GC en YELLOW
+- **VRP** : VRP SI en RED persistant (z=-2.42), GC YELLOW stable (z=-1.14)
+- **Ratio IV** : stable a 0.451, P95 sur 20j — convergence IV inhabituelle
