@@ -1,0 +1,2 @@
+DateTime;Folder_Path;Period;Beta;ZP;Corr;ADF;ZE_Long;ZE_Short;ZTP_Long;ZTP_Short;ZSL_Long;ZSL_Short;TP;SL;Corr_Min;Coint_Min;Trades;LONG;SHORT;Winners;Win_Rate;PnL_Net;PnL_Avg;Best;Worst;Max_DD;Profit_Factor;Sharpe;Calmar;Days_Loaded;TP_DOLLAR;TP_ZSCORE;SL_DOLLAR;SL_ZSCORE
+2026-02-08 23:12:51;5min/beta2640_zp20_corr30_adf26/zEn3.5_3.5_zTP1.0_-1.0_zSLn4.0_4.0_TP99999_SL99999_corr0.6_coint40;5min;2640;20;30;26;-3.5;3.5;1.0;-1.0;-4.0;4.0;99999;-99999;0.6;40;100;57;43;55;55.0;6680.5;66.81;3343.5;-538.0;-3593.5;2.07;0.155;1.86;1080;0;100;0;0

@@ -43,6 +43,22 @@ output/archive/**/equity_curve.png
 # Dossiers non-curates
 output_old/
 
+# Donnees processees (cache auto-regenere par MD5)
+data/processed/
+
+# Vol metrics volumineux (backfill historique)
+data/vol_metrics/iv_history_*.parquet
+data/vol_metrics/*.bak.parquet
+
+# Fichiers analyse SC one-off
+SC_*.txt
+SC_*.md
+sc_*.txt
+compare_sc_python.py
+
+# Config IDE
+pyrightconfig.json
+
 # OS
 Thumbs.db
 .DS_Store

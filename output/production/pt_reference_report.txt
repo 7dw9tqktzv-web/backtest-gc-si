@@ -1,0 +1,31 @@
+======================================================================
+PAPER TRADING REFERENCE - Trades attendus par Python
+======================================================================
+Date generation  : 2026-02-11 01:37
+Config           : beta2640_zp20_corr30_adf26_zE-3.5_3.5_zTP1.0_-1.0_zSL-4.0_4.0_TP99999_SL-99999_corr0.6_coint40
+Periode data     : 2023-02-06 17:30:00 -> 2026-02-10 18:16:00
+Paper trading    : depuis 2026-02-01
+Slippage         : 2 ticks GC, 2 ticks SI
+Contrats         : standard
+
+--- BACKTEST COMPLET (60 trades) ---
+PnL net total    : $+51,756.00
+Win rate         : 31/60 (51.7%)
+
+======================================================================
+--- PERIODE PAPER TRADING : 4 trades depuis 2026-02-01 ---
+======================================================================
+PnL net          : $+32,628.00
+Win rate         : 4/4 (100.0%)
+
+  #   Dir              Entree              Sortie  Duree       Exit    PnL Net      Cumul
+------------------------------------------------------------------------------------------
+ 57  LONG    2026-02-02 23:25    2026-02-03 01:10   105m  TP_ZSCORE $+4,638.00 $+4,638.00
+ 58  LONG    2026-02-04 17:30    2026-02-04 19:00    90m  TP_ZSCORE $+4,018.00 $+8,656.00
+ 59  LONG    2026-02-05 17:30    2026-02-05 19:00    90m  TP_ZSCORE $+17,378.00 $+26,034.00
+ 60  LONG    2026-02-08 17:30    2026-02-08 19:05    95m  TP_ZSCORE $+6,594.00 $+32,628.00
+
+======================================================================
+Comparer ces trades avec le Trade Activity Log de Sierra Chart.
+Criteres de match : datetime +/- 1 barre, meme direction.
+======================================================================

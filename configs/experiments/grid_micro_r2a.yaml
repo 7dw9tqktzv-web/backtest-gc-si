@@ -1,0 +1,49 @@
+# Grid Search Micro R2a - Cluster Roi (beta 4620-7920)
+#
+# Zoom autour de la Famille A (C1/C2/C6) identifiee en R1 :
+#   - b4620 domine 5/12 profils de scoring
+#   - dTP=250 = plafond, on explore 175-300 finement
+#   - entry_start_hour comme variable build (×7 builds par groupe)
+#   - mhb explore (PnL decay montre inflexion barre 18-19)
+#   - zE fin (3.4-3.8 par pas de 0.05)
+#
+# Estimation : ~840 groupes ind × 63 builds × 378 replays = ~20M configs
+# Mode micro (MGC/SIL), $1.88 commission, 2 ticks slippage
+#
+# Usage: python scripts/run_grid_search.py --config configs/experiments/grid_micro_r2a.yaml
+
+type: grid_search
+title: "GRID MICRO R2a - CLUSTER ROI (beta 4620-7920)"
+exit_mode: micro_full
+
+execution:
+  timeframe: 5min
+  num_workers: 24
+  output_path: output/grid_searches/r2a/grid_micro_r2a.csv
+  min_trades_for_sharpe: 10
+
+indicators:
+  beta_lookback: [4620, 5280, 6600, 7920]
+  zscore_period: [24, 26, 28, 30, 32, 34, 36]
+  correlation_period: [20, 24, 27, 30, 33, 36]
+  adf_hurst_period: [32, 48, 64, 96, 144]
+
+entry_exit:
+  zscore_entry: [3.4, 3.45, 3.5, 3.55, 3.6, 3.65, 3.7, 3.75, 3.8]
+  cointegration_min: [20]
+  zscore_tp: [-1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0]
+  zscore_sl: [99]
+  dollar_tp: [175, 200, 225, 250, 275, 300]
+  dollar_sl: [-500]
+  flat_end_of_session: [true]
+  max_holding_bars: [0, 3, 6, 9, 12, 15, 18]
+  micro_multiplier_max: [2]
+  entry_start_hour: [18, 19, 20, 21, 22, 23, 0]
+
+fixed_overrides:
+  contracts.mode: "micro"
+  exit.zscore_tp_enabled: true
+  costs.slippage_gc_ticks: 2
+  costs.slippage_si_ticks: 2
+  session.session_end_time: "14:55"
+  session.entry_end_hour: 14

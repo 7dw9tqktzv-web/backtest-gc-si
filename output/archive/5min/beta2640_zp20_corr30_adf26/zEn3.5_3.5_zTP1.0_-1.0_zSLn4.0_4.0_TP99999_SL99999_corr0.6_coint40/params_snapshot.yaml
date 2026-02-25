@@ -1,0 +1,68 @@
+advanced:
+  indicator_mode: rolling
+  kalman_alpha: 1.0e-06
+  regime_filter: false
+  regime_states: 3
+contracts:
+  commission_per_contract_rt: 1.5
+  gc_point_value: 10
+  gc_tick_size: 0.1
+  gc_tick_value: 1
+  mode: micro
+  si_point_value: 1000
+  si_tick_size: 0.005
+  si_tick_value: 5
+costs:
+  commission_per_contract: 4.0
+  slippage_gc_ticks: 2
+  slippage_si_ticks: 2
+data:
+  gc_file: data/raw/GCJ26_FUT_CME_1mn.scid_BarData.txt
+  gc_file_5s: data/raw/GCJ26_FUT_CME_5secondes.scid_BarData.txt
+  si_file: data/raw/SIH26_FUT_CME-1mn.scid_BarData.txt
+  si_file_5s: data/raw/SIH26_FUT_CME_5secondes.scid_BarData.txt
+entry:
+  cointegration_score_min: 40
+  correlation_min: 0.6
+  hurst_max: 1.0
+  zscore_long: -3.5
+  zscore_short: 3.5
+exit:
+  pnl_stop_loss: -99999
+  pnl_take_profit: 99999
+  zscore_sl_long: -4.0
+  zscore_sl_short: 4.0
+  zscore_tp_enabled: true
+  zscore_tp_long: 1.0
+  zscore_tp_min_pnl: null
+  zscore_tp_short: -1.0
+indicators:
+  adf_critical_value: -2.86
+  adf_hurst_period: 26
+  beta_lookback: 2640
+  coint_corr_threshold: 0.6
+  correlation_period: 30
+  period: 5min
+  zscore_period: 20
+reentry:
+  zscore_reset_long: -1.0
+  zscore_reset_short: 1.0
+regime_filter:
+  correlation_daily:
+    enabled: true
+    threshold: 0.86
+    window: 40
+  enabled: false
+  halflife_ar1:
+    enabled: true
+    threshold: 4.9
+    window: 60
+session:
+  end_time: '17:00:00'
+  entry_end_hour: 24
+  entry_start_hour: 0
+  start_time: '18:00:00'
+sizing:
+  gc_contracts_max: 0
+  mode: dollar_neutral_beta
+  si_contracts: 1

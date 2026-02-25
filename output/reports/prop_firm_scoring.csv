@@ -1,0 +1,16 @@
+metric,value
+trades,100.0
+pnl_total,45224.0
+pnl_avg,452.24
+win_rate,53.0
+pf,2.4085840652837476
+max_dd,-17341.0
+max_dd_daily,-2662.0
+max_trailing_dd,-17341.0
+max_dd_days,4.0
+recovery_trades,15.0
+consistency_weekly,50.0
+trades_per_month,2.9411764705882355
+max_single_loss,-2662.0
+avg_duration_min,223.75
+composite_score,49.6826079406085
