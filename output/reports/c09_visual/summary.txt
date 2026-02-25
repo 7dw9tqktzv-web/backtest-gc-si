@@ -1,0 +1,34 @@
+
+================================================================================
+  CONFIG C09 - RESUME COMPLET
+  b2640_zp28_cp12_adf64_zE3.4_co20_zTP-0.5_dTP200_dSL-500_nohold_mm2_es0
+================================================================================
+
+  METRIQUES GLOBALES
+  ------------------
+  Trades:           264
+  PnL Net:          $7,942
+  Win Rate:         73.1%
+  Profit Factor:    1.64
+  Sharpe:           1.767
+  Max Drawdown:     $-908
+  Calmar:           8.75
+  Expectancy:       $30.1/trade
+  Payoff Ratio:     0.60
+
+  Avg Win:          $105.3
+  Avg Loss:         $-174.4
+  Best Trade:       $244
+  Worst Trade:      $-573
+
+  Duree Moyenne:    74 min
+  Duree Mediane:    55 min
+
+  PERIODE
+  -------
+  Debut:            2022-11-25
+  Fin:              2026-02-13
+  Jours:            1176
+
+  Graphiques generes dans: output/reports/c09_visual/
+================================================================================
